@@ -1223,7 +1223,7 @@ public final class Configuration
 
     /**
      * CPU the conductor agent thread is pinned to. An index into the effective cgroup cpuset when
-     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      * <p>
      * Also used for the shared agent thread when using {@link ThreadingMode#SHARED}.
@@ -1236,7 +1236,7 @@ public final class Configuration
 
     /**
      * CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
-     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
     @Config(
@@ -1247,7 +1247,7 @@ public final class Configuration
 
     /**
      * CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
-     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      * <p>
      * Also used for the shared-network agent thread when using {@link ThreadingMode#SHARED_NETWORK}.
@@ -1260,7 +1260,7 @@ public final class Configuration
 
     /**
      * CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
-     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
     @Config(
@@ -1269,19 +1269,6 @@ public final class Configuration
         expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
     public static final String NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME =
         "aeron.driver.native.resource.agent.cpu.affinity";
-
-    /**
-     * Name of the system property to enable cgroup/cpuset-derived CPU affinity for the Media Driver's threads.
-     */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-    public static final String DRIVER_CPUSET_AFFINITY_PROP_NAME = "aeron.driver.cpuset.affinity";
-
-    /**
-     * Name of the system property to treat cpuset topology validation warnings (thread-sibling misalignment,
-     * L3 cache, or die locality violations) as fatal {@link ConfigurationException}s instead of warnings.
-     */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-    public static final String DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.driver.cpuset.warnings.as.errors";
 
     /**
      * CPU the conductor thread is pinned to.
@@ -1325,28 +1312,6 @@ public final class Configuration
     public static int nativeResourceAgentCpuAffinity()
     {
         return getInteger(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
-    }
-
-    /**
-     * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
-     *
-     * @return true if cgroup/cpuset-derived CPU affinity should be applied.
-     * @see #DRIVER_CPUSET_AFFINITY_PROP_NAME
-     */
-    public static boolean driverCpusetAffinity()
-    {
-        return Boolean.getBoolean(DRIVER_CPUSET_AFFINITY_PROP_NAME);
-    }
-
-    /**
-     * Should cpuset topology validation warnings be treated as fatal errors.
-     *
-     * @return true if cpuset topology validation warnings should be treated as fatal errors.
-     * @see #DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
-     */
-    public static boolean driverCpusetWarningsAsErrors()
-    {
-        return Boolean.getBoolean(DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
     }
 
     /**

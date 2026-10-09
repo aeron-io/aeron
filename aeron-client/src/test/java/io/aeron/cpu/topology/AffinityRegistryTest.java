@@ -340,23 +340,23 @@ class AffinityRegistryTest
     }
 
     private AffinityRegistry newRegistry(
-        final Map<String, Integer> affinities, final boolean cpusetAffinity, final boolean warningsAsErrors)
+        final Map<String, Integer> affinities, final boolean useCpusetOffsets, final boolean failOnValidationErrors)
     {
-        return newRegistry(affinities, cpusetAffinity, warningsAsErrors, discard());
+        return newRegistry(affinities, useCpusetOffsets, failOnValidationErrors, discard());
     }
 
     private AffinityRegistry newRegistry(
         final Map<String, Integer> affinities,
-        final boolean cpusetAffinity,
-        final boolean warningsAsErrors,
+        final boolean useCpusetOffsets,
+        final boolean failOnValidationErrors,
         final PrintStream warningStream)
     {
         final AffinityRegistry registry = new AffinityRegistry(
             sysfsTestDir,
             new CpusetV2Reader(testProcPath, testCgroupPath),
             true,
-            cpusetAffinity,
-            warningsAsErrors,
+            useCpusetOffsets,
+            failOnValidationErrors,
             warningStream);
         new LinkedHashMap<>(affinities).forEach(registry::addAffinity);
         registries.add(registry);

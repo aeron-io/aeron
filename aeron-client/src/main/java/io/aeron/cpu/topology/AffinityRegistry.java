@@ -60,8 +60,8 @@ public final class AffinityRegistry implements AutoCloseable
     private final TopologyChecker cpusetChecker;
     private final TopologyChecker affinityChecker;
     private final boolean topologyAvailable;
-    private final boolean cpusetAffinity;
-    private final boolean warningsAsErrors;
+    private final boolean useCpusetOffsets;
+    private final boolean failOnValidationErrors;
     private final PrintStream warningStream;
     private final List<CoreClaim> ownedCoreClaims = new ArrayList<>();
     private volatile boolean isConcluded;
@@ -74,19 +74,19 @@ public final class AffinityRegistry implements AutoCloseable
      * Creates a registry for the process's effective cgroup cpuset and CPU topology which writes warnings to
      * {@link CommonContext#fallbackLogger()}.
      *
-     * @param cpusetAffinity   if true, requested values are indices into the effective cgroup cpuset which is also
-     *                         validated, otherwise they are raw CPU ids.
-     * @param warningsAsErrors if true, throw a {@link ConfigurationException} on {@link #conclude()} instead of
-     *                         warning.
+     * @param useCpusetOffsets       if true, requested values are offsets into the effective cgroup cpuset which is
+     *                               also validated, otherwise they are raw CPU ids.
+     * @param failOnValidationErrors if true, throw a {@link ConfigurationException} on {@link #conclude()} instead
+     *                               of warning.
      */
-    public AffinityRegistry(final boolean cpusetAffinity, final boolean warningsAsErrors)
+    public AffinityRegistry(final boolean useCpusetOffsets, final boolean failOnValidationErrors)
     {
         this(
             TopologyChecker.DEFAULT_SYSFS_ROOT,
             new CpusetV2Reader(),
             SystemUtil.isLinux(),
-            cpusetAffinity,
-            warningsAsErrors,
+            useCpusetOffsets,
+            failOnValidationErrors,
             CommonContext.fallbackLogger());
     }
 
@@ -94,14 +94,14 @@ public final class AffinityRegistry implements AutoCloseable
         final Path sysfsRoot,
         final CpusetV2Reader cpusetV2Reader,
         final boolean topologyAvailable,
-        final boolean cpusetAffinity,
-        final boolean warningsAsErrors,
+        final boolean useCpusetOffsets,
+        final boolean failOnValidationErrors,
         final PrintStream warningStream)
     {
         this.cpusetV2Reader = cpusetV2Reader;
         this.topologyAvailable = topologyAvailable;
-        this.cpusetAffinity = cpusetAffinity;
-        this.warningsAsErrors = warningsAsErrors;
+        this.useCpusetOffsets = useCpusetOffsets;
+        this.failOnValidationErrors = failOnValidationErrors;
         this.warningStream = warningStream;
         this.cpusetChecker = new TopologyChecker(sysfsRoot, cpusetV2Reader);
         // Thread alignment is excluded as pinned threads intentionally leave out their siblings.
@@ -158,9 +158,9 @@ public final class AffinityRegistry implements AutoCloseable
      *
      * @throws ConcurrentConcludeException if already concluded.
      * @throws ConfigurationException      if a thread is pinned on a platform which does not support thread
-     *                                     affinity, an index, or a raw CPU id when {@code cpusetAffinity} is not
+     *                                     affinity, an index, or a raw CPU id when {@code useCpusetOffsets} is not
      *                                     set, is outside the cpuset, or a warning is found and
-     *                                     {@code warningsAsErrors} is set.
+     *                                     {@code failOnValidationErrors} is set.
      */
     public void conclude()
     {
@@ -177,7 +177,7 @@ public final class AffinityRegistry implements AutoCloseable
 
         int warnings = 0;
 
-        if (cpusetAffinity && topologyAvailable)
+        if (useCpusetOffsets && topologyAvailable)
         {
             final Cpuset cpuset = cpusetV2Reader.readCpuSet();
             warnings += cpusetChecker.check(new CpuSelection.CpusetSelection(cpuset), warningStream);
@@ -205,7 +205,7 @@ public final class AffinityRegistry implements AutoCloseable
         {
             warnings += validateAgainstClaims(pinned);
 
-            if (warningsAsErrors && 0 < warnings)
+            if (failOnValidationErrors && 0 < warnings)
             {
                 throw new ConfigurationException("cpuset warnings as errors, " + warnings + " warnings");
             }

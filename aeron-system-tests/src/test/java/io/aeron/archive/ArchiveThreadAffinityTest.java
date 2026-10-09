@@ -64,7 +64,7 @@ class ArchiveThreadAffinityTest
             TestMediaDriver ignore = TestMediaDriver.launch(driverContext(), null);
             Archive ignore2 = Archive.launch(archiveContext()
                 .threadingMode(ArchiveThreadingMode.DEDICATED)
-                .cpusetAffinity(true)
+                .useCpusetOffsets(true)
                 .conductorCpuAffinity(2)
                 .recorderCpuAffinity(0)
                 .replayerCpuAffinity(1)))
@@ -99,10 +99,10 @@ class ArchiveThreadAffinityTest
         final IntArrayList cpus = requireCpus(4);
         try (ThreadAffinityRecording recording = new ThreadAffinityRecording();
             ArchivingMediaDriver ignore = ArchivingMediaDriver.launch(
-                driverContext().driverCpusetAffinity(true).conductorCpuAffinity(3),
+                driverContext().useCpusetOffsets(true).conductorCpuAffinity(3),
                 archiveContext()
                     .threadingMode(ArchiveThreadingMode.DEDICATED)
-                    .cpusetAffinity(true)
+                    .useCpusetOffsets(true)
                     .conductorCpuAffinity(0)
                     .recorderCpuAffinity(1)
                     .replayerCpuAffinity(2)))
@@ -121,14 +121,14 @@ class ArchiveThreadAffinityTest
     {
         requireCpus(1);
         try (MediaDriver ignore = MediaDriver.launch(
-            driverContext().driverCpusetAffinity(true).conductorCpuAffinity(0)))
+            driverContext().useCpusetOffsets(true).conductorCpuAffinity(0)))
         {
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
                 () -> Archive.launch(archiveContext()
                     .threadingMode(ArchiveThreadingMode.SHARED)
-                    .cpusetAffinity(true)
-                    .cpusetWarningsAsErrors(true)
+                    .useCpusetOffsets(true)
+                    .failOnAffinityValidationErrors(true)
                     .conductorCpuAffinity(0)).close());
             assertTrue(ex.getMessage().contains("cpuset warnings as errors"), ex.getMessage());
         }

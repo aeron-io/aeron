@@ -554,19 +554,20 @@ public class CommonContext implements Cloneable
     public static final String THREAD_NAMING_DEFAULT = THREAD_NAMING_CLASSIC;
 
     /**
-     * Property name to treat the requested CPU affinities of the Archive and Cluster threads as indices into the
-     * effective cgroup cpuset, and to validate that cpuset. The Media Driver uses
-     * {@code aeron.driver.cpuset.affinity} instead.
+     * Property name to treat the requested CPU affinities of all threads as offsets
+     * into the effective cgroup cpuset, rather than as raw CPU ids, and to validate that cpuset.
      */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false, existsInC = false)
-    public static final String CPUSET_AFFINITY_PROP_NAME = "aeron.cpuset.affinity";
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    public static final String THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME =
+        "aeron.thread.affinity.use.cpuset.offsets";
 
     /**
-     * Property name to treat CPU affinity and topology warnings of the Archive and Cluster as errors. The Media
-     * Driver uses {@code aeron.driver.cpuset.warnings.as.errors} instead.
+     * Property name to fail with a {@link io.aeron.exceptions.ConfigurationException} instead of warning when the
+     * CPU affinity and topology validation of all threads finds a problem.
      */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false, existsInC = false)
-    public static final String CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.cpuset.warnings.as.errors";
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    public static final String THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME =
+        "aeron.thread.affinity.fail.on.validation.errors";
 
     static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSSSSSZ");
 
@@ -590,26 +591,25 @@ public class CommonContext implements Cloneable
     }
 
     /**
-     * Should the requested CPU affinities of the Archive and Cluster threads be treated as indices into the effective
-     * cgroup cpuset.
+     * Should the requested CPU affinities of all threads be treated as offsets into the effective cgroup cpuset.
      *
-     * @return true if cpuset affinity is enabled.
-     * @see #CPUSET_AFFINITY_PROP_NAME
+     * @return true if the CPU affinities are offsets into the effective cgroup cpuset.
+     * @see #THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
      */
-    public static boolean cpusetAffinity()
+    public static boolean threadAffinityUseCpusetOffsets()
     {
-        return Boolean.getBoolean(CPUSET_AFFINITY_PROP_NAME);
+        return Boolean.getBoolean(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME);
     }
 
     /**
-     * Should CPU affinity and topology warnings of the Archive and Cluster be treated as errors.
+     * Indicates if CPU affinity and topology warnings be treated as errors.
      *
      * @return true if warnings should be treated as errors.
-     * @see #CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+     * @see #THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
      */
-    public static boolean cpusetWarningsAsErrors()
+    public static boolean threadAffinityFailOnValidationErrors()
     {
-        return Boolean.getBoolean(CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
+        return Boolean.getBoolean(THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME);
     }
 
     /**
