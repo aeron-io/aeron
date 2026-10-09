@@ -161,7 +161,9 @@ size_t aeron_loss_reporter_read(
             source_length);
 
         const size_t record_length =
-            sizeof(aeron_loss_reporter_entry_t) + (2 * sizeof(int32_t)) + channel_length + source_length;
+            sizeof(aeron_loss_reporter_entry_t) +
+            AERON_ALIGN((sizeof(int32_t) + channel_length), sizeof(int32_t)) +
+            (sizeof(int32_t) + source_length);
         offset += AERON_ALIGN(record_length, AERON_LOSS_REPORTER_ENTRY_ALIGNMENT);
     }
 
