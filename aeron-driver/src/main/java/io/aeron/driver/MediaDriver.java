@@ -641,8 +641,6 @@ public final class MediaDriver implements AutoCloseable
         private String senderWildcardPortRange = Configuration.senderWildcardPortRange();
         private String receiverWildcardPortRange = Configuration.receiverWildcardPortRange();
 
-        private boolean useCpusetOffsets = CommonContext.threadAffinityUseCpusetOffsets();
-        private boolean failOnAffinityValidationErrors = CommonContext.threadAffinityFailOnValidationErrors();
         private AffinityRegistry affinityRegistry;
 
         private EpochClock epochClock;
@@ -4080,7 +4078,7 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Get the CPU the conductor agent thread is pinned to. Also applies to the shared agent thread in
          * {@link ThreadingMode#SHARED}. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
@@ -4094,7 +4092,7 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Set the CPU the conductor agent thread is pinned to. Also applies to the shared agent thread in
          * {@link ThreadingMode#SHARED}. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @param conductorCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
@@ -4109,7 +4107,7 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Get the CPU the sender agent thread is pinned to. Also applies to the shared-network agent thread in
          * {@link ThreadingMode#SHARED_NETWORK}. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
@@ -4123,7 +4121,7 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Set the CPU the sender agent thread is pinned to. Also applies to the shared-network agent thread in
          * {@link ThreadingMode#SHARED_NETWORK}. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @param senderCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
@@ -4137,7 +4135,7 @@ public final class MediaDriver implements AutoCloseable
 
         /**
          * Get the CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
@@ -4150,7 +4148,7 @@ public final class MediaDriver implements AutoCloseable
 
         /**
          * Set the CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @param receiverCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
@@ -4164,7 +4162,7 @@ public final class MediaDriver implements AutoCloseable
 
         /**
          * Get the CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
@@ -4177,7 +4175,7 @@ public final class MediaDriver implements AutoCloseable
 
         /**
          * Set the CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
-         * {@link #useCpusetOffsets()} is set.
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
          *
          * @param nativeResourceAgentCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
@@ -4186,57 +4184,6 @@ public final class MediaDriver implements AutoCloseable
         public Context nativeResourceAgentCpuAffinity(final int nativeResourceAgentCpuAffinity)
         {
             this.nativeResourceAgentCpuAffinity = nativeResourceAgentCpuAffinity;
-            return this;
-        }
-
-        /**
-         * Are the CPU affinities offsets into the effective cgroup cpuset, which is then also validated, rather than
-         * raw CPU ids.
-         *
-         * @return true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public boolean useCpusetOffsets()
-        {
-            return useCpusetOffsets;
-        }
-
-        /**
-         * Should the CPU affinities be offsets into the effective cgroup cpuset, which is then also validated, rather
-         * than raw CPU ids.
-         *
-         * @param useCpusetOffsets true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public Context useCpusetOffsets(final boolean useCpusetOffsets)
-        {
-            this.useCpusetOffsets = useCpusetOffsets;
-            return this;
-        }
-
-        /**
-         * Should cpuset topology validation warnings be treated as fatal errors.
-         *
-         * @return true if cpuset topology validation warnings should be treated as fatal errors.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public boolean failOnAffinityValidationErrors()
-        {
-            return failOnAffinityValidationErrors;
-        }
-
-        /**
-         * Should cpuset topology validation warnings be treated as fatal errors.
-         *
-         * @param failOnAffinityValidationErrors true if cpuset topology validation warnings should be treated as
-         *                                       fatal errors.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public Context failOnAffinityValidationErrors(final boolean failOnAffinityValidationErrors)
-        {
-            this.failOnAffinityValidationErrors = failOnAffinityValidationErrors;
             return this;
         }
 
@@ -4639,7 +4586,8 @@ public final class MediaDriver implements AutoCloseable
 
         private void concludeAffinity()
         {
-            affinityRegistry = new AffinityRegistry(useCpusetOffsets, failOnAffinityValidationErrors);
+            affinityRegistry = new AffinityRegistry(
+                CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors());
             switch (threadingMode)
             {
                 case INVOKER:
@@ -4947,12 +4895,10 @@ public final class MediaDriver implements AutoCloseable
                 "\n    useWindowsHighResTimer=" + useWindowsHighResTimer +
                 "\n    warnIfDirectoryExists=" + warnIfDirectoryExists +
                 "\n    dirDeleteOnStart=" + dirDeleteOnStart +
-                "\n    useCpusetOffsets=" + useCpusetOffsets +
                 "\n    conductorCpuAffinity=" + conductorCpuAffinity +
                 "\n    senderCpuAffinity=" + senderCpuAffinity +
                 "\n    receiverCpuAffinity=" + receiverCpuAffinity +
                 "\n    nativeResourceAgentCpuAffinity=" + nativeResourceAgentCpuAffinity +
-                "\n    failOnAffinityValidationErrors=" + failOnAffinityValidationErrors +
                 "\n    dirDeleteOnShutdown=" + dirDeleteOnShutdown +
                 "\n    termBufferSparseFile=" + termBufferSparseFile +
                 "\n    performStorageChecks=" + performStorageChecks +

@@ -1715,8 +1715,6 @@ public final class ConsensusModule implements AutoCloseable
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
         private int cpuAffinity = Configuration.cpuAffinity();
-        private boolean useCpusetOffsets = CommonContext.threadAffinityUseCpusetOffsets();
-        private boolean failOnAffinityValidationErrors = CommonContext.threadAffinityFailOnValidationErrors();
         private AffinityRegistry affinityRegistry;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
@@ -2087,7 +2085,8 @@ public final class ConsensusModule implements AutoCloseable
                 threadFactory = Thread::new;
             }
 
-            affinityRegistry = new AffinityRegistry(useCpusetOffsets, failOnAffinityValidationErrors);
+            affinityRegistry = new AffinityRegistry(
+                CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors());
             if (!useAgentInvoker)
             {
                 affinityRegistry.addAffinity(CLUSTER_CPU_AFFINITY_PROP_NAME, cpuAffinity);
@@ -4132,7 +4131,8 @@ public final class ConsensusModule implements AutoCloseable
         /**
          * Get the CPU the consensus module thread is pinned to.
          *
-         * @return CPU, or cpuset index if {@link #useCpusetOffsets()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -4144,7 +4144,8 @@ public final class ConsensusModule implements AutoCloseable
         /**
          * Set the CPU the consensus module thread is pinned to.
          *
-         * @param cpuAffinity CPU, or cpuset index if {@link #useCpusetOffsets()}, or
+         * @param cpuAffinity CPU, or cpuset index if
+         *                    {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
          *                    {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
@@ -4152,56 +4153,6 @@ public final class ConsensusModule implements AutoCloseable
         public Context cpuAffinity(final int cpuAffinity)
         {
             this.cpuAffinity = cpuAffinity;
-            return this;
-        }
-
-        /**
-         * Are the CPU affinities offsets into the effective cgroup cpuset, which is then also validated, rather than
-         * raw CPU ids.
-         *
-         * @return true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public boolean useCpusetOffsets()
-        {
-            return useCpusetOffsets;
-        }
-
-        /**
-         * Should the CPU affinities be offsets into the effective cgroup cpuset, which is then also validated, rather
-         * than raw CPU ids.
-         *
-         * @param useCpusetOffsets true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public Context useCpusetOffsets(final boolean useCpusetOffsets)
-        {
-            this.useCpusetOffsets = useCpusetOffsets;
-            return this;
-        }
-
-        /**
-         * Are CPU affinity and topology warnings treated as errors.
-         *
-         * @return true if CPU affinity and topology warnings are treated as errors.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public boolean failOnAffinityValidationErrors()
-        {
-            return failOnAffinityValidationErrors;
-        }
-
-        /**
-         * Should CPU affinity and topology warnings be treated as errors.
-         *
-         * @param failOnAffinityValidationErrors true if CPU affinity and topology warnings are treated as errors.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public Context failOnAffinityValidationErrors(final boolean failOnAffinityValidationErrors)
-        {
-            this.failOnAffinityValidationErrors = failOnAffinityValidationErrors;
             return this;
         }
 
@@ -4819,8 +4770,6 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    isLogMdc=" + isLogMdc +
                 "\n    useAgentInvoker=" + useAgentInvoker +
                 "\n    cpuAffinity=" + cpuAffinity +
-                "\n    useCpusetOffsets=" + useCpusetOffsets +
-                "\n    failOnAffinityValidationErrors=" + failOnAffinityValidationErrors +
                 "\n    cycleThresholdNs=" + cycleThresholdNs +
                 "\n    dutyCycleTracker=" + dutyCycleTracker +
                 "\n    totalSnapshotDurationThresholdNs=" + totalSnapshotDurationThresholdNs +

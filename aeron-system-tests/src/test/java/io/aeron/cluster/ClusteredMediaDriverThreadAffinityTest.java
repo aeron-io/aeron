@@ -27,6 +27,7 @@ import io.aeron.test.TestContexts;
 import io.aeron.test.ThreadAffinityRecording;
 import io.aeron.test.cluster.StubClusteredService;
 import org.agrona.collections.IntArrayList;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -34,8 +35,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.Properties;
 
+import static io.aeron.CommonContext.THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.AERON_CLUSTER_CONSENSUS_THREAD_NAME;
+import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
+import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
@@ -53,6 +58,21 @@ class ClusteredMediaDriverThreadAffinityTest
     @TempDir
     private Path baseDir;
 
+    private final Properties systemPropertiesBackup = new Properties();
+
+    @AfterEach
+    void tearDown()
+    {
+        restoreSystemProperties(systemPropertiesBackup);
+    }
+
+    private void setSystemProperty(final String name, final String value)
+    {
+        final Properties properties = new Properties();
+        properties.setProperty(name, value);
+        backupAndOverrideSystemProperties(systemPropertiesBackup, properties);
+    }
+
     @Test
     @InterruptAfter(10)
     @SuppressWarnings("try")
@@ -60,6 +80,7 @@ class ClusteredMediaDriverThreadAffinityTest
     {
         final IntArrayList cpus = ThreadAffinityRecording.effectiveCpus();
         assumeTrue(cpus.size() >= 6, "requires at least 6 CPUs in the effective cpuset");
+        setSystemProperty(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME, "true");
 
         final String aeronDirectoryName = CommonContext.generateRandomDirName();
         try (ThreadAffinityRecording recording = new ThreadAffinityRecording();
@@ -67,14 +88,12 @@ class ClusteredMediaDriverThreadAffinityTest
                 new MediaDriver.Context()
                     .aeronDirectoryName(aeronDirectoryName)
                     .threadingMode(ThreadingMode.SHARED)
-                    .useCpusetOffsets(true)
                     .conductorCpuAffinity(5)
                     .dirDeleteOnStart(true)
                     .dirDeleteOnShutdown(true),
                 TestContexts.localhostArchive()
                     .archiveDir(baseDir.resolve("archive").toFile())
                     .threadingMode(ArchiveThreadingMode.DEDICATED)
-                    .useCpusetOffsets(true)
                     .conductorCpuAffinity(1)
                     .recorderCpuAffinity(2)
                     .replayerCpuAffinity(3)
@@ -82,7 +101,6 @@ class ClusteredMediaDriverThreadAffinityTest
                     .deleteArchiveOnStart(true),
                 TestContexts.localhostConsensusModule()
                     .clusterDir(baseDir.resolve("cluster").toFile())
-                    .useCpusetOffsets(true)
                     .cpuAffinity(4)
                     .ingressChannel("aeron:udp")
                     .logChannel("aeron:ipc")
@@ -93,7 +111,6 @@ class ClusteredMediaDriverThreadAffinityTest
                 new ClusteredServiceContainer.Context()
                     .aeronDirectoryName(aeronDirectoryName)
                     .clusterDir(baseDir.resolve("cluster").toFile())
-                    .useCpusetOffsets(true)
                     .cpuAffinity(0)
                     .clusteredService(new StubClusteredService())))
         {

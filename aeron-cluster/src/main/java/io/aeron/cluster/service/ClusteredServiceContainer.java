@@ -781,8 +781,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private int serviceId = Configuration.serviceId();
         private String serviceName = System.getProperty(SERVICE_NAME_PROP_NAME);
         private int cpuAffinity = Configuration.cpuAffinity();
-        private boolean useCpusetOffsets = CommonContext.threadAffinityUseCpusetOffsets();
-        private boolean failOnAffinityValidationErrors = CommonContext.threadAffinityFailOnValidationErrors();
         private AffinityRegistry affinityRegistry;
         private String replayChannel = Configuration.replayChannel();
         private int replayStreamId = Configuration.replayStreamId();
@@ -961,7 +959,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
                     "clustered-service-" + clusterId + "-" + serviceId);
             }
 
-            affinityRegistry = new AffinityRegistry(useCpusetOffsets, failOnAffinityValidationErrors)
+            affinityRegistry = new AffinityRegistry(
+                CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors())
                 .addAffinity(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME, cpuAffinity);
             affinityRegistry.conclude();
 
@@ -1242,7 +1241,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
         /**
          * Get the CPU the clustered service thread is pinned to.
          *
-         * @return CPU, or cpuset index if {@link #useCpusetOffsets()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME
          */
         @Config(id = "CLUSTER_SERVICE_CPU_AFFINITY")
@@ -1254,7 +1254,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
         /**
          * Set the CPU the clustered service thread is pinned to.
          *
-         * @param cpuAffinity CPU, or cpuset index if {@link #useCpusetOffsets()}, or
+         * @param cpuAffinity CPU, or cpuset index if
+         *                    {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
          *                    {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME
@@ -1262,56 +1263,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public Context cpuAffinity(final int cpuAffinity)
         {
             this.cpuAffinity = cpuAffinity;
-            return this;
-        }
-
-        /**
-         * Are the CPU affinities offsets into the effective cgroup cpuset, which is then also validated, rather than
-         * raw CPU ids.
-         *
-         * @return true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public boolean useCpusetOffsets()
-        {
-            return useCpusetOffsets;
-        }
-
-        /**
-         * Should the CPU affinities be offsets into the effective cgroup cpuset, which is then also validated, rather
-         * than raw CPU ids.
-         *
-         * @param useCpusetOffsets true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public Context useCpusetOffsets(final boolean useCpusetOffsets)
-        {
-            this.useCpusetOffsets = useCpusetOffsets;
-            return this;
-        }
-
-        /**
-         * Are CPU affinity and topology warnings treated as errors.
-         *
-         * @return true if CPU affinity and topology warnings are treated as errors.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public boolean failOnAffinityValidationErrors()
-        {
-            return failOnAffinityValidationErrors;
-        }
-
-        /**
-         * Should CPU affinity and topology warnings be treated as errors.
-         *
-         * @param failOnAffinityValidationErrors true if CPU affinity and topology warnings are treated as errors.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public Context failOnAffinityValidationErrors(final boolean failOnAffinityValidationErrors)
-        {
-            this.failOnAffinityValidationErrors = failOnAffinityValidationErrors;
             return this;
         }
 
@@ -2239,8 +2190,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
                 "\n    serviceId=" + serviceId +
                 "\n    serviceName='" + serviceName + '\'' +
                 "\n    cpuAffinity=" + cpuAffinity +
-                "\n    useCpusetOffsets=" + useCpusetOffsets +
-                "\n    failOnAffinityValidationErrors=" + failOnAffinityValidationErrors +
                 "\n    replayChannel='" + replayChannel + '\'' +
                 "\n    replayStreamId=" + replayStreamId +
                 "\n    controlChannel='" + controlChannel + '\'' +

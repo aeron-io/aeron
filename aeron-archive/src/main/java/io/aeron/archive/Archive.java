@@ -1191,8 +1191,6 @@ public final class Archive implements AutoCloseable
         private int conductorCpuAffinity = Configuration.conductorCpuAffinity();
         private int recorderCpuAffinity = Configuration.recorderCpuAffinity();
         private int replayerCpuAffinity = Configuration.replayerCpuAffinity();
-        private boolean useCpusetOffsets = CommonContext.threadAffinityUseCpusetOffsets();
-        private boolean failOnAffinityValidationErrors = CommonContext.threadAffinityFailOnValidationErrors();
         private AffinityRegistry affinityRegistry;
         private ThreadFactory threadFactory;
         private ThreadFactory recorderThreadFactory;
@@ -2798,7 +2796,8 @@ public final class Archive implements AutoCloseable
          * Get the CPU the conductor thread is pinned to, also used for the shared thread in
          * {@link ArchiveThreadingMode#SHARED}.
          *
-         * @return CPU, or cpuset index if {@link #useCpusetOffsets()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -2811,7 +2810,8 @@ public final class Archive implements AutoCloseable
          * Set the CPU the conductor thread is pinned to, also used for the shared thread in
          * {@link ArchiveThreadingMode#SHARED}.
          *
-         * @param conductorCpuAffinity CPU, or cpuset index if {@link #useCpusetOffsets()}, or
+         * @param conductorCpuAffinity CPU, or cpuset index if
+         *                             {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
          *                             {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
@@ -2825,7 +2825,8 @@ public final class Archive implements AutoCloseable
         /**
          * Get the CPU the recorder thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
          *
-         * @return CPU, or cpuset index if {@link #useCpusetOffsets()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#RECORDER_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -2837,7 +2838,8 @@ public final class Archive implements AutoCloseable
         /**
          * Set the CPU the recorder thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
          *
-         * @param recorderCpuAffinity CPU, or cpuset index if {@link #useCpusetOffsets()}, or
+         * @param recorderCpuAffinity CPU, or cpuset index if
+         *                            {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
          *                            {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#RECORDER_CPU_AFFINITY_PROP_NAME
@@ -2851,7 +2853,8 @@ public final class Archive implements AutoCloseable
         /**
          * Get the CPU the replayer thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
          *
-         * @return CPU, or cpuset index if {@link #useCpusetOffsets()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#REPLAYER_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -2863,7 +2866,8 @@ public final class Archive implements AutoCloseable
         /**
          * Set the CPU the replayer thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
          *
-         * @param replayerCpuAffinity CPU, or cpuset index if {@link #useCpusetOffsets()}, or
+         * @param replayerCpuAffinity CPU, or cpuset index if
+         *                            {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
          *                            {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#REPLAYER_CPU_AFFINITY_PROP_NAME
@@ -2874,56 +2878,6 @@ public final class Archive implements AutoCloseable
             return this;
         }
 
-        /**
-         * Are the CPU affinities offsets into the effective cgroup cpuset, which is then also validated, rather than
-         * raw CPU ids.
-         *
-         * @return true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public boolean useCpusetOffsets()
-        {
-            return useCpusetOffsets;
-        }
-
-        /**
-         * Should the CPU affinities be offsets into the effective cgroup cpuset, which is then also validated, rather
-         * than raw CPU ids.
-         *
-         * @param useCpusetOffsets true if the CPU affinities are offsets into the effective cgroup cpuset.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME
-         */
-        public Context useCpusetOffsets(final boolean useCpusetOffsets)
-        {
-            this.useCpusetOffsets = useCpusetOffsets;
-            return this;
-        }
-
-        /**
-         * Are CPU affinity and topology warnings treated as errors.
-         *
-         * @return true if CPU affinity and topology warnings are treated as errors.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public boolean failOnAffinityValidationErrors()
-        {
-            return failOnAffinityValidationErrors;
-        }
-
-        /**
-         * Should CPU affinity and topology warnings be treated as errors.
-         *
-         * @param failOnAffinityValidationErrors true if CPU affinity and topology warnings are treated as errors.
-         * @return this for a fluent API.
-         * @see CommonContext#THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME
-         */
-        public Context failOnAffinityValidationErrors(final boolean failOnAffinityValidationErrors)
-        {
-            this.failOnAffinityValidationErrors = failOnAffinityValidationErrors;
-            return this;
-        }
-
         AffinityRegistry affinityRegistry()
         {
             return affinityRegistry;
@@ -2931,7 +2885,8 @@ public final class Archive implements AutoCloseable
 
         private void concludeAffinity()
         {
-            affinityRegistry = new AffinityRegistry(useCpusetOffsets, failOnAffinityValidationErrors);
+            affinityRegistry = new AffinityRegistry(
+                CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors());
             switch (threadingMode)
             {
                 case INVOKER:
@@ -4091,8 +4046,6 @@ public final class Archive implements AutoCloseable
                 "\n    conductorCpuAffinity=" + conductorCpuAffinity +
                 "\n    recorderCpuAffinity=" + recorderCpuAffinity +
                 "\n    replayerCpuAffinity=" + replayerCpuAffinity +
-                "\n    useCpusetOffsets=" + useCpusetOffsets +
-                "\n    failOnAffinityValidationErrors=" + failOnAffinityValidationErrors +
                 "\n    threadFactory=" + threadFactory +
                 "\n    abortLatch=" + abortLatch +
                 "\n    idleStrategySupplier=" + idleStrategySupplier +

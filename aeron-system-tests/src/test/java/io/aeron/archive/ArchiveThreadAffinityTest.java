@@ -26,6 +26,7 @@ import io.aeron.test.TestContexts;
 import io.aeron.test.ThreadAffinityRecording;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.collections.IntArrayList;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -33,11 +34,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.Properties;
 
+import static io.aeron.CommonContext.THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME;
+import static io.aeron.CommonContext.THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_RECORDER_THREAD_NAME;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_REPLAYER_THREAD_NAME;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_SHARED_THREAD_NAME;
+import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
+import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -53,6 +59,20 @@ class ArchiveThreadAffinityTest
     private Path archiveDir;
 
     private final String aeronDirectoryName = CommonContext.generateRandomDirName();
+    private final Properties systemPropertiesBackup = new Properties();
+
+    @AfterEach
+    void tearDown()
+    {
+        restoreSystemProperties(systemPropertiesBackup);
+    }
+
+    private void setSystemProperty(final String name, final String value)
+    {
+        final Properties properties = new Properties();
+        properties.setProperty(name, value);
+        backupAndOverrideSystemProperties(systemPropertiesBackup, properties);
+    }
 
     @Test
     @InterruptAfter(10)
@@ -60,11 +80,11 @@ class ArchiveThreadAffinityTest
     void shouldPinDedicatedArchiveThreadsToCpusetIndices()
     {
         final IntArrayList cpus = requireCpus(3);
+        setSystemProperty(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME, "true");
         try (ThreadAffinityRecording recording = new ThreadAffinityRecording();
             TestMediaDriver ignore = TestMediaDriver.launch(driverContext(), null);
             Archive ignore2 = Archive.launch(archiveContext()
                 .threadingMode(ArchiveThreadingMode.DEDICATED)
-                .useCpusetOffsets(true)
                 .conductorCpuAffinity(2)
                 .recorderCpuAffinity(0)
                 .replayerCpuAffinity(1)))
@@ -97,12 +117,12 @@ class ArchiveThreadAffinityTest
     void shouldPinDriverAndArchiveInArchivingMediaDriver()
     {
         final IntArrayList cpus = requireCpus(4);
+        setSystemProperty(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME, "true");
         try (ThreadAffinityRecording recording = new ThreadAffinityRecording();
             ArchivingMediaDriver ignore = ArchivingMediaDriver.launch(
-                driverContext().useCpusetOffsets(true).conductorCpuAffinity(3),
+                driverContext().conductorCpuAffinity(3),
                 archiveContext()
                     .threadingMode(ArchiveThreadingMode.DEDICATED)
-                    .useCpusetOffsets(true)
                     .conductorCpuAffinity(0)
                     .recorderCpuAffinity(1)
                     .replayerCpuAffinity(2)))
@@ -120,15 +140,14 @@ class ArchiveThreadAffinityTest
     void shouldRejectCpuClaimedByDriverWhenWarningsAreErrors()
     {
         requireCpus(1);
-        try (MediaDriver ignore = MediaDriver.launch(
-            driverContext().useCpusetOffsets(true).conductorCpuAffinity(0)))
+        setSystemProperty(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME, "true");
+        try (MediaDriver ignore = MediaDriver.launch(driverContext().conductorCpuAffinity(0)))
         {
+            setSystemProperty(THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME, "true");
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
                 () -> Archive.launch(archiveContext()
                     .threadingMode(ArchiveThreadingMode.SHARED)
-                    .useCpusetOffsets(true)
-                    .failOnAffinityValidationErrors(true)
                     .conductorCpuAffinity(0)).close());
             assertTrue(ex.getMessage().contains("cpuset warnings as errors"), ex.getMessage());
         }
