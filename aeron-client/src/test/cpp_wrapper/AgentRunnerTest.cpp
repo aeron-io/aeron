@@ -348,3 +348,76 @@ TEST_F(AgentRunnerTest, startThrowsIfAlreadyStarted)
     EXPECT_EQ(1, agent.closeCallCount());
     EXPECT_GT(agent.doWorkCallCount(), 1);
 }
+
+class ThrowErrorOnStartAgent : public TestAgent
+{
+public:
+    ThrowErrorOnStartAgent() = default;
+
+    void onStart()
+    {
+        TestAgent::onStart();
+        throw std::domain_error("error");
+    }
+};
+
+TEST_F(AgentRunnerTest, shouldJoinThreadIfOneWasStarted)
+{
+    ThrowErrorOnStartAgent agent;
+    NoOpIdleStrategy idleStrategy;
+    exception_handler_t exception_handler = [&](const std::exception &ex)
+    {
+        EXPECT_EQ(typeid(ex), typeid(std::domain_error));
+        EXPECT_STREQ("error", ex.what());
+    };
+    AgentRunner<ThrowErrorOnStartAgent, NoOpIdleStrategy> agentRunner(agent, idleStrategy, exception_handler, "abc");
+
+    agentRunner.start();
+    EXPECT_TRUE(agentRunner.isStarted());
+
+    while (agent.startCallCount() != 1)
+    {
+        std::this_thread::yield();
+    }
+
+    while (!agentRunner.isClosed())
+    {
+        std::this_thread::yield();
+    }
+
+    EXPECT_FALSE(agentRunner.isRunning());
+    EXPECT_TRUE(agentRunner.isClosed());
+
+    agentRunner.close();
+    agentRunner.close();
+
+    EXPECT_EQ(1, agent.closeCallCount());
+    EXPECT_EQ(1, agent.startCallCount());
+    EXPECT_EQ(0, agent.doWorkCallCount());
+}
+
+TEST_F(AgentRunnerTest, shouldCloseAgentExplicitlyIfNotStarted)
+{
+    TestAgent agent;
+    NoOpIdleStrategy idleStrategy;
+    exception_handler_t exception_handler;
+    AgentRunner<TestAgent, NoOpIdleStrategy> agentRunner(agent, idleStrategy, exception_handler, "abc");
+
+    EXPECT_FALSE(agentRunner.isStarted());
+    EXPECT_FALSE(agentRunner.isRunning());
+    EXPECT_FALSE(agentRunner.isClosed());
+    EXPECT_EQ(0, agent.startCallCount());
+    EXPECT_EQ(0, agent.doWorkCallCount());
+    EXPECT_EQ(0, agent.closeCallCount());
+
+    agentRunner.close();
+    agentRunner.close();
+    agentRunner.close();
+
+    EXPECT_FALSE(agentRunner.isStarted());
+    EXPECT_FALSE(agentRunner.isRunning());
+    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_EQ(0, agent.startCallCount());
+    EXPECT_EQ(0, agent.doWorkCallCount());
+    EXPECT_EQ(1, agent.closeCallCount());
+}

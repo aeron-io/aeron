@@ -193,11 +193,7 @@ public:
         {
             m_isRunning.store(false, std::memory_order_release);
 
-            if (m_thread.joinable())
-            {
-                m_thread.join();
-            }
-            else
+            if (!m_isStarted.load(std::memory_order_acquire))
             {
                 try
                 {
@@ -207,6 +203,14 @@ public:
                 {
                     m_exceptionHandler(exception);
                 }
+            }
+        }
+
+        if (m_isStarted.load(std::memory_order_acquire))
+        {
+            if (m_thread.joinable())
+            {
+                m_thread.join();
             }
         }
     }
