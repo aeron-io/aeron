@@ -1,3 +1,0 @@
-io.aeron.cpu.topology.L3TopologyValidator
-io.aeron.cpu.topology.DieLocalityValidator
-io.aeron.cpu.topology.ThreadAlignmentValidator
