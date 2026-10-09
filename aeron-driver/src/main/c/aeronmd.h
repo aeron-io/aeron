@@ -982,13 +982,13 @@ int32_t aeron_driver_context_get_sender_cpu_affinity(aeron_driver_context_t *con
 int aeron_driver_context_set_native_resource_agent_cpu_affinity(aeron_driver_context_t *context, int32_t value);
 int32_t aeron_driver_context_get_native_resource_agent_cpu_affinity(aeron_driver_context_t *context);
 
-#define AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR "AERON_DRIVER_CPUSET_AFFINITY"
-int aeron_driver_context_set_cpuset_affinity(aeron_driver_context_t *context, bool value);
-bool aeron_driver_context_get_cpuset_affinity(aeron_driver_context_t *context);
+#define AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_ENV_VAR "AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS"
+int aeron_driver_context_set_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context);
 
-#define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR "AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS"
-int aeron_driver_context_set_cpuset_warnings_as_errors(aeron_driver_context_t *context, bool value);
-bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *context);
+#define AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_ENV_VAR "AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS"
+int aeron_driver_context_set_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context);
 
 /**
  * Set the list of filenames to dynamic libraries to load upon context init.

@@ -241,8 +241,8 @@ typedef struct aeron_driver_context_stct
     int32_t native_resource_agent_cpu_affinity_no;          /* aeron.driver.native.resource.agent.cpu.affinity = -1 */
     int32_t native_resource_agent_cpu_affinity_resolved;
     int32_t stream_session_limit;                           /* aeron.driver.stream.session.limit = INT32_MAX */
-    bool cpuset_affinity;                                   /* aeron.driver.cpuset.affinity = false */
-    bool cpuset_warnings_as_errors;                         /* aeron.driver.cpuset.warnings_as_errors = false */
+    bool thread_affinity_use_cpuset_offsets;                /* aeron.thread.affinity.use.cpuset.offsets = false */
+    bool thread_affinity_fail_on_validation_errors;         /* aeron.thread.affinity.fail.on.validation.errors = false */
     bool enable_experimental_features;                      /* aeron.enable.experimental.features = false */
 
     struct                                                  /* aeron.receiver.receiver.tag = <unset> */

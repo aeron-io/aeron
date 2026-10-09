@@ -243,8 +243,8 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_DEFAULT UINT32_C(4)
 #define AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT UINT32_C(1)
 #define AERON_CPU_AFFINITY_DEFAULT (-1)
-#define AERON_DRIVER_CPUSET_AFFINITY_DEFAULT (false)
-#define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT (false)
+#define AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT (false)
+#define AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT (false)
 #define AERON_DRIVER_CONNECT_DEFAULT (true)
 #define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT (false)
 #define AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT (INT32_MAX)
@@ -532,8 +532,8 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->sender_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->receiver_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->native_resource_agent_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
-    _context->cpuset_affinity = AERON_DRIVER_CPUSET_AFFINITY_DEFAULT;
-    _context->cpuset_warnings_as_errors = AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
+    _context->thread_affinity_use_cpuset_offsets = AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT;
+    _context->thread_affinity_fail_on_validation_errors = AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT;
     _context->enable_experimental_features = AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT;
     _context->stream_session_limit = AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
     _context->udp_channel_transport_poller_iteration_threshold = AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT;
@@ -815,11 +815,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         255);
     _context->native_resource_agent_cpu_affinity_resolved = _context->native_resource_agent_cpu_affinity_no;
 
-    _context->cpuset_affinity = aeron_parse_bool(
-        getenv(AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR), AERON_DRIVER_CPUSET_AFFINITY_DEFAULT);
+    _context->thread_affinity_use_cpuset_offsets = aeron_parse_bool(
+        getenv(AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_ENV_VAR),
+        AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT);
 
-    _context->cpuset_warnings_as_errors = aeron_parse_bool(
-        getenv(AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR), AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT);
+    _context->thread_affinity_fail_on_validation_errors = aeron_parse_bool(
+        getenv(AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_ENV_VAR),
+        AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT);
 
     _context->send_to_sm_poll_ratio = (uint8_t)aeron_config_parse_uint64(
         AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR,
@@ -3568,30 +3570,32 @@ int32_t aeron_driver_context_get_native_resource_agent_cpu_affinity(aeron_driver
     return NULL != context ? context->native_resource_agent_cpu_affinity_no : AERON_CPU_AFFINITY_DEFAULT;
 }
 
-int aeron_driver_context_set_cpuset_affinity(aeron_driver_context_t *context, bool value)
+int aeron_driver_context_set_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context, bool value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->cpuset_affinity = value;
+    context->thread_affinity_use_cpuset_offsets = value;
     return 0;
 }
 
-bool aeron_driver_context_get_cpuset_affinity(aeron_driver_context_t *context)
+bool aeron_driver_context_get_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context)
 {
-    return NULL != context ? context->cpuset_affinity : AERON_DRIVER_CPUSET_AFFINITY_DEFAULT;
+    return NULL != context ?
+        context->thread_affinity_use_cpuset_offsets : AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT;
 }
 
-int aeron_driver_context_set_cpuset_warnings_as_errors(aeron_driver_context_t *context, bool value)
+int aeron_driver_context_set_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context, bool value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->cpuset_warnings_as_errors = value;
+    context->thread_affinity_fail_on_validation_errors = value;
     return 0;
 }
 
-bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *context)
+bool aeron_driver_context_get_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context)
 {
-    return NULL != context ? context->cpuset_warnings_as_errors : AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
+    return NULL != context ?
+        context->thread_affinity_fail_on_validation_errors : AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT;
 }
 
 static int aeron_driver_context_apply_cpuset_affinity_per_cpu(

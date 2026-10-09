@@ -603,8 +603,9 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_resolved=%" PRId32, context->sender_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_no=%" PRId32, context->native_resource_agent_cpu_affinity_no);
     AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_resolved=%" PRId32, context->native_resource_agent_cpu_affinity_resolved);
-    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%s", context->cpuset_affinity ? "true" : "false");
-    AERON_FPRINTF(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
+    AERON_FPRINTF(fpout, "\n    thread_affinity_use_cpuset_offsets=%s", context->thread_affinity_use_cpuset_offsets ? "true" : "false");
+    AERON_FPRINTF(fpout, "\n    thread_affinity_fail_on_validation_errors=%s",
+        context->thread_affinity_fail_on_validation_errors ? "true" : "false");
 
     AERON_FPRINTF(fpout, "\n    epoch_clock=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->epoch_clock, buffer, sizeof(buffer)));
@@ -1197,7 +1198,7 @@ int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FIL
 #ifdef __linux__
 static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, aeron_topology_t *topology)
 {
-    if (!context->cpuset_affinity)
+    if (!context->thread_affinity_use_cpuset_offsets)
     {
         context->conductor_cpu_affinity_resolved = context->conductor_cpu_affinity_no;
         context->sender_cpu_affinity_resolved = context->sender_cpu_affinity_no;
@@ -1322,7 +1323,7 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
     const int total_warnings_count =
         unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
 
-    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
+    if (context->thread_affinity_fail_on_validation_errors && 0 < total_warnings_count)
     {
         AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
         goto error;
