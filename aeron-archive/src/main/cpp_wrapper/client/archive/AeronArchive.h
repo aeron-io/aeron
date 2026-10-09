@@ -1447,7 +1447,7 @@ private:
 
     static void recording_descriptor_consumer_func(
         aeron_archive_recording_descriptor_t *recording_descriptor,
-        void *clientd)
+        void *clientd) noexcept
     {
         auto consumer = *reinterpret_cast<recording_descriptor_consumer_t *>(clientd);
 
@@ -1474,7 +1474,7 @@ private:
 
     static void recording_subscription_descriptor_consumer_func(
         aeron_archive_recording_subscription_descriptor_t *recording_subscription_descriptor,
-        void *clientd)
+        void *clientd) noexcept
     {
         auto consumer = *reinterpret_cast<recording_subscription_descriptor_consumer_t *>(clientd);
 

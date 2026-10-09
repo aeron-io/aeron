@@ -78,7 +78,7 @@ typedef std::function<ControlledPollAction(
 
 
 template<typename H>
-static void doPoll(void *clientd, const std::uint8_t *buffer, std::size_t length, aeron_header_t *header)
+static void doPoll(void *clientd, const std::uint8_t *buffer, std::size_t length, aeron_header_t *header) noexcept
 {
     H &handler = *reinterpret_cast<H *>(clientd);
     AtomicBuffer atomicBuffer(const_cast<std::uint8_t *>(buffer), length);
@@ -88,7 +88,7 @@ static void doPoll(void *clientd, const std::uint8_t *buffer, std::size_t length
 
 template<typename H>
 static aeron_controlled_fragment_handler_action_t doControlledPoll(
-    void *clientd, const std::uint8_t *buffer, std::size_t length, aeron_header_t *header)
+    void *clientd, const std::uint8_t *buffer, std::size_t length, aeron_header_t *header) noexcept
 {
     H &handler = *reinterpret_cast<H *>(clientd);
     AtomicBuffer atomicBuffer(const_cast<std::uint8_t *>(buffer), length);
@@ -100,7 +100,7 @@ static aeron_controlled_fragment_handler_action_t doControlledPoll(
 
 template<typename H>
 static void doBlockPoll(
-    void *clientd, const std::uint8_t *buffer, std::size_t length, std::int32_t session_id, std::int32_t term_id)
+    void *clientd, const std::uint8_t *buffer, std::size_t length, std::int32_t session_id, std::int32_t term_id) noexcept
 {
     H &handler = *reinterpret_cast<H *>(clientd);
     AtomicBuffer atomicBuffer(const_cast<std::uint8_t *>(buffer), length);

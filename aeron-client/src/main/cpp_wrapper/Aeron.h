@@ -1149,14 +1149,14 @@ private:
         return aeron;
     }
 
-    static void onAvailableImageCallback(void *clientd, aeron_subscription_t *subscription, aeron_image_t *image)
+    static void onAvailableImageCallback(void *clientd, aeron_subscription_t *subscription, aeron_image_t *image) noexcept
     {
         on_available_image_t &callback = *reinterpret_cast<on_available_image_t *>(clientd);
         Image imageWrapper(subscription, image);
         callback(imageWrapper);
     }
 
-    static void onUnavailableImageCallback(void *clientd, aeron_subscription_t *subscription, aeron_image_t *image)
+    static void onUnavailableImageCallback(void *clientd, aeron_subscription_t *subscription, aeron_image_t *image) noexcept
     {
         on_unavailable_image_t &callback = *reinterpret_cast<on_unavailable_image_t *>(clientd);
         Image imageWrapper(subscription, image);
@@ -1164,28 +1164,28 @@ private:
     }
 
     static void onAvailableCounterCallback(
-        void *clientd, aeron_counters_reader_t *counters_reader, std::int64_t registration_id, std::int32_t counter_id)
+        void *clientd, aeron_counters_reader_t *counters_reader, std::int64_t registration_id, std::int32_t counter_id) noexcept
     {
-        CountersReader reader = CountersReader(counters_reader);
+        auto reader = CountersReader(counters_reader);
         on_available_counter_t &callback = *reinterpret_cast<on_available_counter_t *>(clientd);
         callback(reader, registration_id, counter_id);
     }
 
     static void onUnavailableCounterCallback(
-        void *clientd, aeron_counters_reader_t *counters_reader, std::int64_t registration_id, std::int32_t counter_id)
+        void *clientd, aeron_counters_reader_t *counters_reader, std::int64_t registration_id, std::int32_t counter_id) noexcept
     {
-        CountersReader reader = CountersReader(counters_reader);
+        auto reader = CountersReader(counters_reader);
         on_unavailable_counter_t &callback = *reinterpret_cast<on_unavailable_counter_t *>(clientd);
         callback(reader, registration_id, counter_id);
     }
 
-    static void onCloseClientCallback(void *clientd)
+    static void onCloseClientCallback(void *clientd) noexcept
     {
         on_close_client_t &callback = *reinterpret_cast<on_close_client_t *>(clientd);
         callback();
     }
 
-    static void emptyCallback(void * /* clientd */)
+    static void emptyCallback(void * /* clientd */) noexcept
     {
     }
 };

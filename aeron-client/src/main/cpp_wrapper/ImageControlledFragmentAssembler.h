@@ -69,9 +69,9 @@ public:
      *
      * @return controlled_poll_fragment_handler_t composed with the ImageControlledFragmentAssembler instance
      */
-    controlled_poll_fragment_handler_t handler()
+    controlled_poll_fragment_handler_t handler() noexcept
     {
-        return [this](AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header)
+        return [this](AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header) noexcept
         {
             return this->onFragment(buffer, offset, length, header);
         };
@@ -81,7 +81,8 @@ private:
     controlled_poll_fragment_handler_t m_delegate;
     aeron_image_controlled_fragment_assembler_t *m_fragment_assembler = nullptr;
 
-    static aeron_controlled_fragment_handler_action_t handlerCallback(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+    static aeron_controlled_fragment_handler_action_t handlerCallback(
+        void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header) noexcept
     {
         auto assembler = reinterpret_cast<ImageControlledFragmentAssembler *>(clientd);
         Header headerWrapper{header};
@@ -92,22 +93,19 @@ private:
         {
             case ControlledPollAction::ABORT:
                 return AERON_ACTION_ABORT;
-                break;
             case ControlledPollAction::BREAK:
                 return AERON_ACTION_BREAK;
-                break;
             case ControlledPollAction::COMMIT:
                 return AERON_ACTION_COMMIT;
-                break;
             case ControlledPollAction::CONTINUE:
                 return AERON_ACTION_CONTINUE;
-                break;
+            default:
+                return AERON_ACTION_ABORT;
         }
-
-        throw IllegalArgumentException("unknown action", SOURCEINFO, EINVAL);
     }
 
-    ControlledPollAction onFragment(AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header)
+    ControlledPollAction onFragment(
+        AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header) noexcept
     {
         aeron_controlled_fragment_handler_action_t action = aeron_image_controlled_fragment_assembler_handler(
             m_fragment_assembler,
@@ -119,19 +117,16 @@ private:
         {
             case AERON_ACTION_ABORT:
                 return ControlledPollAction::ABORT;
-                break;
             case AERON_ACTION_BREAK:
                 return ControlledPollAction::BREAK;
-                break;
             case AERON_ACTION_COMMIT:
                 return ControlledPollAction::COMMIT;
-                break;
             case AERON_ACTION_CONTINUE:
                 return ControlledPollAction::CONTINUE;
                 break;
+            default:
+                return ControlledPollAction::ABORT;
         }
-
-        throw IllegalArgumentException("unknown action", SOURCEINFO, EINVAL);
     }
 };
 

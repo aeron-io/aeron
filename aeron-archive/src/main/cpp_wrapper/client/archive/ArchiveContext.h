@@ -327,7 +327,7 @@ private:
         ctx->m_idleFunc(work_count);
     }
 
-    static aeron_archive_encoded_credentials_t *encodedCredentialsFunc(void *clientd)
+    static aeron_archive_encoded_credentials_t *encodedCredentialsFunc(void *clientd) noexcept
     {
         auto ctx = (Context *)clientd;
 
@@ -338,7 +338,8 @@ private:
         return &ctx->m_lastEncodedCredentials;
     }
 
-    static aeron_archive_encoded_credentials_t *onChallengeFunc(aeron_archive_encoded_credentials_t *encodedChallenge, void *clientd)
+    static aeron_archive_encoded_credentials_t *onChallengeFunc(
+        aeron_archive_encoded_credentials_t *encodedChallenge, void *clientd) noexcept
     {
         auto ctx = (Context *)clientd;
 
@@ -349,7 +350,7 @@ private:
         return &ctx->m_lastEncodedCredentials;
     }
 
-    static void onFreeFunc(aeron_archive_encoded_credentials_t *credentials, void *clientd)
+    static void onFreeFunc(aeron_archive_encoded_credentials_t *credentials, void *clientd) noexcept
     {
         auto ctx = (Context *)clientd;
 
@@ -358,7 +359,7 @@ private:
 
     static void recording_signal_consumer_func(
         aeron_archive_recording_signal_t *recording_signal,
-        void *clientd)
+        void *clientd) noexcept
     {
         auto ctx = (Context *)clientd;
 
@@ -375,7 +376,7 @@ private:
         }
     }
 
-    static void error_handler_func(void *clientd, int errcode, const char *message)
+    static void error_handler_func(void *clientd, int errcode, const char *message) noexcept
     {
         auto ctx = (Context *)clientd;
 
@@ -392,7 +393,7 @@ private:
         }
     }
 
-    static void delegating_invoker_func(void *clientd)
+    static void delegating_invoker_func(void *clientd) noexcept
     {
         auto ctx = (Context *)clientd;
 

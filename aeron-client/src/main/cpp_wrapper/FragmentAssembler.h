@@ -72,9 +72,9 @@ public:
      *
      * @return fragment_handler_t composed with the FragmentAssembler instance
      */
-    fragment_handler_t handler()
+    fragment_handler_t handler() noexcept
     {
-        return [this](AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header)
+        return [this](AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header) noexcept
         {
             this->onFragment(buffer, offset, length, header);
         };
@@ -96,7 +96,7 @@ private:
     aeron_fragment_assembler_t *m_fragment_assembler = nullptr;
     fragment_handler_t m_delegate;
 
-    static void handlerCallback(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
+    static void handlerCallback(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header) noexcept
     {
         auto *assembler = reinterpret_cast<FragmentAssembler *>(clientd);
         Header headerWrapper{header};
@@ -104,7 +104,7 @@ private:
         assembler->m_delegate(buffer1, 0, (util::index_t)length, headerWrapper);
     }
 
-    inline void onFragment(AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header)
+    inline void onFragment(AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header) noexcept
     {
         aeron_fragment_assembler_handler(m_fragment_assembler, buffer.buffer() + offset, length, header.hdr());
     }

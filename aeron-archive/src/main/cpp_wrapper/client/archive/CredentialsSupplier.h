@@ -24,7 +24,7 @@ namespace aeron { namespace archive { namespace client
 
 typedef std::function<std::pair<const char *, std::uint32_t>()> credentials_encoded_credentials_supplier_t;
 
-inline std::pair<const char *, std::uint32_t> defaultCredentialsEncodedCredentials()
+inline std::pair<const char *, std::uint32_t> defaultCredentialsEncodedCredentials() noexcept
 {
     return { nullptr, 0 };
 }
@@ -33,14 +33,14 @@ typedef std::function<std::pair<const char *, std::uint32_t>(
     std::pair<const char *, std::uint32_t> encodedChallenge)> credentials_challenge_supplier_t;
 
 inline std::pair<const char *, std::uint32_t> defaultCredentialsOnChallenge(
-    std::pair<const char *, std::uint32_t> encodedChallenge)
+    std::pair<const char *, std::uint32_t> encodedChallenge) noexcept
 {
     return { nullptr, 0 };
 }
 
 typedef std::function<void(std::pair<const char *, std::uint32_t> encodedCredentials)> credentials_free_t;
 
-inline void defaultCredentialsOnFree(std::pair<const char *, std::uint32_t> credentials)
+inline void defaultCredentialsOnFree(std::pair<const char *, std::uint32_t> credentials) noexcept
 {
     delete[] credentials.first;
 }

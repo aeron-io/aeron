@@ -169,35 +169,35 @@ inline void defaultErrorHandler(const std::exception &exception)
     ::exit(-1);
 }
 
-inline void defaultOnNewPublicationHandler(const std::string &, std::int32_t, std::int32_t, std::int64_t)
+inline void defaultOnNewPublicationHandler(const std::string &, std::int32_t, std::int32_t, std::int64_t) noexcept
 {
 }
 
-inline void defaultOnAvailableImageHandler(Image &)
+inline void defaultOnAvailableImageHandler(Image &) noexcept
 {
 }
 
-inline void defaultOnNewSubscriptionHandler(const std::string &, std::int32_t, std::int64_t)
+inline void defaultOnNewSubscriptionHandler(const std::string &, std::int32_t, std::int64_t) noexcept
 {
 }
 
-inline void defaultOnUnavailableImageHandler(Image &)
+inline void defaultOnUnavailableImageHandler(Image &) noexcept
 {
 }
 
-inline void defaultOnAvailableCounterHandler(CountersReader &, std::int64_t, std::int32_t)
+inline void defaultOnAvailableCounterHandler(CountersReader &, std::int64_t, std::int32_t) noexcept
 {
 }
 
-inline void defaultOnUnavailableCounterHandler(CountersReader &, std::int64_t, std::int32_t)
+inline void defaultOnUnavailableCounterHandler(CountersReader &, std::int64_t, std::int32_t) noexcept
 {
 }
 
-inline void defaultOnCloseClientHandler()
+inline void defaultOnCloseClientHandler() noexcept
 {
 }
 
-inline void defaultOnErrorFrameHandler(aeron::status::PublicationErrorFrame &)
+inline void defaultOnErrorFrameHandler(aeron::status::PublicationErrorFrame &) noexcept
 {
 }
 
@@ -678,7 +678,7 @@ private:
         }
     }
 
-    static void errorHandlerCallback(void *clientd, int errcode, const char *message)
+    static void errorHandlerCallback(void *clientd, int errcode, const char *message) noexcept
     {
         try
         {
@@ -696,7 +696,7 @@ private:
         const char *channel,
         std::int32_t stream_id,
         std::int32_t session_id,
-        std::int64_t correlation_id)
+        std::int64_t correlation_id) noexcept
     {
         on_new_publication_t &handler = *reinterpret_cast<on_new_publication_t *>(clientd);
         handler(std::string(channel), stream_id, session_id, correlation_id);
@@ -706,27 +706,27 @@ private:
         void *clientd,
         const char *channel,
         std::int32_t stream_id,
-        std::int64_t correlation_id)
+        std::int64_t correlation_id) noexcept
     {
         on_new_subscription_t &handler = *reinterpret_cast<on_new_subscription_t *>(clientd);
         handler(std::string(channel), stream_id, correlation_id);
     }
 
     static void availableCounterHandlerCallback(
-        void *clientd, aeron_counters_reader_t *counters_reader, std::int64_t registration_id, std::int32_t counter_id)
+        void *clientd, aeron_counters_reader_t *counters_reader, std::int64_t registration_id, std::int32_t counter_id) noexcept
     {
         on_available_counter_t &handler = *reinterpret_cast<on_available_counter_t *>(clientd);
         CountersReader countersReader(counters_reader);
         handler(countersReader, registration_id, counter_id);
     }
 
-    static void closeClientHandlerCallback(void *clientd)
+    static void closeClientHandlerCallback(void *clientd) noexcept
     {
         on_close_client_t &handler = *reinterpret_cast<on_close_client_t *>(clientd);
         handler();
     }
 
-    static void errorFrameHandlerCallback(void *clientd, aeron_publication_error_values_t *error_frame)
+    static void errorFrameHandlerCallback(void *clientd, aeron_publication_error_values_t *error_frame) noexcept
     {
         on_publication_error_frame_t &handler = *reinterpret_cast<on_publication_error_frame_t *>(clientd);
         aeron::status::PublicationErrorFrame errorFrame{error_frame};

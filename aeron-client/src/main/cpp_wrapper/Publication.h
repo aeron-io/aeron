@@ -63,7 +63,7 @@ typedef std::function<std::int64_t(
     util::index_t length)> on_reserved_value_supplier_t;
 
 static const on_reserved_value_supplier_t DEFAULT_RESERVED_VALUE_SUPPLIER =
-    [](AtomicBuffer &, util::index_t, util::index_t) -> std::int64_t
+    [](AtomicBuffer &, util::index_t, util::index_t) noexcept -> std::int64_t
     {
         return 0;
     };
@@ -792,7 +792,8 @@ private:
     std::unordered_map<std::int64_t, AsyncDestination *> m_pendingDestinations = {};
     std::recursive_mutex m_adminLock = {};
 
-    static std::int64_t reservedValueSupplierCallback(void *clientd, std::uint8_t *buffer, std::size_t frame_length)
+    static std::int64_t reservedValueSupplierCallback(
+        void *clientd, std::uint8_t *buffer, std::size_t frame_length) noexcept
     {
         on_reserved_value_supplier_t &supplier = *static_cast<on_reserved_value_supplier_t *>(clientd);
         AtomicBuffer atomicBuffer(buffer, frame_length);

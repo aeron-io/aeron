@@ -813,7 +813,8 @@ private:
     std::string m_channel = {};
     std::unordered_map<std::int64_t, AsyncDestination *> m_pendingDestinations = {};
 
-    static std::int64_t reservedValueSupplierCallback(void *clientd, std::uint8_t *buffer, std::size_t frame_length)
+    static std::int64_t reservedValueSupplierCallback(
+        void *clientd, std::uint8_t *buffer, std::size_t frame_length) noexcept
     {
         on_reserved_value_supplier_t &supplier = *static_cast<on_reserved_value_supplier_t *>(clientd);
         AtomicBuffer atomicBuffer(buffer, frame_length);
