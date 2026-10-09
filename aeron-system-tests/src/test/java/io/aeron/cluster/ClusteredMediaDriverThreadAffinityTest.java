@@ -101,7 +101,7 @@ class ClusteredMediaDriverThreadAffinityTest
                     .deleteArchiveOnStart(true),
                 TestContexts.localhostConsensusModule()
                     .clusterDir(baseDir.resolve("cluster").toFile())
-                    .cpuAffinity(4)
+                    .clusterCpuAffinity(4)
                     .ingressChannel("aeron:udp")
                     .logChannel("aeron:ipc")
                     .replicationChannel("aeron:udp?endpoint=localhost:0")

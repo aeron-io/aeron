@@ -1714,7 +1714,7 @@ public final class ConsensusModule implements AutoCloseable
         private VersionValidator appVersionValidator;
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
-        private int cpuAffinity = Configuration.cpuAffinity();
+        private int clusterCpuAffinity = Configuration.cpuAffinity();
         private AffinityRegistry affinityRegistry;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
@@ -2089,7 +2089,7 @@ public final class ConsensusModule implements AutoCloseable
                 CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors());
             if (!useAgentInvoker)
             {
-                affinityRegistry.addAffinity(CLUSTER_CPU_AFFINITY_PROP_NAME, cpuAffinity);
+                affinityRegistry.addAffinity(CLUSTER_CPU_AFFINITY_PROP_NAME, clusterCpuAffinity);
             }
             affinityRegistry.conclude();
 
@@ -4136,23 +4136,23 @@ public final class ConsensusModule implements AutoCloseable
          * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
          */
         @Config
-        public int cpuAffinity()
+        public int clusterCpuAffinity()
         {
-            return cpuAffinity;
+            return clusterCpuAffinity;
         }
 
         /**
          * Set the CPU the consensus module thread is pinned to.
          *
-         * @param cpuAffinity CPU, or cpuset index if
-         *                    {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
-         *                    {@link ThreadAffinity#NO_AFFINITY}.
+         * @param clusterCpuAffinity CPU, or cpuset index if
+         *                           {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *                           {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
          */
-        public Context cpuAffinity(final int cpuAffinity)
+        public Context clusterCpuAffinity(final int clusterCpuAffinity)
         {
-            this.cpuAffinity = cpuAffinity;
+            this.clusterCpuAffinity = clusterCpuAffinity;
             return this;
         }
 
@@ -4769,7 +4769,7 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    egressPublisher=" + egressPublisher +
                 "\n    isLogMdc=" + isLogMdc +
                 "\n    useAgentInvoker=" + useAgentInvoker +
-                "\n    cpuAffinity=" + cpuAffinity +
+                "\n    clusterCpuAffinity=" + clusterCpuAffinity +
                 "\n    cycleThresholdNs=" + cycleThresholdNs +
                 "\n    dutyCycleTracker=" + dutyCycleTracker +
                 "\n    totalSnapshotDurationThresholdNs=" + totalSnapshotDurationThresholdNs +
