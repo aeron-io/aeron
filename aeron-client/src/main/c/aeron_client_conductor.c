@@ -1200,7 +1200,7 @@ malformed_command:
 static int aeron_counter_heartbeat_timestamp_find_counter_id_by_registration_id(
     aeron_counters_reader_t *counters_reader, int32_t type_id, int64_t registration_id)
 {
-    for (size_t i = 0, size = (size_t)counters_reader->max_counter_id; i < size; i++)
+    for (size_t i = 0, max_id = (size_t)counters_reader->max_counter_id; i <= max_id; i++)
     {
         aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)(
             counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(i));
