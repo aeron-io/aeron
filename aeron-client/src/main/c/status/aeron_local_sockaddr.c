@@ -56,9 +56,10 @@ static void aeron_local_sockaddr_find_address_counter_metadata_func(
         return;
     }
 
-    int64_t *status_indicator_addr = aeron_counters_reader_addr(find_addr->reader, status_indicator_id);
+    // the status of the local socket address counter itself, the channel status was checked before the search
+    int64_t *local_sockaddr_status_addr = aeron_counters_reader_addr(find_addr->reader, id);
     int64_t status;
-    AERON_GET_ACQUIRE(status, *(volatile int64_t *)status_indicator_addr);
+    AERON_GET_ACQUIRE(status, *(volatile int64_t *)local_sockaddr_status_addr);
 
     if (AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE != status)
     {
