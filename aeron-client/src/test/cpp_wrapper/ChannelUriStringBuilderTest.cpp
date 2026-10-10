@@ -186,3 +186,39 @@ TEST(ChannelUriStringBuilderTest, shouldHandleMaxRetransmits)
     std::shared_ptr<ChannelUri> channelUri = ChannelUri::parse(uriString);
     ASSERT_NE(std::string::npos, channelUri->toString().find("max-resend=123"));
 }
+
+TEST(ChannelUriStringBuilderTest, shouldThrowWhenBuildingWithoutMedia)
+{
+    ChannelUriStringBuilder builder;
+
+    EXPECT_THROW(builder.build(), IllegalStateException);
+}
+
+TEST(ChannelUriStringBuilderTest, shouldClearOnlyRejoin)
+{
+    ChannelUriStringBuilder builder;
+
+    builder
+        .media(UDP_MEDIA)
+        .reliable(true)
+        .rejoin(false)
+        .rejoin(nullptr);
+
+    ASSERT_EQ(builder.build(), "aeron:udp?reliable=true");
+}
+
+TEST(ChannelUriStringBuilderTest, shouldWrapTermIdOfInitialPosition)
+{
+    ChannelUriStringBuilder builder;
+
+    std::int32_t termLength = 64 * 1024;
+    std::int64_t position = termLength;
+
+    builder
+        .media(IPC_MEDIA)
+        .initialPosition(position, INT32_MAX, termLength);
+
+    ASSERT_EQ(
+        builder.build(),
+        "aeron:ipc?term-length=65536|init-term-id=2147483647|term-id=-2147483648|term-offset=0");
+}
