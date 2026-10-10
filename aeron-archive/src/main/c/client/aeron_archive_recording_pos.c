@@ -33,7 +33,7 @@ typedef bool (*key_matcher_func_t)(struct aeron_archive_recording_pos_key_defn *
 
 static int32_t find_counter_id(aeron_counters_reader_t *counters_reader, key_matcher_func_t matcher, void *clientd)
 {
-    for (int32_t i = 0, size = aeron_counters_reader_max_counter_id(counters_reader); i < size; i++)
+    for (int32_t i = 0, max_id = aeron_counters_reader_max_counter_id(counters_reader); i <= max_id; i++)
     {
         int32_t counter_state;
 
