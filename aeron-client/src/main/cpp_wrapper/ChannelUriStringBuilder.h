@@ -287,7 +287,7 @@ public:
 
     inline this_t &rejoin(std::nullptr_t nullp)
     {
-        m_reliable.reset(nullptr);
+        m_rejoin.reset(nullptr);
         return *this;
     }
 
@@ -358,7 +358,9 @@ public:
 
         m_termLength.reset(new Value(termLength));
         m_initialTermId.reset(new Value(initialTermId));
-        m_termId.reset(new Value((position >> bitsToShift) + initialTermId));
+        // wrap the term id as an int32, as Java's LogBufferDescriptor.computeTermIdFromPosition does
+        const std::uint32_t termCount = static_cast<std::uint32_t>(position >> bitsToShift);
+        m_termId.reset(new Value(static_cast<std::int32_t>(termCount + static_cast<std::uint32_t>(initialTermId))));
         m_termOffset.reset(new Value(position & (termLength - 1)));
 
         return *this;
@@ -414,6 +416,11 @@ public:
 
     std::string build()
     {
+        if (!m_media)
+        {
+            throw IllegalStateException("media type is mandatory", SOURCEINFO, EINVAL);
+        }
+
         std::ostringstream sb;
 
         if (m_prefix && !m_prefix->empty())
