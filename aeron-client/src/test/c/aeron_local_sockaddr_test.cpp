@@ -83,3 +83,31 @@ TEST_F(LocalSockaddrTest, shouldOnlyFindAddressesWhoseOwnCounterIsActive)
     ASSERT_EQ(1, aeron_local_sockaddr_find_addrs(&m_reader, CHANNEL_STATUS_ID, address_vec, 3));
     EXPECT_EQ(std::string("127.0.0.1:40123"), std::string(reinterpret_cast<char *>(buffers[0])));
 }
+
+TEST_F(LocalSockaddrTest, shouldRejectZeroLengthAddressBuffer)
+{
+    allocateLocalSockaddr(1, "127.0.0.1:40123", AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE);
+
+    // the zero-length buffer is followed by guard bytes, so that a write past it is detected
+    uint8_t storage[AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN];
+    std::memset(storage, 0xA5, sizeof(storage));
+    aeron_iovec_t address_vec = { storage, 0 };
+
+    EXPECT_EQ(-1, aeron_local_sockaddr_find_addrs(&m_reader, CHANNEL_STATUS_ID, &address_vec, 1));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+
+    for (size_t i = 0; i < sizeof(storage); i++)
+    {
+        ASSERT_EQ(0xA5, storage[i]) << "byte " << i << " was overwritten";
+    }
+}
+
+TEST_F(LocalSockaddrTest, shouldRejectNullAddressBuffer)
+{
+    allocateLocalSockaddr(1, "127.0.0.1:40123", AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE);
+
+    aeron_iovec_t address_vec = { nullptr, AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN };
+
+    EXPECT_EQ(-1, aeron_local_sockaddr_find_addrs(&m_reader, CHANNEL_STATUS_ID, &address_vec, 1));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+}

@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+#include <errno.h>
+#include <inttypes.h>
 #include <string.h>
 
 #include "aeron_local_sockaddr.h"
+#include "util/aeron_error.h"
 #include "concurrent/aeron_atomic.h"
 #include "concurrent/aeron_counters_manager.h"
 #include "aeron_counters.h"
@@ -99,6 +102,18 @@ int aeron_local_sockaddr_find_addrs(
     aeron_iovec_t *address_vec,
     size_t address_vec_len)
 {
+    for (size_t i = 0; i < address_vec_len; i++)
+    {
+        if (NULL == address_vec[i].iov_base || 0 == address_vec[i].iov_len)
+        {
+            AERON_SET_ERR(
+                EINVAL,
+                "address_vec[%" PRIu64 "] must have a non-NULL iov_base and a non-zero iov_len",
+                (uint64_t)i);
+            return -1;
+        }
+    }
+
     volatile int64_t *status_indicator_addr = aeron_counters_reader_addr(reader, channel_status_indicator_id);
 
     if (NULL == status_indicator_addr)
