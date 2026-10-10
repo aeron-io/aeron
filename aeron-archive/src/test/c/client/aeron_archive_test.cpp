@@ -4812,6 +4812,28 @@ TEST_F(AeronCArchiveTest, shouldNotExitWhenFollowingAnEmptyLiveRecording)
     ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
 }
 
+TEST_F(AeronCArchiveTest, shouldRejectReplayMergeWhenReplayDestinationHasNoEndpoint)
+{
+    connect();
+
+    aeron_subscription_t *subscription = addSubscription("aeron:udp?control-mode=manual", m_recordingStreamId);
+    ASSERT_NE(nullptr, subscription);
+
+    aeron_archive_replay_merge_t *replay_merge = nullptr;
+    ASSERT_EQ(-1, aeron_archive_replay_merge_init(
+        &replay_merge,
+        subscription,
+        m_archive,
+        "aeron:udp?session-id=1",
+        "aeron:udp?control=localhost:23268",
+        "aeron:udp?endpoint=localhost:23267|control=localhost:23265",
+        0,
+        0,
+        aeron_epoch_clock(),
+        REPLAY_MERGE_PROGRESS_TIMEOUT_DEFAULT_MS));
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("replay destination must have an endpoint"));
+}
+
 class AeronArchiveClientNameTest : public AeronCArchiveTestBase, public testing::TestWithParam<std::string>
 {
 };
