@@ -133,6 +133,30 @@ public final class ClusterMarkFile implements AutoCloseable
         final long timeoutMs,
         final int filePageSize)
     {
+        this(file, type, errorBufferLength, epochClock, timeoutMs, filePageSize, null);
+    }
+
+    /**
+     * Create new {@link MarkFile} for a cluster component but check if an existing component is active.
+     *
+     * @param file              full qualified file to the {@link MarkFile}.
+     * @param type              of cluster component the {@link MarkFile} represents.
+     * @param errorBufferLength for storing the error log.
+     * @param epochClock        for checking liveness against.
+     * @param timeoutMs         for the activity check on an existing {@link MarkFile}.
+     * @param filePageSize      for aligning file length to.
+     * @param fallbackLogger    for reporting errors found in an existing {@link MarkFile}, or {@code null} to
+     *                          use {@link CommonContext#fallbackLogger()}.
+     */
+    public ClusterMarkFile(
+        final File file,
+        final ClusterComponentType type,
+        final int errorBufferLength,
+        final EpochClock epochClock,
+        final long timeoutMs,
+        final int filePageSize,
+        final PrintStream fallbackLogger)
+    {
         if (errorBufferLength < ERROR_BUFFER_MIN_LENGTH || errorBufferLength > ERROR_BUFFER_MAX_LENGTH)
         {
             throw new IllegalArgumentException("Invalid errorBufferLength: " + errorBufferLength);
@@ -204,7 +228,8 @@ public final class ClusterMarkFile implements AutoCloseable
                     final UnsafeBuffer existingErrorBuffer =
                         new UnsafeBuffer(existingBuffer, headerLength, existingErrorBufferLength);
 
-                    saveExistingErrors(file, existingErrorBuffer, type, CommonContext.fallbackLogger());
+                    saveExistingErrors(file, existingErrorBuffer, type, null != fallbackLogger ?
+                        fallbackLogger : CommonContext.fallbackLogger());
                     existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
                 }
             }
