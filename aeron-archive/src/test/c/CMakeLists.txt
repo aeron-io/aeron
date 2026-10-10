@@ -58,6 +58,7 @@ endfunction()
 if (AERON_UNIT_TESTS)
     aeron_c_archive_unit_test(aeron_archive_async_connect_leak_test client/aeron_archive_async_connect_leak_test.cpp)
     aeron_c_archive_unit_test(aeron_archive_persistent_subscription_context_test client/aeron_archive_persistent_subscription_context_test.cpp)
+    aeron_c_archive_unit_test(aeron_archive_recording_pos_test client/aeron_archive_recording_pos_test.cpp)
 endif ()
 
 if (AERON_SYSTEM_TESTS)
