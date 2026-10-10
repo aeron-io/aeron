@@ -204,7 +204,12 @@ try
 
     Push-Location -Path $BuildDir
 
-    $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationpath
+    $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -products * `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -latest -property installationpath
+    if (-not $vsPath)
+    {
+        throw "No Visual Studio installation with the C++ build tools (Microsoft.VisualStudio.Component.VC.Tools.x86.x64) found"
+    }
     Import-Module (Get-ChildItem $vsPath -Recurse -File -Filter Microsoft.VisualStudio.DevShell.dll).FullName
     Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation
 
