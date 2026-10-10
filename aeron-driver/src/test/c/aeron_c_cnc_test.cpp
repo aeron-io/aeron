@@ -15,6 +15,7 @@
  */
 
 #include <functional>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -25,6 +26,7 @@ extern "C"
 #include "aeron_socket.h"
 #include "concurrent/aeron_atomic.h"
 #include "aeron_system_counters.h"
+#include "aeron_cnc_file_descriptor.h"
 }
 
 #define URI_RESERVED "aeron:udp?endpoint=127.0.0.1:24325"
@@ -266,4 +268,48 @@ TEST_F(CncTest, shouldGetLossReport)
 
     ASSERT_TRUE(0 < aeron_cnc_loss_reporter_read(m_cnc, countingLossReader, &lossCallbackCounter)) << aeron_errmsg();
     ASSERT_NE(0, lossCallbackCounter);
+}
+
+static void setCncBufferLengths(
+    aeron_cnc_metadata_t *metadata,
+    int32_t to_driver,
+    int32_t to_clients,
+    int32_t counter_metadata,
+    int32_t counter_values,
+    int32_t error_log)
+{
+    metadata->to_driver_buffer_length = to_driver;
+    metadata->to_clients_buffer_length = to_clients;
+    metadata->counter_metadata_buffer_length = counter_metadata;
+    metadata->counter_values_buffer_length = counter_values;
+    metadata->error_log_buffer_length = error_log;
+}
+
+TEST(CncFileDescriptorTest, shouldCheckFileLengthAgainstBufferLengths)
+{
+    std::vector<uint64_t> storage(1024, 0);
+    auto *metadata = reinterpret_cast<aeron_cnc_metadata_t *>(storage.data());
+    setCncBufferLengths(metadata, 1024, 1024, 1024, 1024, 1024);
+
+    const size_t required_length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + 5 * 1024;
+    aeron_mapped_file_t cnc_mmap = { storage.data(), required_length };
+    EXPECT_TRUE(aeron_cnc_is_file_length_sufficient(&cnc_mmap));
+
+    cnc_mmap.length = required_length - 1;
+    EXPECT_FALSE(aeron_cnc_is_file_length_sufficient(&cnc_mmap));
+}
+
+TEST(CncFileDescriptorTest, shouldRejectNegativeBufferLengths)
+{
+    std::vector<uint64_t> storage(1024, 0);
+    auto *metadata = reinterpret_cast<aeron_cnc_metadata_t *>(storage.data());
+
+    // the negative length cancels out the oversized one, so that a wrapping sum equals the file length
+    setCncBufferLengths(metadata, 1024, -(1 << 30), 1024, (1 << 30) + 1024, 1024);
+    aeron_mapped_file_t cnc_mmap = { storage.data(), AERON_CNC_VERSION_AND_META_DATA_LENGTH + 4096 };
+    EXPECT_FALSE(aeron_cnc_is_file_length_sufficient(&cnc_mmap));
+
+    setCncBufferLengths(metadata, 1024, 1024, 1024, 1024, -1024);
+    cnc_mmap.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + 4096;
+    EXPECT_FALSE(aeron_cnc_is_file_length_sufficient(&cnc_mmap));
 }
