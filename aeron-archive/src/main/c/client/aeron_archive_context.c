@@ -341,7 +341,8 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
             goto error;
         }
 
-        if (aeron_context_set_client_name(aeron_ctx, "archive-client") < 0)
+        const char *aeron_client_name = '\0' == ctx->client_name[0] ? "archive-client" : ctx->client_name;
+        if (aeron_context_set_client_name(aeron_ctx, aeron_client_name) < 0)
         {
             AERON_APPEND_ERR("%s", "");
             goto error;
