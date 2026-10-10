@@ -40,6 +40,7 @@ import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.cluster.service.SnapshotDurationTracker;
 import io.aeron.config.Config;
 import io.aeron.config.DefaultType;
+import io.aeron.cpu.topology.AffinityRegistry;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.driver.NameResolver;
 import io.aeron.driver.status.DutyCycleStallTracker;
@@ -70,6 +71,7 @@ import org.agrona.concurrent.NoOpLock;
 import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.YieldingIdleStrategy;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
@@ -104,6 +106,7 @@ import static io.aeron.CommonContext.fallbackLogger;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLIENT_TIMEOUT_COUNT_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLOCK_PROP_NAME;
+import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_NODE_ROLE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.COMMIT_POSITION_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_ERROR_COUNT_TYPE_ID;
@@ -297,7 +300,11 @@ public final class ConsensusModule implements AutoCloseable
             else
             {
                 conductorRunner = new AgentRunner(
-                    ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), conductor);
+                    ctx.idleStrategy(),
+                    ctx.errorHandler(),
+                    ctx.errorCounter(),
+                    conductor,
+                    ctx.affinityRegistry.mappedAffinityValue(CLUSTER_CPU_AFFINITY_PROP_NAME));
                 conductorInvoker = null;
             }
         }
@@ -961,6 +968,13 @@ public final class ConsensusModule implements AutoCloseable
             "aeron.cluster.consensus.module.agent.role.name";
 
         /**
+         * CPU the consensus module thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
+         */
+        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+        public static final String CLUSTER_CPU_AFFINITY_PROP_NAME = "aeron.cluster.cpu.affinity";
+
+        /**
          * Property name for replication progress timeout.
          *
          * @since 1.41.0
@@ -1486,6 +1500,17 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
+         * CPU the consensus module thread is pinned to.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see #CLUSTER_CPU_AFFINITY_PROP_NAME
+         */
+        public static int cpuAffinity()
+        {
+            return Integer.getInteger(CLUSTER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+        }
+
+        /**
          * The amount of time to wait to time out an archive replication when progress has stalled.
          *
          * @return system property {@link #CLUSTER_REPLICATION_PROGRESS_TIMEOUT_PROP_NAME} or
@@ -1689,6 +1714,8 @@ public final class ConsensusModule implements AutoCloseable
         private VersionValidator appVersionValidator;
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
+        private int clusterCpuAffinity = Configuration.cpuAffinity();
+        private AffinityRegistry affinityRegistry;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
         private boolean enableControlOnConsensusChannel = Configuration.enableControlOnConsensusChannel();
@@ -2057,6 +2084,14 @@ public final class ConsensusModule implements AutoCloseable
             {
                 threadFactory = Thread::new;
             }
+
+            affinityRegistry = new AffinityRegistry(
+                CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors());
+            if (!useAgentInvoker)
+            {
+                affinityRegistry.addAffinity(CLUSTER_CPU_AFFINITY_PROP_NAME, clusterCpuAffinity);
+            }
+            affinityRegistry.conclude();
 
             if (null == idleStrategySupplier)
             {
@@ -4094,6 +4129,34 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
+         * Get the CPU the consensus module thread is pinned to.
+         *
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int clusterCpuAffinity()
+        {
+            return clusterCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the consensus module thread is pinned to.
+         *
+         * @param clusterCpuAffinity CPU, or cpuset index if
+         *                           {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *                           {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context clusterCpuAffinity(final int clusterCpuAffinity)
+        {
+            this.clusterCpuAffinity = clusterCpuAffinity;
+            return this;
+        }
+
+        /**
          * Set the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
          * <p>
          * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
@@ -4492,6 +4555,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public void close()
         {
+            CloseHelper.close(countedErrorHandler, affinityRegistry);
             CloseHelper.close(countedErrorHandler, recordingLog);
             CloseHelper.close(countedErrorHandler, nodeStateFile);
             CloseHelper.close(countedErrorHandler, markFile);
@@ -4705,6 +4769,7 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    egressPublisher=" + egressPublisher +
                 "\n    isLogMdc=" + isLogMdc +
                 "\n    useAgentInvoker=" + useAgentInvoker +
+                "\n    clusterCpuAffinity=" + clusterCpuAffinity +
                 "\n    cycleThresholdNs=" + cycleThresholdNs +
                 "\n    dutyCycleTracker=" + dutyCycleTracker +
                 "\n    totalSnapshotDurationThresholdNs=" + totalSnapshotDurationThresholdNs +

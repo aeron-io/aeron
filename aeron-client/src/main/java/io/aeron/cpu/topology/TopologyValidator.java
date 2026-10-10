@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import java.io.PrintStream;
 
 interface TopologyValidator
 {
     /**
-     * Validates the given cpuset based on a specific topology constraint.
+     * Validates the given selection of CPUs based on a specific topology constraint.
      *
-     * @param cpuset        to validate.
+     * @param selection     to validate.
      * @param warningStream to write warnings to.
      * @return number of warnings.
      */
-    int validate(Cpuset cpuset, PrintStream warningStream);
+    int validate(CpuSelection selection, PrintStream warningStream);
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
@@ -25,7 +25,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
+import static io.aeron.cpu.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
 
 class ThreadAlignmentValidator implements TopologyValidator
 {
@@ -70,17 +70,17 @@ class ThreadAlignmentValidator implements TopologyValidator
         return missingSiblings;
     }
 
-    public int validate(final Cpuset cpuset, final PrintStream warningStream)
+    public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         try
         {
-            final List<MissingSibling> missingSiblings = findMissingSiblings(cpuset.cpus());
+            final List<MissingSibling> missingSiblings = findMissingSiblings(selection.cpus());
             for (final MissingSibling missing : missingSiblings)
             {
                 warningStream.printf(
-                    "WARNING: cpuset is missing sibling CPU(s) %d of the " +
-                        "core containing CPU %d (partial core in cpuset)%n",
-                    missing.siblingCpu(), missing.coreCpu());
+                    "WARNING: %s is missing sibling CPU(s) %d of the " +
+                        "core containing CPU %d (partial core in %s)%n",
+                    selection.kind(), missing.siblingCpu(), missing.coreCpu(), selection.kind());
             }
             return missingSiblings.size();
         }

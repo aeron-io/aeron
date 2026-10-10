@@ -29,6 +29,7 @@ import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
 import io.aeron.config.Config;
 import io.aeron.config.DefaultType;
+import io.aeron.cpu.topology.AffinityRegistry;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.driver.status.DutyCycleStallTracker;
 import io.aeron.exceptions.ConcurrentConcludeException;
@@ -55,6 +56,7 @@ import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.YieldingIdleStrategy;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.StatusIndicator;
@@ -72,6 +74,7 @@ import java.util.function.Supplier;
 import static io.aeron.ChannelUri.addAliasIfAbsent;
 import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.CommonContext.threadName;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.SERVICE_NAME_PROP_NAME;
@@ -133,7 +136,12 @@ public final class ClusteredServiceContainer implements AutoCloseable
         }
 
         final ClusteredServiceAgent agent = new ClusteredServiceAgent(ctx);
-        serviceAgentRunner = new AgentRunner(ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), agent);
+        serviceAgentRunner = new AgentRunner(
+            ctx.idleStrategy(),
+            ctx.errorHandler(),
+            ctx.errorCounter(),
+            agent,
+            ctx.affinityRegistry.mappedAffinityValue(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME));
     }
 
     /**
@@ -238,6 +246,14 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         @Config
         public static final String SERVICE_NAME_PROP_NAME = "aeron.cluster.service.name";
+
+        /**
+         * CPU the clustered service thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set.
+         */
+        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+        public static final String CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME = "aeron.cluster.service.cpu.affinity";
+
 
         /**
          * Name for a clustered service to be the role of the {@link Agent}.
@@ -481,6 +497,17 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public static String serviceName()
         {
             return System.getProperty(SERVICE_NAME_PROP_NAME, SERVICE_NAME_DEFAULT);
+        }
+
+        /**
+         * CPU the clustered service thread is pinned to.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see #CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME
+         */
+        public static int cpuAffinity()
+        {
+            return Integer.getInteger(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
         }
 
         /**
@@ -753,6 +780,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private int clusterId = Configuration.clusterId();
         private int serviceId = Configuration.serviceId();
         private String serviceName = System.getProperty(SERVICE_NAME_PROP_NAME);
+        private int cpuAffinity = Configuration.cpuAffinity();
+        private AffinityRegistry affinityRegistry;
         private String replayChannel = Configuration.replayChannel();
         private int replayStreamId = Configuration.replayStreamId();
         private String controlChannel = Configuration.controlChannel();
@@ -929,6 +958,11 @@ public final class ClusteredServiceContainer implements AutoCloseable
                     AERON_CLUSTER_CLUSTERED_SERVICE_THREAD_NAME_PREFIX + serviceId,
                     "clustered-service-" + clusterId + "-" + serviceId);
             }
+
+            affinityRegistry = new AffinityRegistry(
+                CommonContext.threadAffinityUseCpusetOffsets(), CommonContext.threadAffinityFailOnValidationErrors())
+                .addAffinity(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME, cpuAffinity);
+            affinityRegistry.conclude();
 
             if (null == aeron)
             {
@@ -1202,6 +1236,34 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public String serviceName()
         {
             return serviceName;
+        }
+
+        /**
+         * Get the CPU the clustered service thread is pinned to.
+         *
+         * @return CPU, or cpuset index if {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *         {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME
+         */
+        @Config(id = "CLUSTER_SERVICE_CPU_AFFINITY")
+        public int cpuAffinity()
+        {
+            return cpuAffinity;
+        }
+
+        /**
+         * Set the CPU the clustered service thread is pinned to.
+         *
+         * @param cpuAffinity CPU, or cpuset index if
+         *                    {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME}, or
+         *                    {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME
+         */
+        public Context cpuAffinity(final int cpuAffinity)
+        {
+            this.cpuAffinity = cpuAffinity;
+            return this;
         }
 
         /**
@@ -2070,6 +2132,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public void close()
         {
             final ErrorHandler errorHandler = countedErrorHandler();
+            CloseHelper.close(errorHandler, affinityRegistry);
             if (ownsAeronClient)
             {
                 CloseHelper.close(errorHandler, aeron);
@@ -2126,6 +2189,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
                 "\n    clusterId=" + clusterId +
                 "\n    serviceId=" + serviceId +
                 "\n    serviceName='" + serviceName + '\'' +
+                "\n    cpuAffinity=" + cpuAffinity +
                 "\n    replayChannel='" + replayChannel + '\'' +
                 "\n    replayStreamId=" + replayStreamId +
                 "\n    controlChannel='" + controlChannel + '\'' +

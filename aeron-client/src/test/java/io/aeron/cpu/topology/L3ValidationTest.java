@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import io.aeron.test.CapturingPrintStream;
-import io.aeron.topology.TopologyTestUtils.Pair;
+import io.aeron.cpu.topology.CpuSelection.CpusetSelection;
+import io.aeron.cpu.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -29,9 +30,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.TopologyTestUtils.countWarnings;
-import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
-import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
+import static io.aeron.cpu.topology.TopologyTestUtils.countWarnings;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupCpuSet;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupL3Peers;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class L3ValidationTest
@@ -51,7 +52,7 @@ class L3ValidationTest
 
         final CapturingPrintStream out = new CapturingPrintStream();
         final int actualWarningCount = l3TopologyValidator.validate(
-            new Cpuset(cpuList, cpuList.toString()), out.resetAndGetPrintStream());
+            new CpusetSelection(new Cpuset(cpuList, cpuList.toString())), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }
@@ -75,7 +76,8 @@ class L3ValidationTest
         final L3TopologyValidator l3TopologyValidator = new L3TopologyValidator(sysfsTestDir);
 
         final CapturingPrintStream out = new CapturingPrintStream();
-        final int actualWarningCount = l3TopologyValidator.validate(resultCpuset, out.resetAndGetPrintStream());
+        final int actualWarningCount = l3TopologyValidator.validate(
+            new CpusetSelection(resultCpuset), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }

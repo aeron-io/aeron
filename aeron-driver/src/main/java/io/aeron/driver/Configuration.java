@@ -41,6 +41,7 @@ import org.agrona.concurrent.SleepingIdleStrategy;
 import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.YieldingIdleStrategy;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.broadcast.BroadcastBufferDescriptor;
 import org.agrona.concurrent.ringbuffer.RingBufferDescriptor;
 import org.agrona.concurrent.status.CountersReader;
@@ -1221,38 +1222,96 @@ public final class Configuration
         "aeron.driver.resolver.bootstrap.neighbor.resolution.interval";
 
     /**
-     * Name of the system property to enable cgroup/cpuset-derived CPU affinity for the Media Driver's threads.
+     * CPU the conductor agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
+     * {@link ThreadAffinity#NO_AFFINITY}.
+     * <p>
+     * Also used for the shared agent thread when using {@link ThreadingMode#SHARED}.
      */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-    public static final String DRIVER_CPUSET_AFFINITY_PROP_NAME = "aeron.driver.cpuset.affinity";
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
+    public static final String CONDUCTOR_CPU_AFFINITY_PROP_NAME = "aeron.conductor.cpu.affinity";
 
     /**
-     * Name of the system property to treat cpuset topology validation warnings (thread-sibling misalignment,
-     * L3 cache, or die locality violations) as fatal {@link ConfigurationException}s instead of warnings.
+     * CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
+     * {@link ThreadAffinity#NO_AFFINITY}.
      */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-    public static final String DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.driver.cpuset.warnings.as.errors";
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
+    public static final String RECEIVER_CPU_AFFINITY_PROP_NAME = "aeron.receiver.cpu.affinity";
 
     /**
-     * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+     * CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
+     * {@link ThreadAffinity#NO_AFFINITY}.
+     * <p>
+     * Also used for the shared-network agent thread when using {@link ThreadingMode#SHARED_NETWORK}.
+     */
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
+    public static final String SENDER_CPU_AFFINITY_PROP_NAME = "aeron.sender.cpu.affinity";
+
+    /**
+     * CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link CommonContext#THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME} is set. Defaults to
+     * {@link ThreadAffinity#NO_AFFINITY}.
+     */
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
+    public static final String NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME =
+        "aeron.driver.native.resource.agent.cpu.affinity";
+
+    /**
+     * CPU the conductor thread is pinned to.
      *
-     * @return true if cgroup/cpuset-derived CPU affinity should be applied.
-     * @see #DRIVER_CPUSET_AFFINITY_PROP_NAME
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+     * @see #CONDUCTOR_CPU_AFFINITY_PROP_NAME
      */
-    public static boolean driverCpusetAffinityEnabled()
+    public static int conductorCpuAffinity()
     {
-        return Boolean.parseBoolean(getProperty(DRIVER_CPUSET_AFFINITY_PROP_NAME));
+        return getInteger(CONDUCTOR_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
     }
 
     /**
-     * Should cpuset topology validation warnings be treated as fatal errors.
+     * CPU the sender thread is pinned to.
      *
-     * @return true if cpuset topology validation warnings should be treated as fatal errors.
-     * @see #DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+     * @see #SENDER_CPU_AFFINITY_PROP_NAME
      */
-    public static boolean driverCpusetWarningsAsErrors()
+    public static int senderCpuAffinity()
     {
-        return Boolean.parseBoolean(getProperty(DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME));
+        return getInteger(SENDER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+    }
+
+    /**
+     * CPU the receiver thread is pinned to.
+     *
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+     * @see #RECEIVER_CPU_AFFINITY_PROP_NAME
+     */
+    public static int receiverCpuAffinity()
+    {
+        return getInteger(RECEIVER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+    }
+
+    /**
+     * CPU the native resource agent thread is pinned to.
+     *
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+     * @see #NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
+     */
+    public static int nativeResourceAgentCpuAffinity()
+    {
+        return getInteger(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
     }
 
     /**

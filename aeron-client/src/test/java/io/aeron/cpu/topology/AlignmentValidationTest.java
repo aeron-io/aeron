@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import io.aeron.test.CapturingPrintStream;
-import io.aeron.topology.TopologyTestUtils.Pair;
+import io.aeron.cpu.topology.CpuSelection.CpusetSelection;
+import io.aeron.cpu.topology.TopologyTestUtils.Pair;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -28,9 +29,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.TopologyTestUtils.countWarnings;
-import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
-import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
+import static io.aeron.cpu.topology.TopologyTestUtils.countWarnings;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupCpuSet;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupSiblingThreads;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -86,7 +87,8 @@ public class AlignmentValidationTest
             missingSiblingCpus[i] = missingSiblings.get(i).siblingCpu();
         }
         assertArrayEquals(expectedMissingThreads, missingSiblingCpus);
-        final int actualWarningCount = validator.validate(resultCpuset, out.resetAndGetPrintStream());
+        final int actualWarningCount = validator.validate(
+            new CpusetSelection(resultCpuset), out.resetAndGetPrintStream());
         assertEquals(expectedMissingThreads.length, actualWarningCount);
         assertEquals(expectedMissingThreads.length, countWarnings(out.flushAndGetContent()));
     }
