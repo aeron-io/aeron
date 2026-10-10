@@ -1636,3 +1636,82 @@ TEST_F(CSystemTest, shouldAddAndDeleteDestinationsExclusive)
 
     ASSERT_EQ(aeron_async_remove_publication(pub_reg_id, m_aeron, nullptr, nullptr), 0);
 }
+
+class CClientHeartbeatTest : public CSystemTestBase, public testing::Test
+{
+protected:
+    CClientHeartbeatTest() : CSystemTestBase(
+        std::vector<std::pair<std::string, std::string>>{},
+        [](aeron_driver_context_t *context)
+        {
+            aeron_driver_context_set_counters_buffer_length(context, AERON_COUNTERS_VALUES_BUFFER_LENGTH_MIN);
+        })
+    {
+    }
+};
+
+TEST_F(CClientHeartbeatTest, shouldFindClientHeartbeatCounterInLastCounterSlot)
+{
+    aeron_t *aeron = connect();
+    aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron);
+    const int32_t max_counter_id = aeron_counters_reader_max_counter_id(counters_reader);
+
+    // allocate every counter id below the last one, so that the next client heartbeat counter gets the last id;
+    // ids are allocated in sequence, and requests are sent in batches to keep the test fast
+    int32_t counter_id = AERON_NULL_COUNTER_ID;
+    while (counter_id < max_counter_id - 1)
+    {
+        aeron_async_add_counter_t *asyncs[128];
+        const int32_t batch_size = std::min<int32_t>(128, max_counter_id - 1 - counter_id);
+
+        for (int32_t i = 0; i < batch_size; i++)
+        {
+            ASSERT_EQ(0, aeron_async_add_counter(&asyncs[i], aeron, 1001, nullptr, 0, "filler", 6)) << aeron_errmsg();
+        }
+
+        for (int32_t i = 0; i < batch_size; i++)
+        {
+            aeron_counter_t *counter = awaitCounterOrError(asyncs[i]);
+            ASSERT_NE(nullptr, counter) << aeron_errmsg();
+
+            aeron_counter_constants_t constants;
+            aeron_counter_constants(counter, &constants);
+            counter_id = std::max(counter_id, constants.counter_id);
+        }
+    }
+    ASSERT_EQ(max_counter_id - 1, counter_id);
+
+    aeron_context_t *context = nullptr;
+    aeron_t *client = nullptr;
+    ASSERT_EQ(0, aeron_context_init(&context)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_init(&client, context)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_start(client)) << aeron_errmsg();
+
+    // a subscription registers the client with the driver before any other counter is allocated
+    aeron_async_add_subscription_t *async_sub = nullptr;
+    ASSERT_EQ(0, aeron_async_add_subscription(
+        &async_sub, client, AERON_IPC_CHANNEL, STREAM_ID, nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+    ASSERT_NE(nullptr, awaitSubscriptionOrError(async_sub)) << aeron_errmsg();
+
+    int32_t type_id;
+    int64_t registration_id;
+    ASSERT_EQ(0, aeron_counters_reader_counter_type_id(counters_reader, max_counter_id, &type_id));
+    ASSERT_EQ(AERON_COUNTER_CLIENT_HEARTBEAT_TIMESTAMP_TYPE_ID, type_id);
+    ASSERT_EQ(0, aeron_counters_reader_counter_registration_id(counters_reader, max_counter_id, &registration_id));
+    ASSERT_EQ(aeron_client_id(client), registration_id);
+
+    // once the client finds its heartbeat counter, it appends its name and version to the counter label
+    char label[AERON_COUNTER_MAX_LABEL_LENGTH + 1] = {};
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (nullptr == strstr(label, " version=") && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        const int length = aeron_counters_reader_counter_label(counters_reader, max_counter_id, label, sizeof(label) - 1);
+        label[length < 0 ? 0 : length] = '\0';
+    }
+
+    EXPECT_NE(nullptr, strstr(label, " version=")) << label;
+
+    aeron_close(client);
+    aeron_context_close(context);
+}

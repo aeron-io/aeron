@@ -62,7 +62,7 @@ inline static std::int32_t findCounterIdByRegistrationId(
 {
     AtomicBuffer buffer = countersReader.metaDataBuffer();
 
-    for (std::int32_t i = 0, size = countersReader.maxCounterId(); i < size; i++)
+    for (std::int32_t i = 0, maxId = countersReader.maxCounterId(); i <= maxId; i++)
     {
         if (countersReader.getCounterState(i) == CountersReader::RECORD_ALLOCATED)
         {
@@ -93,13 +93,18 @@ inline static std::int32_t findCounterIdByRegistrationId(
 inline static bool isActive(
     CountersReader &countersReader, std::int32_t counterId, std::int32_t counterTypeId, std::int64_t registrationId)
 {
+    // getCounterTypeId validates the counter id before the metadata is read
+    if (countersReader.getCounterTypeId(counterId) != counterTypeId)
+    {
+        return false;
+    }
+
     AtomicBuffer buffer = countersReader.metaDataBuffer();
     const util::index_t recordOffset = CountersReader::metadataOffset(counterId);
     auto key = buffer.overlayStruct<HeartbeatTimestampKeyDefn>(recordOffset + CountersReader::KEY_OFFSET);
 
     return
         registrationId == key.registrationId &&
-        buffer.getInt32(recordOffset + CountersReader::TYPE_ID_OFFSET) == counterTypeId &&
         countersReader.getCounterState(counterId) == CountersReader::RECORD_ALLOCATED;
 }
 
