@@ -106,6 +106,20 @@ public:
         return m_aeronW;
     }
 
+    inline Context &clientName(const std::string &clientName)
+    {
+        if (aeron_archive_context_set_client_name(m_aeron_archive_ctx_t, clientName.c_str()) < 0)
+        {
+            ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
+        return *this;
+    }
+
+    inline std::string clientName() const
+    {
+        return { aeron_archive_context_get_client_name(m_aeron_archive_ctx_t) };
+    }
+
     inline Context &aeronDirectoryName(const std::string &directoryName)
     {
         aeron_archive_context_set_aeron_directory_name(m_aeron_archive_ctx_t, directoryName.c_str());
@@ -175,6 +189,17 @@ public:
         return nullptr == channel ? std::string() : std::string(channel);
     }
 
+    inline Context &recordingEventsStreamId(const std::int32_t streamId)
+    {
+        aeron_archive_context_set_recording_events_stream_id(m_aeron_archive_ctx_t, streamId);
+        return *this;
+    }
+
+    inline std::int32_t recordingEventsStreamId() const
+    {
+        return aeron_archive_context_get_recording_events_stream_id(m_aeron_archive_ctx_t);
+    }
+
     inline Context &messageTimeoutNs(const std::uint64_t messageTimeoutNs)
     {
         aeron_archive_context_set_message_timeout_ns(m_aeron_archive_ctx_t, messageTimeoutNs);
@@ -195,6 +220,39 @@ public:
     inline std::uint32_t messageRetryAttempts() const
     {
         return aeron_archive_context_get_message_retry_attempts(m_aeron_archive_ctx_t);
+    }
+
+    inline Context &controlTermBufferLength(const std::size_t controlTermBufferLength)
+    {
+        aeron_archive_context_set_control_term_buffer_length(m_aeron_archive_ctx_t, controlTermBufferLength);
+        return *this;
+    }
+
+    inline std::size_t controlTermBufferLength() const
+    {
+        return aeron_archive_context_get_control_term_buffer_length(m_aeron_archive_ctx_t);
+    }
+
+    inline Context &controlMtuLength(const std::size_t controlMtuLength)
+    {
+        aeron_archive_context_set_control_mtu_length(m_aeron_archive_ctx_t, controlMtuLength);
+        return *this;
+    }
+
+    inline std::size_t controlMtuLength() const
+    {
+        return aeron_archive_context_get_control_mtu_length(m_aeron_archive_ctx_t);
+    }
+
+    inline Context &controlTermBufferSparse(bool controlTermBufferSparse)
+    {
+        aeron_archive_context_set_control_term_buffer_sparse(m_aeron_archive_ctx_t, controlTermBufferSparse);
+        return *this;
+    }
+
+    inline bool controlTermBufferSparse() const
+    {
+        return aeron_archive_context_get_control_term_buffer_sparse(m_aeron_archive_ctx_t);
     }
 
     template<typename IdleStrategy>

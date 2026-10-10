@@ -10,6 +10,7 @@
 
 === Changelog
 
+* **[Archive/C{plus}{plus} Wrapper]** Add getters and setters for Archive client client_name, recording_events_stream_id, control_term_buffer_length, control_mtu_length, and control_term_buffer_sparse.
 * **[Archive/C]** Set archive's aeron client name to client name of the archive context.
 * **[Archive]** Fsync the catalog on close even when the closing thread is interrupted. (https://github.com/aeron-io/aeron/pull/2166[#2166])
 * **[Samples/Java]** Delegate `SamplesUtil#mapExistingFileReadOnly` to `IOUtil#mapExistingFile`.
