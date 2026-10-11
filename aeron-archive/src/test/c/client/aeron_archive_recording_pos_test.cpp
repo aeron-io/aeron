@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 #include <gtest/gtest.h>
 
@@ -48,6 +49,18 @@ protected:
         metadata->state = AERON_COUNTER_RECORD_ALLOCATED;
     }
 
+    void allocateWithSourceIdentity(int32_t counter_id, int32_t source_identity_length, const char *source_identity)
+    {
+        allocate(counter_id, AERON_COUNTER_ARCHIVE_RECORDING_POSITION_TYPE_ID, 7, 8);
+        aeron_counter_metadata_descriptor_t *metadata =
+            reinterpret_cast<aeron_counter_metadata_descriptor_t *>(m_metadata) + counter_id;
+        std::memcpy(metadata->key + sizeof(int64_t) + sizeof(int32_t), &source_identity_length, sizeof(int32_t));
+        std::memcpy(
+            metadata->key + sizeof(int64_t) + (2 * sizeof(int32_t)),
+            source_identity,
+            std::strlen(source_identity));
+    }
+
     alignas(64) uint8_t m_metadata[NUM_COUNTERS * sizeof(aeron_counter_metadata_descriptor_t)] = {};
     alignas(64) uint8_t m_values[NUM_COUNTERS * sizeof(aeron_counter_value_descriptor_t)] = {};
     aeron_counters_reader_t m_reader = {};
@@ -76,4 +89,42 @@ TEST_F(AeronArchiveRecordingPosTest, shouldFindRecordingPositionCounterInEverySl
 
         allocate(counter_id, OTHER_TYPE_ID, 100 + counter_id, 200 + counter_id);
     }
+}
+
+TEST_F(AeronArchiveRecordingPosTest, shouldGetSourceIdentity)
+{
+    allocateWithSourceIdentity(0, 9, "127.0.0.1");
+
+    char buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = {};
+    size_t length = sizeof(buffer);
+    ASSERT_EQ(0, aeron_archive_recording_pos_get_source_identity(&m_reader, 0, buffer, &length));
+    EXPECT_EQ(std::string("127.0.0.1"), std::string(buffer, length));
+}
+
+TEST_F(AeronArchiveRecordingPosTest, shouldRejectNegativeSourceIdentityLength)
+{
+    allocateWithSourceIdentity(0, -1, "");
+
+    char buffer[AERON_COUNTER_MAX_LABEL_LENGTH];
+    std::memset(buffer, 0x5A, sizeof(buffer));
+    size_t length = sizeof(buffer);
+    EXPECT_EQ(-1, aeron_archive_recording_pos_get_source_identity(&m_reader, 0, buffer, &length));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+
+    for (size_t i = 0; i < sizeof(buffer); i++)
+    {
+        ASSERT_EQ(0x5A, (uint8_t)buffer[i]) << "byte " << i << " was overwritten";
+    }
+}
+
+TEST_F(AeronArchiveRecordingPosTest, shouldLimitSourceIdentityToTheCounterKey)
+{
+    // the writer stores at most MAX_KEY_LENGTH - 16 bytes of key header - 8 bytes of archive id
+    const size_t max_source_identity_length = AERON_COUNTER_MAX_KEY_LENGTH - 16 - 8;
+    allocateWithSourceIdentity(0, 1000, "127.0.0.1");
+
+    char buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = {};
+    size_t length = sizeof(buffer);
+    ASSERT_EQ(0, aeron_archive_recording_pos_get_source_identity(&m_reader, 0, buffer, &length));
+    EXPECT_EQ(max_source_identity_length, length);
 }
