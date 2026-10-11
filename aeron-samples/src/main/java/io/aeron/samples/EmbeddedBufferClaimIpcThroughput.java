@@ -17,7 +17,6 @@ package io.aeron.samples;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
-import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.driver.MediaDriver;
@@ -31,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.agrona.SystemUtil.loadPropertiesFiles;
 
 /**
- * Throughput test using {@link ExclusivePublication#tryClaim(int, BufferClaim)} over UDP transport.
+ * Throughput test using {@link Publication#tryClaim(int, BufferClaim)} over IPC transport.
  */
 public class EmbeddedBufferClaimIpcThroughput
 {
