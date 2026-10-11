@@ -229,6 +229,9 @@ subprojects {
             jvmArgs('-XX:+EnableDynamicAgentLoading')
         }
 
+        // A C media driver launched by the tests inherits the environment, so an AERON_* change must rerun them.
+        inputs.property('aeronEnvironment', providers.environmentVariablesPrefixedBy('AERON_'))
+
         testClassesDirs = testing.suites.test.sources.output.classesDirs
         classpath = testing.suites.test.sources.runtimeClasspath
 
