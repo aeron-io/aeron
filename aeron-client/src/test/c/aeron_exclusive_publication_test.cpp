@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -590,6 +590,29 @@ TEST_F(ExclusivePublicationTest, offerMaxPositionExceededIfPublicationLimitReach
     const auto term_offset = (int32_t)(TERM_LENGTH - length - 1);
     const int32_t term_id = INT32_MIN + (INITIAL_TERM_ID - 1);
     createPublication(term_count, term_offset, term_id);
+
+    const int64_t position = aeron_exclusive_publication_offer(
+        m_publication,
+        reinterpret_cast<const uint8_t *>(payload),
+        length,
+        reserved_value_supplier,
+        nullptr);
+
+    ASSERT_EQ(AERON_PUBLICATION_MAX_POSITION_EXCEEDED, position);
+}
+
+TEST_F(ExclusivePublicationTest, offerMaxPositionExceededIfAlignedFrameReachesMaxPosition)
+{
+    const char *payload = "Aeron is awesome!";
+    const size_t length = strlen(payload);
+    const int32_t term_count = INT32_MAX;
+    const auto term_offset = (int32_t)(TERM_LENGTH - AERON_LOGBUFFER_FRAME_ALIGNMENT);
+    const int32_t term_id = INT32_MIN + (INITIAL_TERM_ID - 1);
+    createPublication(term_count, term_offset, term_id);
+    const int64_t limit_position = aeron_logbuffer_compute_position(
+        term_id, term_offset, m_publication->position_bits_to_shift, m_publication->initial_term_id);
+    aeron_counter_set_release(m_position_limit_addr, limit_position);
+    ASSERT_LT(limit_position + (int64_t)length, m_publication->max_possible_position);
 
     const int64_t position = aeron_exclusive_publication_offer(
         m_publication,

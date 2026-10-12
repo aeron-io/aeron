@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,9 @@ inline int64_t aeron_exclusive_publication_new_position(
 inline int64_t aeron_exclusive_publication_back_pressure_status(
     aeron_exclusive_publication_t *publication, int64_t current_position, int32_t message_length)
 {
-    if ((current_position + message_length) >= publication->max_possible_position)
+    if ((current_position +
+        (int32_t)AERON_ALIGN(message_length + AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT)) >=
+        publication->max_possible_position)
     {
         return AERON_PUBLICATION_MAX_POSITION_EXCEEDED;
     }
