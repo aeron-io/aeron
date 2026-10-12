@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1327,6 +1327,22 @@ int aeron_raw_log_map_existing(aeron_mapped_raw_log_t *mapped_raw_log, const cha
         return -1;
     }
 
+    if (file_length < AERON_LOGBUFFER_META_DATA_LENGTH)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "Raw log file length less than min length of %d: length=%" PRId64 ", filename: %s",
+            (int)AERON_LOGBUFFER_META_DATA_LENGTH,
+            file_length,
+            path);
+#if !defined(_MSC_VER)
+        close(fd);
+#else
+        _close(fd);
+#endif
+        return -1;
+    }
+
     mapped_raw_log->mapped_file.length = file_length;
     mapped_raw_log->mapped_file.addr = NULL;
 
@@ -1348,6 +1364,19 @@ int aeron_raw_log_map_existing(aeron_mapped_raw_log_t *mapped_raw_log, const cha
     if (aeron_logbuffer_check_term_length(term_length) < 0 || aeron_logbuffer_check_page_size(page_size) < 0)
     {
         AERON_APPEND_ERR("Raw log metadata invalid, unmapping, filename: %s", path);
+        aeron_unmap(&mapped_raw_log->mapped_file);
+        return -1;
+    }
+
+    if ((size_t)file_length < (AERON_LOGBUFFER_PARTITION_COUNT * term_length) + AERON_LOGBUFFER_META_DATA_LENGTH)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "Raw log file length too short for its term length: length=%" PRId64 ", term_length=%" PRIu64
+            ", filename: %s",
+            file_length,
+            (uint64_t)term_length,
+            path);
         aeron_unmap(&mapped_raw_log->mapped_file);
         return -1;
     }
