@@ -6,6 +6,31 @@
 
 * **[Java/C]** Add UDP socket traffic class configuration. (https://github.com/aeron-io/aeron/pull/2152[#2152])
 * **[Driver/C]** Allow poller transport iteration threshold to be configured from driver context.
+* Add thread affinity support for Java threads across all modules/components, configurable via the following system
+properties:
++
+--
+** Media Driver - `aeron.conductor.cpu.affinity`, `aeron.sender.cpu.affinity`, `aeron.receiver.cpu.affinity`, and
+`aeron.driver.native.resource.agent.cpu.affinity`. As with the C Media Driver, the conductor affinity is applied to the
+shared thread in `SHARED` threading mode and the sender affinity to the shared network thread in `SHARED_NETWORK`
+threading mode.
+** Archive - `aeron.archive.conductor.cpu.affinity`, `aeron.archive.recorder.cpu.affinity`, and
+`aeron.archive.replayer.cpu.affinity`. Recorder and replayer affinities only apply in `DEDICATED` threading mode.
+** Cluster - `aeron.cluster.cpu.affinity` (consensus module) and `aeron.cluster.service.cpu.affinity` (clustered
+service container).
+--
+* **[Java]** Validate the CPU affinities of all Aeron threads within the same JVM against
+each other and the CPU topology. Validation issues are reported as warnings by default.
+* **[Java/C]** Add global thread affinity configuration shared by the Java and C Media Drivers:
+`aeron.thread.affinity.use.cpuset.offsets` (`AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS`) to treat the configured CPU
+affinities as offsets into the effective cgroup cpuset, and `aeron.thread.affinity.fail.on.validation.errors`
+(`AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`) to fail on startup instead of warning when affinity validation
+finds a problem.
+* **Breaking:** **[Driver/C]** Rename the cpuset affinity configuration to match the Java Media Driver:
+`AERON_DRIVER_CPUSET_AFFINITY` is now `AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS`
+(`aeron_driver_context_set/get_thread_affinity_use_cpuset_offsets`), and `AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS` is
+now `AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`
+(`aeron_driver_context_set/get_thread_affinity_fail_on_validation_errors`).
 
 === Changelog
 
