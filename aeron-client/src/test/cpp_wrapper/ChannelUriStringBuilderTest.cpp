@@ -247,3 +247,21 @@ TEST_P(InitialPositionTest, shouldWrapTermIdOfInitialPosition)
     EXPECT_STREQ(std::to_string(expectedTermOffset).c_str(), aeron_uri_find_param_value(&uri.params.ipc.additional_params, AERON_URI_TERM_OFFSET_KEY));
     aeron_uri_close(&uri);
 }
+
+TEST(ChannelUriTest, shouldRejectInvalidCharacterInMediaWithTheCharacterInTheMessage)
+{
+    for (const char c : { ':', '|', '=' })
+    {
+        const std::string uri = std::string("aeron:ud") + c + "p";
+        try
+        {
+            ChannelUri::parse(uri);
+            FAIL() << "expected IllegalArgumentException for " << uri;
+        }
+        catch (const IllegalArgumentException &ex)
+        {
+            EXPECT_NE(std::string::npos, std::string(ex.what()).find(std::string("encountered '") + c + "'"))
+                << ex.what();
+        }
+    }
+}

@@ -268,8 +268,8 @@ public:
                         case ':':
                         case '|':
                         case '=':
-                            throw IllegalStateException(
-                                "encountered '" + std::to_string(c) + "' within media definition at index " +
+                            throw IllegalArgumentException(
+                                "encountered '" + std::string(1, c) + "' within media definition at index " +
                                     std::to_string(i) + " in " + uri, SOURCEINFO, EINVAL);
 
                         default:
