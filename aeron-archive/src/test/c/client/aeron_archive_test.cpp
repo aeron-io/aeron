@@ -3480,6 +3480,56 @@ TEST_P(AeronCArchiveParamTest, shouldReplayWithResponseChannel)
     EXPECT_EQ(stop_position, aeron_image_position(image));
 }
 
+TEST_P(AeronCArchiveParamTest, shouldReplayWithResponseChannelWhenControlResponseChannelIsNotAResponseChannel)
+{
+    bool tryStop = GetParam();
+
+    size_t message_count = 1000;
+    const char *replay_channel = "aeron:udp?control-mode=response|control=localhost:10002";
+
+    // a normal control response channel, so the context reserves a session id for the control channels
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_request_channel(m_ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_response_channel(m_ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_idle_strategy(
+        m_ctx, aeron_idle_strategy_sleeping_idle, (void *)&m_idle_duration_ns));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_credentials_supplier(
+        m_ctx,
+        encoded_credentials_supplier,
+        nullptr,
+        nullptr,
+        &default_creds_clientd));
+    ASSERT_EQ_ERR(0, aeron_archive_connect(&m_archive, m_ctx));
+
+    m_aeron = aeron_archive_context_get_aeron(m_ctx);
+
+    int64_t recording_id, stop_position, halfway_position;
+
+    recordData(tryStop, &recording_id, &stop_position, &halfway_position, message_count);
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+
+    replay_params.position = 0;
+    replay_params.length = stop_position;
+    replay_params.file_io_max_length = 4096;
+
+    aeron_subscription_t *subscription;
+
+    ASSERT_EQ_ERR(0, aeron_archive_replay(
+        &subscription,
+        m_archive,
+        recording_id,
+        replay_channel,
+        m_replayStreamId,
+        &replay_params));
+
+    consumeMessages(subscription, message_count);
+
+    aeron_image_t *image = aeron_subscription_image_at_index(subscription, 0);
+    EXPECT_EQ(stop_position, aeron_image_position(image));
+}
+
 TEST_P(AeronCArchiveParamTest, shouldBoundedReplayWithResponseChannel)
 {
     bool tryStop = GetParam();

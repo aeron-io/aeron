@@ -2450,6 +2450,7 @@ int aeron_archive_initiate_replay_via_response_channel(
     aeron_uri_string_builder_t builder;
 
     bool failure = aeron_uri_string_builder_init_on_string(&builder, aeron_archive->ctx->control_request_channel) < 0 ||
+        aeron_uri_string_builder_put(&builder, AERON_URI_SESSION_ID_KEY, NULL) < 0 ||
         aeron_uri_string_builder_put(&builder, AERON_URI_TERM_OFFSET_KEY, NULL) < 0 ||
         aeron_uri_string_builder_put(&builder, AERON_URI_TERM_ID_KEY, NULL) < 0 ||
         aeron_uri_string_builder_put(&builder, AERON_URI_INITIAL_TERM_ID_KEY, NULL) < 0 ||
