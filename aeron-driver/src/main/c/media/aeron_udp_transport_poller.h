@@ -38,6 +38,13 @@ typedef struct aeron_udp_transport_poller_stct
     size_t iteration_threshold;
     int fd;
     void *bindings_clientd;
+
+    /*
+     * Whether the transports are currently in `fd`'s epoll set. Below
+     * `poller->iteration_threshold` the poller never waits on epoll, so it does
+     * not register -- see `aeron_udp_transport_poller_add`.
+     */
+    int is_epoll_registered;
 }
 aeron_udp_transport_poller_t;
 
