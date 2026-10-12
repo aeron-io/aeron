@@ -450,7 +450,13 @@ static inline int aeron_udp_channel_transport_recvmsg(
 
     for (size_t i = 0, length = vlen; i < length; i++)
     {
+        // `aeron_recvmsg` writes the address length back into the header, and the
+        // descriptions it is called with here are the caller's, built once and
+        // reused -- so the field is saved and put back rather than left for the
+        // caller to reset on the next poll.
+        socklen_t namelen = msgvec[i].msg_hdr.msg_namelen;
         ssize_t result = aeron_recvmsg(transport->recv_fd, &msgvec[i].msg_hdr, 0);
+        msgvec[i].msg_hdr.msg_namelen = namelen;
 
         if (result < 0)
         {
@@ -590,13 +596,19 @@ static int aeron_udp_channel_transport_recvfrom(
 {
     struct msghdr *msg_hdr = &msgvec[0].msg_hdr;
     struct iovec *iov = &msg_hdr->msg_iov[0];
+
+    // The address length goes to a local, not back into the descriptor. The
+    // descriptor belongs to the caller and is built once and reused, so the
+    // kernel is handed the same bytes on every poll and leaves nothing behind
+    // to be reset -- which is what makes a poll that finds nothing free.
+    socklen_t namelen = msg_hdr->msg_namelen;
     ssize_t result = recvfrom(
         transport->recv_fd,
         iov->iov_base,
         iov->iov_len,
         0,
         (struct sockaddr *)msg_hdr->msg_name,
-        &msg_hdr->msg_namelen);
+        &namelen);
 
     if (result < 0)
     {
@@ -682,6 +694,18 @@ int aeron_udp_channel_transport_recvmmsg(
         }
 #endif
 
+        // `recvmmsg` writes the address length of each datagram it took back
+        // into the array it was handed. That array is the caller's, built once
+        // and reused across polls, so what it held is put back before returning
+        // -- see `aeron_udp_channel_transport_recvfrom`, which does the same
+        // thing by never letting the kernel near the field.
+        socklen_t namelens[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
+
+        for (size_t i = 0; i < vlen && i < AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX; i++)
+        {
+            namelens[i] = msgvec[i].msg_hdr.msg_namelen;
+        }
+
         int result = recvmmsg(transport->recv_fd, msgvec, vlen, 0, &tv);
         if (result < 0)
         {
@@ -711,6 +735,7 @@ int aeron_udp_channel_transport_recvmmsg(
         {
             for (size_t i = 0, length = (size_t)result; i < length; i++)
             {
+                msgvec[i].msg_hdr.msg_namelen = namelens[i];
 #if defined(HAS_MEDIA_RCV_TIMESTAMPS)
                 struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msgvec[i].msg_hdr);
                 if (NULL != cmsg &&

@@ -54,6 +54,28 @@ typedef struct aeron_driver_receiver_stct
         uint8_t *buffers[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
         struct iovec iov[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
         struct sockaddr_storage addrs[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
+
+        /*
+         * The descriptors for the above, built once at init and never rebuilt:
+         * they describe buffers that do not move. Nothing here is rewritten
+         * between polls -- the receive calls are handed a local to write the
+         * address length into rather than the field itself (see
+         * `aeron_udp_channel_transport_recvfrom` and its siblings), so a poll
+         * that finds nothing leaves every one of these bytes exactly as it
+         * found them.
+         *
+         * They used to be a stack array rebuilt on every turn: eight stores per
+         * slot, sixteen slots, a pass, whether or not a single datagram turned
+         * up. That is the same rebuild this driver's Rust half had already
+         * dropped, and what it costs is visible in the receiver's own
+         * instruction count.
+         *
+         * A pointer to an incomplete type because `struct mmsghdr` is declared
+         * by glibc only under `_GNU_SOURCE`, which the translation units that
+         * include this header do not all set; the definition is the receiving
+         * side's business.
+         */
+        struct mmsghdr *msgvec;
     }
     recv_buffers;
 
