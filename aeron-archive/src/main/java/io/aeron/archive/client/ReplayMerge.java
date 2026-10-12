@@ -148,6 +148,11 @@ public final class ReplayMerge implements AutoCloseable
         replayChannelUri.put(CommonContext.EOS_PARAM_NAME, "false");
 
         final String replayEndpoint = ChannelUri.parse(replayDestination).get(ENDPOINT_PARAM_NAME);
+        if (null == replayEndpoint)
+        {
+            throw new IllegalArgumentException("replay destination must have an endpoint: " + replayDestination);
+        }
+
         if (replayEndpoint.endsWith(":0"))
         {
             state = State.RESOLVE_REPLAY_PORT;
