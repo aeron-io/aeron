@@ -422,6 +422,7 @@ int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *
     if (aeron_archive_control_response_poller_poll(poller) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_mutex_unlock(&aeron_archive->lock);
         return -1;
     }
 

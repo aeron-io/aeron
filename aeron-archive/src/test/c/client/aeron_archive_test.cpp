@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <atomic>
+#include <chrono>
+#include <cstring>
 #include <thread>
 
 #include "gtest/gtest.h"
@@ -31,6 +34,7 @@ extern "C"
 #include "aeron_counters.h"
 #include "client/aeron_archive.h"
 #include "client/aeron_archive_client.h"
+#include "client/aeron_archive_control_response_poller.h"
 #include "client/aeron_archive_client_version.h"
 #include "client/aeron_archive_context.h"
 #include "uri/aeron_uri_string_builder.h"
@@ -4979,4 +4983,65 @@ TEST_F(AeronArchiveClientNameTest, shouldHaveErrorMessagesForArchiveErrorCodes)
     EXPECT_STREQ("failed to connect for replication", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
     EXPECT_STREQ("recording is empty", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
     EXPECT_STREQ("invalid position", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
+}
+
+TEST_F(AeronCArchiveTest, shouldReleaseArchiveLockWhenPollingForRecordingSignalsFails)
+{
+    connect();
+
+    // a message with a foreign SBE schema id makes the control response poller fail; it is delivered on a separate
+    // subscription because the archive's control response publication is exclusive to the control session
+    const char *foreign_channel = "aeron:ipc";
+    const int32_t foreign_stream_id = 4321;
+    aeron_subscription_t *foreign_subscription = addSubscription(foreign_channel, foreign_stream_id);
+    aeron_publication_t *foreign_publication = addPublication(foreign_channel, foreign_stream_id);
+
+    uint8_t message[32] = {};
+    const uint16_t foreign_schema_id = 999;
+    std::memcpy(message + 4, &foreign_schema_id, sizeof(foreign_schema_id)); // SBE header: block length, template id, schema id, version
+    while (aeron_publication_offer(foreign_publication, message, sizeof(message), nullptr, nullptr) < 0)
+    {
+        idle();
+    }
+
+    aeron_subscription_t *control_response_subscription = m_archive->control_response_poller->subscription;
+    m_archive->control_response_poller->subscription = foreign_subscription;
+
+    int32_t count = 0;
+    int rc;
+    while (0 == (rc = aeron_archive_poll_for_recording_signals(&count, m_archive)))
+    {
+        idle();
+    }
+
+    m_archive->control_response_poller->subscription = control_response_subscription;
+    ASSERT_EQ(-1, rc);
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("found schema id: 999"));
+
+    // the archive lock is recursive, so only another thread observes a lock left held by the failed call
+    std::atomic<bool> completed(false);
+    std::thread other_thread(
+        [&]()
+        {
+            char buffer[256];
+            aeron_archive_poll_for_error_response(m_archive, buffer, sizeof(buffer));
+            completed = true;
+        });
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!completed && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const bool completed_in_time = completed;
+    if (!completed_in_time)
+    {
+        aeron_mutex_unlock(&m_archive->lock); // release the lock left held by this thread so the other thread can finish
+    }
+
+    other_thread.join();
+    EXPECT_TRUE(completed_in_time) << "another thread could not use the archive client after the failed poll";
+
+    ASSERT_EQ_ERR(0, aeron_publication_close(foreign_publication, nullptr, nullptr));
 }
