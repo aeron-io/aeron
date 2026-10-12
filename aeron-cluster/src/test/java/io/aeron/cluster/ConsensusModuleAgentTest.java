@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ import org.mockito.Mockito;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongConsumer;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.AeronCounters.CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID;
 import static io.aeron.AeronCounters.CLUSTER_CONTROL_TOGGLE_TYPE_ID;
 import static io.aeron.AeronCounters.NODE_CONTROL_TOGGLE_TYPE_ID;
@@ -540,6 +541,23 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
         agent.onServiceMessage(clusterSessionId, new UnsafeBuffer(new byte[64]), 0, 64);
+        verify(mockErrorHandler).onError(any(ClusterEvent.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { -1, 1, Integer.MAX_VALUE })
+    void shouldReportServiceAckWithUnknownServiceId(final int serviceId)
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        final CountedErrorHandler mockErrorHandler = mock(CountedErrorHandler.class);
+        ctx.countedErrorHandler(mockErrorHandler)
+            .epochClock(clock.asEpochClock())
+            .clusterClock(clock)
+            .serviceCount(1);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+
+        agent.onServiceAck(0, 0, 0, NULL_VALUE, serviceId);
         verify(mockErrorHandler).onError(any(ClusterEvent.class));
     }
 
