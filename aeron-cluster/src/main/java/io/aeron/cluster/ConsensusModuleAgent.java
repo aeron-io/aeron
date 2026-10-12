@@ -1443,6 +1443,14 @@ final class ConsensusModuleAgent
     void onServiceMessage(final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
     {
         final int serviceId = PendingServiceMessageTracker.serviceIdFromServiceMessage(clusterSessionId);
+        if (serviceId < 0 || serviceId >= pendingServiceMessageTrackers.length)
+        {
+            ctx.countedErrorHandler().onError(new ClusterEvent(
+                "service message dropped, unknown serviceId=" + serviceId +
+                " clusterSessionId=" + clusterSessionId + " serviceCount=" + pendingServiceMessageTrackers.length));
+            return;
+        }
+
         pendingServiceMessageTrackers[serviceId].enqueueMessage((MutableDirectBuffer)buffer, offset, length);
     }
 

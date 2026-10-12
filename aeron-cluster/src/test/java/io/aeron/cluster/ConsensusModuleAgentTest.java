@@ -45,12 +45,14 @@ import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.NoOpIdleStrategy;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.MockedStatic;
@@ -521,6 +523,23 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
         agent.onExtensionMessage(0, 0, SCHEMA_ID, 0, null, 0, 0, null);
+        verify(mockErrorHandler).onError(any(ClusterEvent.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = { -1, 1, Integer.MAX_VALUE })
+    void shouldReportServiceMessageWithUnknownServiceId(final long clusterSessionId)
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        final CountedErrorHandler mockErrorHandler = mock(CountedErrorHandler.class);
+        ctx.countedErrorHandler(mockErrorHandler)
+            .epochClock(clock.asEpochClock())
+            .clusterClock(clock)
+            .serviceCount(1);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+
+        agent.onServiceMessage(clusterSessionId, new UnsafeBuffer(new byte[64]), 0, 64);
         verify(mockErrorHandler).onError(any(ClusterEvent.class));
     }
 
