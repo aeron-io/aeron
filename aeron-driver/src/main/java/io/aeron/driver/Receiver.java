@@ -72,7 +72,8 @@ public final class Receiver implements Agent
         conductorProxy = ctx.driverConductorProxy();
         reResolutionCheckIntervalNs = ctx.reResolutionCheckIntervalNs();
         dutyCycleTracker = ctx.receiverDutyCycleTracker();
-        roleName = threadName(AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC);
+        roleName = threadName(
+            ctx.properties(), AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC);
     }
 
     /**

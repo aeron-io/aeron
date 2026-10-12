@@ -17,7 +17,11 @@ package io.aeron.archive;
 
 import io.aeron.driver.DutyCycleTracker;
 import org.agrona.CloseHelper;
-import org.agrona.concurrent.*;
+import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.AgentTerminationException;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
+import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.util.concurrent.CountDownLatch;
@@ -36,7 +40,8 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
 
     DedicatedModeArchiveConductor(final Archive.Context ctx)
     {
-        super(ctx, threadName(AERON_ARCHIVE_CONDUCTOR_THREAD_NAME, AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC));
+        super(ctx, threadName(
+            ctx.properties(), AERON_ARCHIVE_CONDUCTOR_THREAD_NAME, AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC));
         closeQueue = new ManyToOneConcurrentLinkedQueue<>();
     }
 
