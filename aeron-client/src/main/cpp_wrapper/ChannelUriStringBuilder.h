@@ -72,6 +72,7 @@ public:
         m_responseCorrelationId.reset(nullptr);
         m_nakDelay.reset(nullptr);
         m_untetheredWindowLimitTimeout.reset(nullptr);
+        m_untetheredLingerTimeout.reset(nullptr);
         m_untetheredRestingTimeout.reset(nullptr);
         m_maxResend.reset(nullptr);
 
@@ -402,6 +403,12 @@ public:
         return *this;
     }
 
+    inline this_t &untetheredLingerTimeout(std::int64_t timeout)
+    {
+        m_untetheredLingerTimeout.reset(new Value(timeout));
+        return *this;
+    }
+
     inline this_t &untetheredRestingTimeout(std::int64_t timeout)
     {
         m_untetheredRestingTimeout.reset(new Value(timeout));
@@ -511,6 +518,7 @@ public:
         append(sb, RESPONSE_CORRELATION_ID_PARAM_NAME, m_responseCorrelationId);
         append(sb, NAK_DELAY_PARAM_NAME, m_nakDelay);
         append(sb, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, m_untetheredWindowLimitTimeout);
+        append(sb, UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, m_untetheredLingerTimeout);
         append(sb, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, m_untetheredRestingTimeout);
         append(sb, MAX_RESEND_PARAM_NAME, m_maxResend);
 
@@ -568,6 +576,7 @@ private:
     std::unique_ptr<Value> m_responseCorrelationId;
     std::unique_ptr<Value> m_nakDelay;
     std::unique_ptr<Value> m_untetheredWindowLimitTimeout;
+    std::unique_ptr<Value> m_untetheredLingerTimeout;
     std::unique_ptr<Value> m_untetheredRestingTimeout;
     std::unique_ptr<Value> m_maxResend;
     std::unique_ptr<std::string> m_mediaReceiveTimestampOffset;
