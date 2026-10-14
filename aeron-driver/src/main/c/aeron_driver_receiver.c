@@ -45,6 +45,14 @@ int aeron_driver_receiver_init(
     }
 
     receiver->recv_buffers.vector_capacity = context->receiver_io_vector_capacity;
+    if (aeron_alloc(
+        (void **)&receiver->recv_buffers.msgvec,
+        receiver->recv_buffers.vector_capacity * sizeof(struct mmsghdr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "Failed to allocate receiver->recv_buffers.msgvec");
+        return -1;
+    }
+
     for (size_t i = 0; i < receiver->recv_buffers.vector_capacity; i++)
     {
         size_t offset;
@@ -60,6 +68,16 @@ int aeron_driver_receiver_init(
 
         receiver->recv_buffers.iov[i].iov_base = receiver->recv_buffers.buffers[i] + offset;
         receiver->recv_buffers.iov[i].iov_len = AERON_DRIVER_RECEIVER_MAX_UDP_PACKET_LENGTH;
+
+        // The descriptor that points at them, built here and not in the poll.
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_name = &receiver->recv_buffers.addrs[i];
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_namelen = sizeof(receiver->recv_buffers.addrs[i]);
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_iov = &receiver->recv_buffers.iov[i];
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_iovlen = 1;
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_flags = 0;
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_control = NULL;
+        receiver->recv_buffers.msgvec[i].msg_hdr.msg_controllen = 0;
+        receiver->recv_buffers.msgvec[i].msg_len = 0;
     }
 
     if (aeron_udp_channel_data_paths_init(
@@ -121,7 +139,6 @@ static void aeron_driver_receiver_on_rb_command_queue(
 
 int aeron_driver_receiver_do_work(void *clientd)
 {
-    struct mmsghdr mmsghdr[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
     aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
 
     const size_t vlen = receiver->recv_buffers.vector_capacity;
@@ -137,22 +154,15 @@ int aeron_driver_receiver_do_work(void *clientd)
         receiver,
         AERON_COMMAND_DRAIN_LIMIT);
 
-    for (size_t i = 0; i < vlen; i++)
-    {
-        mmsghdr[i].msg_hdr.msg_name = &receiver->recv_buffers.addrs[i];
-        mmsghdr[i].msg_hdr.msg_namelen = sizeof(receiver->recv_buffers.addrs[i]);
-        mmsghdr[i].msg_hdr.msg_iov = &receiver->recv_buffers.iov[i];
-        mmsghdr[i].msg_hdr.msg_iovlen = 1;
-        mmsghdr[i].msg_hdr.msg_flags = 0;
-        mmsghdr[i].msg_hdr.msg_control = NULL;
-        mmsghdr[i].msg_hdr.msg_controllen = 0;
-        mmsghdr[i].msg_len = 0;
-    }
-
+    // The descriptors are built once, at init, and the poll leaves them alone:
+    // every receive call writes the address length into a local rather than back
+    // into the descriptor it was given, so the next poll hands the kernel the
+    // same bytes it handed it last time. What used to be here rewrote all eight
+    // fields of all sixteen slots on every turn.
     int64_t bytes_received = 0;
     int poll_result = receiver->poller_poll_func(
         &receiver->poller,
-        mmsghdr,
+        receiver->recv_buffers.msgvec,
         vlen,
         &bytes_received,
         receiver->data_paths.recv_func,
@@ -295,6 +305,7 @@ void aeron_driver_receiver_on_close(void *clientd)
     {
         aeron_free(receiver->recv_buffers.buffers[i]);
     }
+    aeron_free(receiver->recv_buffers.msgvec);
 
     aeron_free(receiver->images.array);
     aeron_free(receiver->pending_setups.array);

@@ -450,7 +450,13 @@ static inline int aeron_udp_channel_transport_recvmsg(
 
     for (size_t i = 0, length = vlen; i < length; i++)
     {
+        // `aeron_recvmsg` writes the address length back into the header, and the
+        // descriptions it is called with here are the caller's, built once and
+        // reused -- so the field is saved and put back rather than left for the
+        // caller to reset on the next poll.
+        socklen_t namelen = msgvec[i].msg_hdr.msg_namelen;
         ssize_t result = aeron_recvmsg(transport->recv_fd, &msgvec[i].msg_hdr, 0);
+        msgvec[i].msg_hdr.msg_namelen = namelen;
 
         if (result < 0)
         {
@@ -560,6 +566,93 @@ static int aeron_udp_channel_transport_recvmsg_x(
 
 #endif
 
+/*
+ * Read one datagram, with `recvfrom`.
+ *
+ * That is the shape the Java driver's data path has: `DataTransportPoller`
+ * reads one datagram per transport per poll, into a single pre-allocated
+ * direct buffer, and `DatagramChannel.receive` is a `recvfrom`. It is also the
+ * cheapest of the three receive calls on an empty socket, and an empty socket
+ * is what most polls of this driver find -- 98.5% of them at 25K messages/s,
+ * 74% at 501K. `recvfrom` builds its iovec on the kernel stack, where
+ * `recvmsg`/`recvmmsg` carry an `msghdr` in and out of user memory, and
+ * `recvmmsg` carries an `mmsghdr` array as well -- which an empty queue pays
+ * for whether or not it filled any of it.
+ *
+ * Only slot zero is read: a call now hands back at most one datagram, where the
+ * call it replaces could hand back a batch of `vlen`. The callers still loop
+ * over their own transports, so what changes is how soon the loop comes back
+ * around -- which is where the saving is spent.
+ *
+ * An error here is the ordinary state of a poll: the same set the msghdr path
+ * treats as "nothing to read" (see `aeron_recvmsg`) is not reported.
+ */
+static int aeron_udp_channel_transport_recvfrom(
+    aeron_udp_channel_transport_t *transport,
+    struct mmsghdr *msgvec,
+    int64_t *bytes_rcved,
+    aeron_udp_transport_recv_func_t recv_func,
+    void *clientd)
+{
+    struct msghdr *msg_hdr = &msgvec[0].msg_hdr;
+    struct iovec *iov = &msg_hdr->msg_iov[0];
+
+    // The address length goes to a local, not back into the descriptor. The
+    // descriptor belongs to the caller and is built once and reused, so the
+    // kernel is handed the same bytes on every poll and leaves nothing behind
+    // to be reset -- which is what makes a poll that finds nothing free.
+    socklen_t namelen = msg_hdr->msg_namelen;
+    ssize_t result = recvfrom(
+        transport->recv_fd,
+        iov->iov_base,
+        iov->iov_len,
+        0,
+        (struct sockaddr *)msg_hdr->msg_name,
+        &namelen);
+
+    if (result < 0)
+    {
+        int err = errno;
+
+        // ECONNREFUSED can sometimes occur with connected UDP sockets if ICMP traffic is able to indicate that the
+        // remote end had closed on a previous send.
+        if (EINTR == err || EAGAIN == err || EWOULDBLOCK == err || ECONNREFUSED == err)
+        {
+            return 0;
+        }
+
+        AERON_SET_ERR(
+            err,
+            "Failed to recvfrom, fd=%d, recv_fd=%d, connected=%s",
+            transport->fd,
+            transport->recv_fd,
+            NULL != transport->connected_address ? "true" : "false");
+
+        return -1;
+    }
+
+    if (0 == result)
+    {
+        return 0;
+    }
+
+    msgvec[0].msg_len = (unsigned int)result;
+
+    recv_func(
+        transport->data_paths,
+        transport,
+        clientd,
+        transport->dispatch_clientd,
+        transport->destination_clientd,
+        iov->iov_base,
+        msgvec[0].msg_len,
+        msg_hdr->msg_name,
+        NULL);
+    *bytes_rcved += msgvec[0].msg_len;
+
+    return 1;
+}
+
 int aeron_udp_channel_transport_recvmmsg(
     aeron_udp_channel_transport_t *transport,
     struct mmsghdr *msgvec,
@@ -568,6 +661,19 @@ int aeron_udp_channel_transport_recvmmsg(
     aeron_udp_transport_recv_func_t recv_func,
     void *clientd)
 {
+    /*
+     * The one-datagram path, unless this transport asked the kernel for a
+     * receive timestamp: that arrives as a control message, and `recvfrom` has
+     * nowhere to put one. `aeron_udp_channel_transport_setup_media_rcv_timestamps`
+     * and a channel's own `rcv-timestamp` are what fill in `timestamp_flags`;
+     * neither is used by the samples or the benchmarks, so the path above is
+     * the one they take.
+     */
+    if (0 == transport->timestamp_flags)
+    {
+        return aeron_udp_channel_transport_recvfrom(transport, msgvec, bytes_rcved, recv_func, clientd);
+    }
+
 #if defined(HAVE_RECVMMSG)
     if (vlen > 1)
     {
@@ -587,6 +693,18 @@ int aeron_udp_channel_transport_recvmmsg(
             }
         }
 #endif
+
+        // `recvmmsg` writes the address length of each datagram it took back
+        // into the array it was handed. That array is the caller's, built once
+        // and reused across polls, so what it held is put back before returning
+        // -- see `aeron_udp_channel_transport_recvfrom`, which does the same
+        // thing by never letting the kernel near the field.
+        socklen_t namelens[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
+
+        for (size_t i = 0; i < vlen && i < AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX; i++)
+        {
+            namelens[i] = msgvec[i].msg_hdr.msg_namelen;
+        }
 
         int result = recvmmsg(transport->recv_fd, msgvec, vlen, 0, &tv);
         if (result < 0)
@@ -617,6 +735,7 @@ int aeron_udp_channel_transport_recvmmsg(
         {
             for (size_t i = 0, length = (size_t)result; i < length; i++)
             {
+                msgvec[i].msg_hdr.msg_namelen = namelens[i];
 #if defined(HAS_MEDIA_RCV_TIMESTAMPS)
                 struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msgvec[i].msg_hdr);
                 if (NULL != cmsg &&
