@@ -32,8 +32,7 @@ public:
     using this_t = BufferBuilder;
 
     explicit BufferBuilder(std::uint32_t initialCapacity = 0) :
-        m_capacity(initialCapacity),
-        m_buffer(new std::uint8_t[m_capacity])
+        m_capacity(initialCapacity)
     {
         if (BUFFER_BUILDER_MAX_CAPACITY < m_capacity)
         {
@@ -41,6 +40,8 @@ public:
                 "initialCapacity outside range 0 - " + std::to_string(BUFFER_BUILDER_MAX_CAPACITY) +
                 ": capacity=" + std::to_string(m_capacity), SOURCEINFO, EINVAL);
         }
+
+        m_buffer.reset(new std::uint8_t[m_capacity]);
     }
 
     BufferBuilder(BufferBuilder &&builder) noexcept:
@@ -53,7 +54,7 @@ public:
 
     std::uint8_t *buffer() const
     {
-        return &m_buffer[0];
+        return m_buffer.get();
     }
 
     std::uint32_t limit() const
@@ -109,19 +110,23 @@ public:
 
     this_t &append(AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &)
     {
-        ensureCapacity(static_cast<std::uint32_t>(length));
-
-        ::memcpy(&m_buffer[0] + m_limit, buffer.buffer() + offset, static_cast<std::uint32_t>(length));
-        m_limit += length;
-        return *this;
+        return append(buffer, offset, length);
     }
 
     this_t &append(AtomicBuffer &buffer, util::index_t offset, util::index_t length)
     {
-        ensureCapacity(static_cast<std::uint32_t>(length));
+        if (offset < 0 || length < 0)
+        {
+            throw util::IllegalArgumentException(
+                "offset and length must not be negative", SOURCEINFO, EINVAL);
+        }
 
-        ::memcpy(&m_buffer[0] + m_limit, buffer.buffer() + offset, static_cast<std::uint32_t>(length));
-        m_limit += length;
+        buffer.boundsCheck(offset, static_cast<std::uint32_t>(length));
+        const std::uint32_t appendLength = static_cast<std::uint32_t>(length);
+        ensureCapacity(appendLength);
+
+        ::memcpy(m_buffer.get() + m_limit, buffer.buffer() + offset, appendLength);
+        m_limit += appendLength;
         return *this;
     }
 
@@ -156,6 +161,12 @@ private:
 
     void ensureCapacity(std::uint32_t additionalCapacity)
     {
+        if (additionalCapacity > BUFFER_BUILDER_MAX_CAPACITY - m_limit)
+        {
+            throw util::IllegalStateException(
+                "max capacity reached: " + std::to_string(BUFFER_BUILDER_MAX_CAPACITY), SOURCEINFO, EINVAL);
+        }
+
         const std::uint32_t requiredCapacity = m_limit + additionalCapacity;
 
         if (requiredCapacity > m_capacity)
@@ -175,7 +186,7 @@ private:
     {
         std::unique_ptr<std::uint8_t[]> newBuffer(new std::uint8_t[newCapacity]);
 
-        ::memcpy(&newBuffer[0], &m_buffer[0], m_limit);
+        ::memcpy(newBuffer.get(), m_buffer.get(), m_limit);
         m_buffer = std::move(newBuffer);
         m_capacity = newCapacity;
     }
