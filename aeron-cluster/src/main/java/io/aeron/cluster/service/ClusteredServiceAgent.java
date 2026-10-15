@@ -209,7 +209,10 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
     public void onClose()
     {
-        aeron.removeCloseHandler(closeHandlerRegistrationId);
+        if (!isAbort)
+        {
+            aeron.removeCloseHandler(closeHandlerRegistrationId);
+        }
 
         if (isAbort)
         {
