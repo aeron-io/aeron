@@ -520,6 +520,7 @@ static void initialize_agent_logging(void)
 
         if (state->filename)
         {
+            // codeql[cpp/path-injection]
             if (NULL == (state->logfp = aeron_open_file_append(state->filename)))
             {
                 AERON_FPRINTF( stderr, "could not open log file %s. exiting.\n%s\n", state->filename, aeron_errmsg());
@@ -2275,6 +2276,7 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
         aeron_err_clear();
     }
 
+    // codeql[cpp/path-injection]
     if (NULL == (state->logfp = aeron_open_file_append(state->filename)))
     {
         AERON_APPEND_ERR("%s", "failed to open log file after rolling, falling back to stdout");
