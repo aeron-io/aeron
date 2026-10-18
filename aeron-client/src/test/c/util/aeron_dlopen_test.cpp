@@ -30,6 +30,7 @@ TEST_F(DlopenTest, shouldFindExistingSymbolWithRtldDefault)
     // printf is universally available in the C runtime on all platforms
     void *sym = aeron_dlsym(RTLD_DEFAULT, "printf");
     EXPECT_NE(nullptr, sym);
+    EXPECT_EQ(1, 0);
 }
 
 TEST_F(DlopenTest, shouldReturnNullForNonexistentSymbolWithRtldDefault)
