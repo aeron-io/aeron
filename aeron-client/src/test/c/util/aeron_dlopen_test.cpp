@@ -27,8 +27,8 @@ class DlopenTest : public testing::Test
 
 TEST_F(DlopenTest, shouldFindExistingSymbolWithRtldDefault)
 {
-    // printf is universally available in the C runtime on all platforms
-    void *sym = aeron_dlsym(RTLD_DEFAULT, "printf");
+    // malloc is universally available in the C runtime on all platforms
+    void *sym = aeron_dlsym(RTLD_DEFAULT, "malloc");
     EXPECT_NE(nullptr, sym);
 }
 
