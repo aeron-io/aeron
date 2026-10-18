@@ -36,6 +36,8 @@ finds a problem.
 now `AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`
 (`aeron_driver_context_set/get_thread_affinity_fail_on_validation_errors`).
 
+* **[Driver/C]** Remove linking to wsock32 in favor of only using ws2_32. This is to avoid header weirdness: https://learn.microsoft.com/en-us/archive/blogs/wndp/winsock-header-weirdness.
+
 === Changelog
 
 * **[Archive/Java]** Fix SIGSEGV when closing sessions after the archive's Aeron client times out. (https://github.com/aeron-io/aeron/pull/2204[#2204])

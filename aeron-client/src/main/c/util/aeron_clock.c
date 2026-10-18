@@ -25,6 +25,7 @@
 
 #if defined(AERON_COMPILER_MSVC)
 
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #define MS_PER_SEC  1000ULL     // MS = milliseconds
