@@ -56,7 +56,6 @@
 #include <stdio.h>
 #include <io.h>
 #include <direct.h>
-#include <winioctl.h>
 
 #include "aeron_alloc.h"
 

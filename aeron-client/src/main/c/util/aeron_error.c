@@ -47,7 +47,11 @@ const char *aeron_strerror_r(int errcode, char *buffer, size_t length)
 }
 
 #elif defined(AERON_COMPILER_MSVC)
+
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 
 const char *aeron_strerror_r(int errcode, char *buffer, size_t length)

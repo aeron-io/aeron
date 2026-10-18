@@ -36,7 +36,6 @@ typedef int aeron_socket_t;
 #elif defined(AERON_COMPILER_MSVC)
 
 #include <WinSock2.h>
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <ws2ipdef.h>
 #include <WS2tcpip.h>

@@ -30,7 +30,6 @@
 #if !defined(_WIN32)
 #include <unistd.h>
 #else
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")

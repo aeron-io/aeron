@@ -71,7 +71,7 @@ void *aeron_open_file_append(const char *path);
 #include <io.h>
 #include <direct.h>
 #include <process.h>
-#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
 #include <windows.h>
 
 #define S_IRWXU 0
