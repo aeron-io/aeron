@@ -97,6 +97,13 @@ static void aeron_init_dlopen_support()
         while (cb_needed / sizeof(HMODULE) > modules_capacity);
 
         modules_size = cb_needed / sizeof(HMODULE);
+
+        for (int i = 0; i < modules_size; i++)
+        {
+            char module_name[128] = { 0 };
+            GetModuleFileNameA(modules[i], module_name, sizeof(module_name));
+            fprintf(stderr, "module %d: %s\n", i, module_name);
+        }
     }
 }
 
