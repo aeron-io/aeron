@@ -58,8 +58,8 @@ TEST_F(SocketTest, setMulticastInterface)
 
     struct in_addr loopback_in_addr_out = {};
     socklen_t loopback_in_addr_out_len = sizeof(loopback_in_addr_out);
-    int get_socket_opt_rc = aeron_getsockopt(socket_fd, IPPROTO_IP, IP_MULTICAST_IF, (void *)&loopback_in_addr_out, &loopback_in_addr_out_len);
-    ASSERT_EQ(0, get_socket_opt_rc);
+    int aeron_getsockopt_rc = aeron_getsockopt(socket_fd, IPPROTO_IP, IP_MULTICAST_IF, (void *)&loopback_in_addr_out, &loopback_in_addr_out_len);
+    ASSERT_EQ(0, aeron_getsockopt_rc);
 
     char loopback_name_out[INET_ADDRSTRLEN];
     const char *inet_ntop_rc = inet_ntop(AF_INET, &loopback_in_addr_out, loopback_name_out, sizeof(loopback_name_out));
