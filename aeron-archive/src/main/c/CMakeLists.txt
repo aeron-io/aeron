@@ -16,21 +16,12 @@
 
 include(CheckSymbolExists)
 
-if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
-    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi)
-    set(WSAPOLL_PROTOTYPE_EXISTS True)
-endif ()
-
 if (MSVC)
     set(AERON_STATIC_LIB_LINK_OPTS "")
 else()
     # Because dlsym() is used to load strategies.
     set(AERON_STATIC_LIB_LINK_OPTS "-rdynamic")
 endif()
-
-if (WSAPOLL_PROTOTYPE_EXISTS)
-    add_definitions(-DHAVE_WSAPOLL)
-endif ()
 
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
     set(CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")

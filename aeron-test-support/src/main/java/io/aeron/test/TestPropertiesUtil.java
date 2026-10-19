@@ -42,9 +42,35 @@ public final class TestPropertiesUtil
      */
     public static Properties backupAndOverrideSystemProperties(final Properties backup, final Properties newProperties)
     {
-        backupSystemProperties(backup, newProperties);
+        final Properties result = backupSystemProperties(backup, newProperties);
         System.getProperties().putAll(newProperties);
-        return backup;
+        return result;
+    }
+
+    /**
+     * Back up the system properties in the supplied newProperties and immediately override
+     * the currently loaded ones.
+     *
+     * @param backup        to store the backed up properties to.
+     * @param properties    a list of key/value pairs to be set as system properties. This should be an even number
+     *                      of entries in the array.
+     * @return the backup properties for a fluent API.
+     */
+    public static Properties backupAndSetSystemProperties(final Properties backup, final String... properties)
+    {
+        if (0 != properties.length % 2)
+        {
+            throw new IllegalArgumentException(
+                "properties should be an even number of values of the form 'key, value, key, value...'");
+        }
+
+        final Properties newProperties = new Properties();
+        for (int i = 0; i < properties.length; i += 2)
+        {
+            newProperties.setProperty(properties[i], properties[i + 1]);
+        }
+
+        return backupAndOverrideSystemProperties(backup, newProperties);
     }
 
     /**

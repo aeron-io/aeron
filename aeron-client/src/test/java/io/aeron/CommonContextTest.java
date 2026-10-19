@@ -16,6 +16,7 @@
 package io.aeron;
 
 import io.aeron.exceptions.ConcurrentConcludeException;
+import io.aeron.test.TestPropertiesUtil;
 import io.aeron.test.Tests;
 import org.agrona.ErrorHandler;
 import org.agrona.concurrent.AtomicBuffer;
@@ -46,10 +47,14 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 
 import static io.aeron.CommonContext.DATE_TIME_FORMATTER;
 import static io.aeron.CommonContext.FALLBACK_LOGGER_PROP_NAME;
 import static io.aeron.CommonContext.FILE_NAME_FORMATTER;
+import static io.aeron.test.TestPropertiesUtil.NULL_SENTINEL;
+import static io.aeron.test.TestPropertiesUtil.backupAndSetSystemProperties;
+import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
 import static java.nio.ByteBuffer.allocateDirect;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -95,20 +100,36 @@ class CommonContextTest
     @Test
     void setupErrorHandlerReturnsALoggingErrorHandlerInstanceIfNoUserErrorHandlerSupplied()
     {
-        final DistinctErrorLog distinctErrorLog = mock(DistinctErrorLog.class);
+        final Properties backup = backupAndSetSystemProperties(
+            new Properties(),
+            FALLBACK_LOGGER_PROP_NAME, NULL_SENTINEL);
 
-        final ErrorHandler errorHandler = CommonContext.setupErrorHandler(null, distinctErrorLog);
+        try
+        {
+            System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
 
-        assertNotNull(errorHandler);
-        final LoggingErrorHandler loggingErrorHandler = assertInstanceOf(LoggingErrorHandler.class, errorHandler);
-        assertSame(distinctErrorLog, loggingErrorHandler.distinctErrorLog());
-        assertSame(System.err, loggingErrorHandler.errorOverflow());
+            final DistinctErrorLog distinctErrorLog = mock(DistinctErrorLog.class);
+
+            final ErrorHandler errorHandler = CommonContext.setupErrorHandler(null, distinctErrorLog);
+
+            assertNotNull(errorHandler);
+            final LoggingErrorHandler loggingErrorHandler = assertInstanceOf(LoggingErrorHandler.class, errorHandler);
+            assertSame(distinctErrorLog, loggingErrorHandler.distinctErrorLog());
+            assertSame(System.err, loggingErrorHandler.errorOverflow());
+        }
+        finally
+        {
+            restoreSystemProperties(backup);
+        }
     }
 
     @Test
     void setupErrorHandlerUsesAFallBackLoggingHandlerForTheOverflow()
     {
-        System.setProperty(FALLBACK_LOGGER_PROP_NAME, "no_op");
+        final Properties backup = backupAndSetSystemProperties(
+            new Properties(),
+            FALLBACK_LOGGER_PROP_NAME, "no_op");
+
         try
         {
             final DistinctErrorLog distinctErrorLog = mock(DistinctErrorLog.class);
@@ -122,7 +143,7 @@ class CommonContextTest
         }
         finally
         {
-            System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
+            TestPropertiesUtil.restoreSystemProperties(backup);
         }
     }
 
@@ -326,43 +347,63 @@ class CommonContextTest
     @Test
     void fallbackLoggerReturnsSystemErrorIfNothingSpecified()
     {
-        System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
-        assertSame(System.err, CommonContext.fallbackLogger());
+        final Properties backup = backupAndSetSystemProperties(
+            new Properties(),
+            FALLBACK_LOGGER_PROP_NAME, NULL_SENTINEL);
+
+        try
+        {
+            System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
+            assertSame(System.err, CommonContext.fallbackLogger());
+        }
+        finally
+        {
+            restoreSystemProperties(backup);
+        }
     }
 
     @ParameterizedTest
     @ValueSource(strings = { "", "stderr", "gaga" })
     void fallbackLoggerReturnsSystemError(final String logger)
     {
-        System.setProperty(FALLBACK_LOGGER_PROP_NAME, logger);
+        final Properties backup = backupAndSetSystemProperties(
+            new Properties(),
+            FALLBACK_LOGGER_PROP_NAME, logger);
+
         try
         {
             assertSame(System.err, CommonContext.fallbackLogger());
         }
         finally
         {
-            System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 
     @Test
     void fallbackLoggerReturnsSystemOutIfConfigured()
     {
-        System.setProperty(FALLBACK_LOGGER_PROP_NAME, "stdout");
+        final Properties backup = backupAndSetSystemProperties(
+            new Properties(),
+            FALLBACK_LOGGER_PROP_NAME, "stdout");
+
         try
         {
             assertSame(System.out, CommonContext.fallbackLogger());
         }
         finally
         {
-            System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 
     @Test
     void fallbackLoggerReturnsNoOpLoggerIfConfigured()
     {
-        System.setProperty(FALLBACK_LOGGER_PROP_NAME, "no_op");
+        final Properties backup = backupAndSetSystemProperties(
+            new Properties(),
+            FALLBACK_LOGGER_PROP_NAME, "no_op");
+
         try
         {
             final PrintStream logger = CommonContext.fallbackLogger();
@@ -373,7 +414,7 @@ class CommonContextTest
         }
         finally
         {
-            System.clearProperty(FALLBACK_LOGGER_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 

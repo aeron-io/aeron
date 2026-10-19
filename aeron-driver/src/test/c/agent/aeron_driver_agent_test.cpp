@@ -34,6 +34,11 @@ void aeron_driver_agent_log_reader_do_work(aeron_driver_agent_log_state_t *, aer
 }
 
 #if defined(AERON_COMPILER_MSVC)
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <windows.h>
 #else
 #include <dirent.h>

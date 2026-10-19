@@ -104,7 +104,6 @@ TEST_F(AgentRunnerTest, shouldCloseAgentIfWasNotStarted)
     EXPECT_EQ(0, agent.doWorkCallCount());
 }
 
-
 class ThrowingAgent : public TestAgent
 {
 public:
@@ -173,7 +172,7 @@ TEST_F(AgentRunnerTest, shouldNotInvokeDoWorkIfStartFailsWithException)
 
     EXPECT_FALSE(agentRunner.isStarted());
     EXPECT_FALSE(agentRunner.isRunning());
-    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_FALSE(agentRunner.isClosed());
     EXPECT_EQ(2, called);
     EXPECT_EQ(1, agent.startCallCount());
     EXPECT_EQ(0, agent.doWorkCallCount());
@@ -212,7 +211,7 @@ TEST_F(AgentRunnerTest, runShouldTerminateSilentlyOnExpectedAgentTerminationExce
 
     EXPECT_FALSE(agentRunner.isStarted());
     EXPECT_FALSE(agentRunner.isRunning());
-    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_FALSE(agentRunner.isClosed());
     EXPECT_EQ(0, called);
     EXPECT_EQ(1, agent.startCallCount());
     EXPECT_EQ(1, agent.closeCallCount());
@@ -236,7 +235,7 @@ TEST_F(AgentRunnerTest, runShouldTerminateOnUnexpectedAgentTerminationException)
 
     EXPECT_FALSE(agentRunner.isStarted());
     EXPECT_FALSE(agentRunner.isRunning());
-    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_FALSE(agentRunner.isClosed());
     EXPECT_EQ(1, called);
     EXPECT_EQ(1, agent.startCallCount());
     EXPECT_EQ(1, agent.closeCallCount());
@@ -276,7 +275,7 @@ TEST_F(AgentRunnerTest, runShouldNotTerminateOnNonAgentTerminationExceptions)
 
     EXPECT_FALSE(agentRunner.isStarted());
     EXPECT_FALSE(agentRunner.isRunning());
-    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_FALSE(agentRunner.isClosed());
     EXPECT_EQ(10, called);
     EXPECT_EQ(1, agent.startCallCount());
     EXPECT_EQ(1, agent.closeCallCount());
@@ -380,13 +379,13 @@ TEST_F(AgentRunnerTest, shouldJoinThreadIfOneWasStarted)
         std::this_thread::yield();
     }
 
-    while (!agentRunner.isClosed())
+    while (agentRunner.isRunning())
     {
         std::this_thread::yield();
     }
 
     EXPECT_FALSE(agentRunner.isRunning());
-    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_FALSE(agentRunner.isClosed());
 
     agentRunner.close();
     agentRunner.close();
@@ -419,5 +418,51 @@ TEST_F(AgentRunnerTest, shouldCloseAgentExplicitlyIfNotStarted)
     EXPECT_TRUE(agentRunner.isClosed());
     EXPECT_EQ(0, agent.startCallCount());
     EXPECT_EQ(0, agent.doWorkCallCount());
+    EXPECT_EQ(1, agent.closeCallCount());
+}
+
+TEST_F(AgentRunnerTest, runIsANoOpIfAgentWasAlreadyClosed)
+{
+    TestAgent agent;
+    NoOpIdleStrategy idleStrategy;
+    exception_handler_t exception_handler;
+    AgentRunner<TestAgent, NoOpIdleStrategy> agentRunner(agent, idleStrategy, exception_handler, "xyz123");
+
+    agentRunner.close();
+
+    EXPECT_FALSE(agentRunner.isRunning());
+    EXPECT_FALSE(agentRunner.isStarted());
+    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_EQ(0, agent.startCallCount());
+    EXPECT_EQ(0, agent.doWorkCallCount());
+    EXPECT_EQ(1, agent.closeCallCount());
+
+    agentRunner.run();
+
+    EXPECT_FALSE(agentRunner.isRunning());
+    EXPECT_FALSE(agentRunner.isStarted());
+    EXPECT_TRUE(agentRunner.isClosed());
+    EXPECT_EQ(0, agent.startCallCount());
+    EXPECT_EQ(0, agent.doWorkCallCount());
+    EXPECT_EQ(1, agent.closeCallCount());
+}
+
+TEST_F(AgentRunnerTest, runCanBeExecutedOnlyOnce)
+{
+    TerminatingAgent agent(true);
+    NoOpIdleStrategy idleStrategy;
+    exception_handler_t exception_handler;
+    AgentRunner<TerminatingAgent, NoOpIdleStrategy> agentRunner(agent, idleStrategy, exception_handler, "xyz123");
+
+    agentRunner.run();
+    agentRunner.run();
+    agentRunner.run();
+    agentRunner.run();
+
+    EXPECT_FALSE(agentRunner.isRunning());
+    EXPECT_FALSE(agentRunner.isStarted());
+    EXPECT_FALSE(agentRunner.isClosed());
+    EXPECT_EQ(1, agent.startCallCount());
+    EXPECT_EQ(1, agent.doWorkCallCount());
     EXPECT_EQ(1, agent.closeCallCount());
 }

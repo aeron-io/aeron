@@ -33,6 +33,7 @@ import static io.aeron.logbuffer.LogBufferDescriptor.LOG_META_DATA_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.LOG_META_DATA_SECTION_INDEX;
 import static io.aeron.logbuffer.LogBufferDescriptor.PARTITION_COUNT;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MIN_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.checkPageSize;
 import static io.aeron.logbuffer.LogBufferDescriptor.checkTermLength;
 import static java.nio.channels.FileChannel.MapMode.READ_ONLY;
@@ -50,6 +51,7 @@ public final class LogBuffers implements AutoCloseable
 {
     private static final EnumSet<StandardOpenOption> FILE_OPTIONS_R = EnumSet.of(READ);
     private static final EnumSet<StandardOpenOption> FILE_OPTIONS_RW = EnumSet.of(READ, WRITE, SPARSE);
+    static final long MIN_LOG_BUFFER_FILE_SIZE = (TERM_MIN_LENGTH * PARTITION_COUNT) + LOG_META_DATA_LENGTH;
 
     private long lingerDeadlineNs = Long.MAX_VALUE;
     private int refCount;
@@ -73,7 +75,7 @@ public final class LogBuffers implements AutoCloseable
      * Construct the log buffers for a given log file.
      *
      * @param logFileName to be mapped.
-     * @param readOnly flag to indicate if mapping should only be read-only.
+     * @param readOnly    flag to indicate if mapping should only be read-only.
      */
     public LogBuffers(final String logFileName, final boolean readOnly)
     {
@@ -87,10 +89,11 @@ public final class LogBuffers implements AutoCloseable
             final EnumSet<StandardOpenOption> fileOptions = readOnly ? FILE_OPTIONS_R : FILE_OPTIONS_RW;
             fileChannel = FileChannel.open(Paths.get(logFileName), fileOptions);
             final long logLength = fileChannel.size();
-            if (logLength < LOG_META_DATA_LENGTH)
+            if (logLength < MIN_LOG_BUFFER_FILE_SIZE)
             {
                 throw new IllegalStateException(
-                    "Log file length less than min length of " + LOG_META_DATA_LENGTH + ": length=" + logLength);
+                    "Log file length less than min length of " + MIN_LOG_BUFFER_FILE_SIZE + ": length=" + logLength +
+                    ", filename=" + logFileName);
             }
 
             final FileChannel.MapMode mapMode = readOnly ? READ_ONLY : READ_WRITE;
@@ -108,6 +111,7 @@ public final class LogBuffers implements AutoCloseable
 
                 checkTermLength(termLength);
                 checkPageSize(pageSize);
+                checkFileSize(logFileName, logLength, termLength);
 
                 for (int i = 0; i < PARTITION_COUNT; i++)
                 {
@@ -140,14 +144,14 @@ public final class LogBuffers implements AutoCloseable
                 final int metaDataTermLength = LogBufferDescriptor.termLength(logMetaDataBuffer);
                 final int pageSize = LogBufferDescriptor.pageSize(logMetaDataBuffer);
 
-                checkPageSize(pageSize);
                 if (metaDataTermLength != assumedTermLength)
                 {
                     throw new IllegalStateException(
                         "assumed term length " + assumedTermLength +
                         " does not match metadata: termLength=" + metaDataTermLength);
                 }
-
+                checkPageSize(pageSize);
+                checkFileSize(logFileName, logLength, termLength);
                 termLength = assumedTermLength;
 
                 for (int i = 0; i < PARTITION_COUNT; i++)
@@ -293,6 +297,15 @@ public final class LogBuffers implements AutoCloseable
     public long lingerDeadlineNs()
     {
         return lingerDeadlineNs;
+    }
+
+    private static void checkFileSize(final String logFileName, final long logLength, final int termLength)
+    {
+        if (logLength < (PARTITION_COUNT * (long)termLength) + LOG_META_DATA_LENGTH)
+        {
+            throw new IllegalStateException("Log file length is too short for its term length: length=" + logLength +
+                ", termLength=" + termLength + ", filename=" + logFileName);
+        }
     }
 
     private static void close(

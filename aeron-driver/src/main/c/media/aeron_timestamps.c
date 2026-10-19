@@ -29,8 +29,8 @@ void aeron_timestamps_set_timestamp(
     }
     else
     {
-        size_t body_length = data_header->frame_header.frame_length - AERON_DATA_HEADER_LENGTH;
-        if (0 <= timestamp_offset && timestamp_offset <= (int32_t)(body_length - sizeof(timestamp_ns)))
+        int32_t body_length = data_header->frame_header.frame_length - (int32_t)AERON_DATA_HEADER_LENGTH;
+        if (0 <= timestamp_offset && timestamp_offset <= body_length - (int32_t)sizeof(timestamp_ns))
         {
             memcpy(
                 (uint8_t *)data_header + AERON_DATA_HEADER_LENGTH + (size_t)timestamp_offset,

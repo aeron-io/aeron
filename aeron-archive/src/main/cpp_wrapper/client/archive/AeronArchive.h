@@ -1449,7 +1449,7 @@ private:
         aeron_archive_recording_descriptor_t *recording_descriptor,
         void *clientd) noexcept
     {
-        auto consumer = *reinterpret_cast<recording_descriptor_consumer_t *>(clientd);
+        const auto consumer = *static_cast<recording_descriptor_consumer_t *>(clientd);
 
         RecordingDescriptor descriptor(
             recording_descriptor->control_session_id,

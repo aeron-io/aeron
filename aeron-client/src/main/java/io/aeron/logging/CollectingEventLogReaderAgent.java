@@ -15,6 +15,7 @@
  */
 package io.aeron.logging;
 
+import io.aeron.CommonContext;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
@@ -218,7 +219,7 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
 
     private void doOutputToFile(final String filename)
     {
-        System.out.println("Dumping to file: " + filename);
+        CommonContext.fallbackLogger().println("Dumping to file: " + filename);
 
         try (PrintStream out = new PrintStream(filename))
         {

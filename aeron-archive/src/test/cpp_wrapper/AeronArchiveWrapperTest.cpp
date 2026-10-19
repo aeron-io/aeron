@@ -1829,6 +1829,26 @@ TEST_F(AeronArchiveWrapperTest, shouldCatchErrorPollingForRecordingSignals)
     }
 }
 
+TEST_F(AeronArchiveWrapperTest, shouldSendReplicateRequestWithDefaultReplicationParams)
+{
+    startDestArchive();
+
+    std::shared_ptr<AeronArchive> dstAeronArchive = AeronArchive::connect(m_destContext);
+
+    // construct over non-zero memory so that members left uninitialised by the constructor are visibly garbage
+    alignas(ReplicationParams) unsigned char storage[sizeof(ReplicationParams)];
+    std::memset(storage, 0xA5, sizeof(storage));
+    ReplicationParams *params = new (storage) ReplicationParams();
+
+    // no credentials: the request must be sent with empty credentials, as in Java
+    const std::int64_t replicationId = dstAeronArchive->replicate(
+        873645, m_context.controlRequestStreamId(), m_context.controlRequestChannel(), *params);
+    EXPECT_GE(replicationId, 0);
+
+    dstAeronArchive->tryStopReplication(replicationId);
+    params->~ReplicationParams();
+}
+
 TEST_F(AeronArchiveWrapperTest, shouldCatchErrorPollingForErrors)
 {
     startDestArchive();

@@ -24,14 +24,6 @@
 #include "media/aeron_receive_channel_endpoint.h"
 #include "aeron_driver_receiver.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 int aeron_driver_receiver_init(
     aeron_driver_receiver_t *receiver,
     aeron_driver_context_t *context,
@@ -60,6 +52,15 @@ int aeron_driver_receiver_init(
 
         receiver->recv_buffers.iov[i].iov_base = receiver->recv_buffers.buffers[i] + offset;
         receiver->recv_buffers.iov[i].iov_len = AERON_DRIVER_RECEIVER_MAX_UDP_PACKET_LENGTH;
+
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_name = &receiver->recv_buffers.addrs[i];
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_namelen = sizeof(receiver->recv_buffers.addrs[i]);
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_iov = &receiver->recv_buffers.iov[i];
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_iovlen = 1;
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_flags = 0;
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_control = NULL;
+        receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_controllen = 0;
+        receiver->recv_buffers.mmsghdr[i].msg_len = 0;
     }
 
     if (aeron_udp_channel_data_paths_init(
@@ -86,6 +87,13 @@ int aeron_driver_receiver_init(
     receiver->poller_poll_func = context->udp_channel_transport_bindings->poller_poll_func;
     receiver->recvmmsg_func = context->udp_channel_transport_bindings->recvmmsg_func;
     receiver->error_log = error_log;
+
+    receiver->duty_cycle_counter = 0;
+    receiver->duty_cycle_ratio = context->receiver_poll_to_slow_work_ratio;
+    receiver->status_message_send_timeout_ns = (int64_t)(context->status_message_timeout_ns >> 1);
+    receiver->slow_tick_work_deadline_ns = 0;
+    receiver->images_per_cycle_limit = context->receiver_images_per_duty_cycle_limit;
+    receiver->next_image_index = -1;
 
     receiver->receiver_proxy.command_queue = &context->receiver_command_queue;
     receiver->receiver_proxy.fail_counter = aeron_system_counter_addr(
@@ -119,57 +127,23 @@ static void aeron_driver_receiver_on_rb_command_queue(
     cmd->func(clientd, cmd);
 }
 
-int aeron_driver_receiver_do_work(void *clientd)
+static int aeron_driver_receiver_slow_tick_work(aeron_driver_receiver_t *receiver, int64_t now_ns)
 {
-    struct mmsghdr mmsghdr[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
-    aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
-
-    const size_t vlen = receiver->recv_buffers.vector_capacity;
-    int64_t now_ns = receiver->context->nano_clock();
-    aeron_clock_update_cached_nano_time(receiver->context->receiver_cached_clock, now_ns);
-
-    aeron_duty_cycle_tracker_t *tracker = receiver->context->receiver_duty_cycle_tracker;
-    tracker->measure_and_update(tracker->state, now_ns);
-
     int work_count = (int)aeron_spsc_rb_read(
         receiver->receiver_proxy.command_queue,
         aeron_driver_receiver_on_rb_command_queue,
         receiver,
         AERON_COMMAND_DRAIN_LIMIT);
 
-    for (size_t i = 0; i < vlen; i++)
+    int next = receiver->next_image_index;
+    if (next < 0)
     {
-        mmsghdr[i].msg_hdr.msg_name = &receiver->recv_buffers.addrs[i];
-        mmsghdr[i].msg_hdr.msg_namelen = sizeof(receiver->recv_buffers.addrs[i]);
-        mmsghdr[i].msg_hdr.msg_iov = &receiver->recv_buffers.iov[i];
-        mmsghdr[i].msg_hdr.msg_iovlen = 1;
-        mmsghdr[i].msg_hdr.msg_flags = 0;
-        mmsghdr[i].msg_hdr.msg_control = NULL;
-        mmsghdr[i].msg_hdr.msg_controllen = 0;
-        mmsghdr[i].msg_len = 0;
+        next = (int)receiver->images.length - 1;
     }
 
-    int64_t bytes_received = 0;
-    int poll_result = receiver->poller_poll_func(
-        &receiver->poller,
-        mmsghdr,
-        vlen,
-        &bytes_received,
-        receiver->data_paths.recv_func,
-        receiver->recvmmsg_func,
-        receiver);
-
-    if (poll_result < 0)
+    for (int limit = receiver->images_per_cycle_limit; next >= 0 && limit > 0; next--, limit--)
     {
-        AERON_APPEND_ERR("%s", "receiver poller_poll");
-        aeron_driver_receiver_log_error(receiver);
-    }
-
-    aeron_counter_get_and_add_release(receiver->total_bytes_received_counter, bytes_received);
-
-    for (size_t i = 0, length = receiver->images.length; i < length; i++)
-    {
-        aeron_publication_image_t *image = receiver->images.array[i].image;
+        aeron_publication_image_t *image = receiver->images.array[next].image;
 
         if (NULL != image->endpoint)
         {
@@ -207,6 +181,10 @@ int aeron_driver_receiver_do_work(void *clientd)
             }
         }
     }
+
+    receiver->next_image_index = next;
+    receiver->duty_cycle_counter = 0;
+    receiver->slow_tick_work_deadline_ns = now_ns + receiver->status_message_send_timeout_ns;
 
     for (int last_index = (int)receiver->pending_setups.length - 1, i = last_index; i >= 0; i--)
     {
@@ -256,9 +234,50 @@ int aeron_driver_receiver_do_work(void *clientd)
         receiver->re_resolution_deadline_ns = now_ns + (int64_t)receiver->context->re_resolution_check_interval_ns;
         aeron_udp_transport_poller_check_receive_endpoint_re_resolutions(
             &receiver->poller, now_ns, receiver->context->conductor_proxy);
+        work_count++;
     }
 
-    return work_count + (int)bytes_received;
+    return work_count;
+}
+
+int aeron_driver_receiver_do_work(void *clientd)
+{
+    aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
+
+    int64_t now_ns = receiver->context->nano_clock();
+    aeron_clock_update_cached_nano_time(receiver->context->receiver_cached_clock, now_ns);
+
+    aeron_duty_cycle_tracker_t *tracker = receiver->context->receiver_duty_cycle_tracker;
+    tracker->measure_and_update(tracker->state, now_ns);
+
+    int64_t bytes_received = 0;
+    int poll_result = receiver->poller_poll_func(
+        &receiver->poller,
+        receiver->recv_buffers.mmsghdr,
+        receiver->recv_buffers.vector_capacity,
+        &bytes_received,
+        receiver->data_paths.recv_func,
+        receiver->recvmmsg_func,
+        receiver);
+
+    if (poll_result < 0)
+    {
+        AERON_APPEND_ERR("%s", "receiver poller_poll");
+        aeron_driver_receiver_log_error(receiver);
+    }
+
+    aeron_counter_get_and_add_release(receiver->total_bytes_received_counter, bytes_received);
+
+    int work_count = (int)bytes_received;
+
+    if (0 == bytes_received ||
+        ++receiver->duty_cycle_counter >= receiver->duty_cycle_ratio ||
+        receiver->slow_tick_work_deadline_ns <= now_ns)
+    {
+        work_count += aeron_driver_receiver_slow_tick_work(receiver, now_ns);
+    }
+
+    return work_count;
 }
 
 static void aeron_driver_receiver_drain_pending_commands_on_close(

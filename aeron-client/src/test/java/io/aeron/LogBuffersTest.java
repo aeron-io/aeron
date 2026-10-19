@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static io.aeron.LogBuffers.MIN_LOG_BUFFER_FILE_SIZE;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -39,8 +40,9 @@ class LogBuffersTest
     {
         final Path logFile = dir.resolve("test.log");
         assertNotNull(Files.createFile(logFile));
-        final byte[] contents = new byte[LOG_META_DATA_LENGTH];
-        final UnsafeBuffer buffer = new UnsafeBuffer(contents);
+        final byte[] contents = new byte[(PARTITION_COUNT * TERM_MIN_LENGTH) + LOG_META_DATA_LENGTH];
+        final UnsafeBuffer buffer =
+            new UnsafeBuffer(contents, contents.length - LOG_META_DATA_LENGTH, LOG_META_DATA_LENGTH);
         termLength(buffer, termLength);
         assertNotNull(Files.write(logFile, contents));
         assertEquals(contents.length, Files.size(logFile));
@@ -57,8 +59,9 @@ class LogBuffersTest
     {
         final Path logFile = dir.resolve("test.log");
         assertNotNull(Files.createFile(logFile));
-        final byte[] contents = new byte[LOG_META_DATA_LENGTH];
-        final UnsafeBuffer buffer = new UnsafeBuffer(contents);
+        final byte[] contents = new byte[(PARTITION_COUNT * TERM_MIN_LENGTH) + LOG_META_DATA_LENGTH];
+        final UnsafeBuffer buffer =
+            new UnsafeBuffer(contents, contents.length - LOG_META_DATA_LENGTH, LOG_META_DATA_LENGTH);
         termLength(buffer, TERM_MIN_LENGTH);
         pageSize(buffer, pageSize);
         assertNotNull(Files.write(logFile, contents));
@@ -70,12 +73,12 @@ class LogBuffersTest
     }
 
     @Test
-    void throwsIllegalStateExceptionIfLogFileSizeIsLessThanLogMetaDataLength(@TempDir final Path dir)
+    void throwsIllegalStateExceptionIfLogFileSizeIsLessThanMinLength(@TempDir final Path dir)
         throws IOException
     {
         final Path logFile = dir.resolve("test.log");
         assertNotNull(Files.createFile(logFile));
-        final int fileLength = LOG_META_DATA_LENGTH - 5;
+        final int fileLength = LOG_META_DATA_LENGTH + 10;
         final byte[] contents = new byte[fileLength];
         final UnsafeBuffer buffer = new UnsafeBuffer(contents);
         termLength(buffer, TERM_MIN_LENGTH);
@@ -85,7 +88,30 @@ class LogBuffersTest
 
         final IllegalStateException exception = assertThrowsExactly(
             IllegalStateException.class, () -> new LogBuffers(logFile.toAbsolutePath().toString()));
-        assertEquals("Log file length less than min length of " + LOG_META_DATA_LENGTH + ": length=" + fileLength,
+        assertEquals("Log file length less than min length of " + MIN_LOG_BUFFER_FILE_SIZE + ": length=" +
+            fileLength + ", filename=" + logFile,
+            exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { TERM_MIN_LENGTH * 2, TERM_MAX_LENGTH, 1024 * 1024 })
+    void throwsIllegalStateExceptionIfFileSizeIsTooSmall(final int termLength, @TempDir final Path dir)
+        throws IOException
+    {
+        final Path logFile = dir.resolve("test.log");
+        assertNotNull(Files.createFile(logFile));
+        final byte[] contents = new byte[(PARTITION_COUNT * TERM_MIN_LENGTH) + LOG_META_DATA_LENGTH];
+        final UnsafeBuffer buffer =
+            new UnsafeBuffer(contents, contents.length - LOG_META_DATA_LENGTH, LOG_META_DATA_LENGTH);
+        termLength(buffer, termLength);
+        pageSize(buffer, PAGE_MIN_SIZE);
+        assertNotNull(Files.write(logFile, contents));
+        assertEquals(contents.length, Files.size(logFile));
+
+        final IllegalStateException exception = assertThrowsExactly(
+            IllegalStateException.class, () -> new LogBuffers(logFile.toAbsolutePath().toString()));
+        assertEquals("Log file length is too short for its term length: length=" +
+                contents.length + ", termLength=" + termLength + ", filename=" + logFile,
             exception.getMessage());
     }
 }

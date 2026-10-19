@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <atomic>
+#include <chrono>
+#include <cstring>
 #include <thread>
 
 #include "gtest/gtest.h"
@@ -31,6 +34,7 @@ extern "C"
 #include "aeron_counters.h"
 #include "client/aeron_archive.h"
 #include "client/aeron_archive_client.h"
+#include "client/aeron_archive_control_response_poller.h"
 #include "client/aeron_archive_client_version.h"
 #include "client/aeron_archive_context.h"
 #include "uri/aeron_uri_string_builder.h"
@@ -3480,6 +3484,56 @@ TEST_P(AeronCArchiveParamTest, shouldReplayWithResponseChannel)
     EXPECT_EQ(stop_position, aeron_image_position(image));
 }
 
+TEST_P(AeronCArchiveParamTest, shouldReplayWithResponseChannelWhenControlResponseChannelIsNotAResponseChannel)
+{
+    bool tryStop = GetParam();
+
+    size_t message_count = 1000;
+    const char *replay_channel = "aeron:udp?control-mode=response|control=localhost:10002";
+
+    // a normal control response channel, so the context reserves a session id for the control channels
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_request_channel(m_ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_response_channel(m_ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_idle_strategy(
+        m_ctx, aeron_idle_strategy_sleeping_idle, (void *)&m_idle_duration_ns));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_credentials_supplier(
+        m_ctx,
+        encoded_credentials_supplier,
+        nullptr,
+        nullptr,
+        &default_creds_clientd));
+    ASSERT_EQ_ERR(0, aeron_archive_connect(&m_archive, m_ctx));
+
+    m_aeron = aeron_archive_context_get_aeron(m_ctx);
+
+    int64_t recording_id, stop_position, halfway_position;
+
+    recordData(tryStop, &recording_id, &stop_position, &halfway_position, message_count);
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+
+    replay_params.position = 0;
+    replay_params.length = stop_position;
+    replay_params.file_io_max_length = 4096;
+
+    aeron_subscription_t *subscription;
+
+    ASSERT_EQ_ERR(0, aeron_archive_replay(
+        &subscription,
+        m_archive,
+        recording_id,
+        replay_channel,
+        m_replayStreamId,
+        &replay_params));
+
+    consumeMessages(subscription, message_count);
+
+    aeron_image_t *image = aeron_subscription_image_at_index(subscription, 0);
+    EXPECT_EQ(stop_position, aeron_image_position(image));
+}
+
 TEST_P(AeronCArchiveParamTest, shouldBoundedReplayWithResponseChannel)
 {
     bool tryStop = GetParam();
@@ -4564,6 +4618,123 @@ TEST_F(AeronCArchiveNoSetupTest, shouldNotHangClosingReplayMergeWhenUsingInvoker
     ASSERT_EQ_ERR(0, aeron_context_close(aeron_ctx));
 }
 
+typedef struct stall_detecting_idle_state_stct
+{
+    aeron_t *aeron;
+    int64_t deadline_ns;
+    bool stalled;
+}
+stall_detecting_idle_state_t;
+
+// Idles like the sleeping idle strategy. If still idling after the deadline, records the stall and invokes the
+// client conductor itself, so that the call being tested completes instead of hanging.
+static void stall_detecting_idle(void *state, int work_count)
+{
+    auto *idle_state = (stall_detecting_idle_state_t *)state;
+    const uint64_t idle_duration_ns = UINT64_C(1000) * UINT64_C(1000);
+
+    aeron_idle_strategy_sleeping_idle((void *)&idle_duration_ns, work_count);
+
+    if (aeron_nano_clock() > idle_state->deadline_ns)
+    {
+        idle_state->stalled = true;
+        aeron_main_do_work(idle_state->aeron);
+    }
+}
+
+static void arm_stall_detection(stall_detecting_idle_state_t *idle_state)
+{
+    idle_state->deadline_ns = aeron_nano_clock() + INT64_C(2) * 1000 * 1000 * 1000;
+    idle_state->stalled = false;
+}
+
+TEST_F(AeronCArchiveNoSetupTest, shouldInvokeClientWhileWaitingWhenUsingInvoker)
+{
+    m_invoke_on_idle = true;
+
+    DoSetUp();
+
+    stall_detecting_idle_state_t idle_state = {};
+    aeron_context_t *aeron_ctx;
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_request_channel(m_ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_response_channel(m_ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_idle_strategy(m_ctx, stall_detecting_idle, &idle_state));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_credentials_supplier(
+        m_ctx,
+        encoded_credentials_supplier,
+        nullptr,
+        nullptr,
+        &default_creds_clientd));
+
+    ASSERT_EQ_ERR(0, aeron_context_init(&aeron_ctx));
+    ASSERT_EQ_ERR(0, aeron_context_set_use_conductor_agent_invoker(aeron_ctx, true));
+    ASSERT_EQ_ERR(0, aeron_context_set_dir(aeron_ctx, aeron_archive_context_get_aeron_directory_name(m_ctx)));
+    ASSERT_EQ_ERR(0, aeron_init(&m_aeron, aeron_ctx));
+    ASSERT_EQ_ERR(0, aeron_start(m_aeron));
+    idle_state.aeron = m_aeron;
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_aeron(m_ctx, m_aeron));
+    arm_stall_detection(&idle_state);
+    ASSERT_EQ_ERR(0, aeron_archive_connect(&m_archive, m_ctx));
+
+    aeron_publication_t *publication;
+    arm_stall_detection(&idle_state);
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_publication(
+        &publication,
+        m_archive,
+        m_recordingChannel.c_str(),
+        m_recordingStreamId));
+    EXPECT_FALSE(idle_state.stalled) << "aeron_archive_add_recorded_publication did not invoke the client";
+
+    aeron_exclusive_publication_t *exclusive_publication;
+    arm_stall_detection(&idle_state);
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_exclusive_publication(
+        &exclusive_publication,
+        m_archive,
+        "aeron:udp?endpoint=localhost:3334",
+        m_recordingStreamId));
+    EXPECT_FALSE(idle_state.stalled) << "aeron_archive_add_recorded_exclusive_publication did not invoke the client";
+
+    setupCounters(aeron_publication_session_id(publication));
+    offerMessages(publication);
+    int64_t stop_position = aeron_publication_position(publication);
+    waitUntilCaughtUp(stop_position);
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+    replay_params.position = 0;
+    replay_params.length = stop_position;
+
+    aeron_subscription_t *replay_subscription;
+    arm_stall_detection(&idle_state);
+    ASSERT_EQ_ERR(0, aeron_archive_replay(
+        &replay_subscription,
+        m_archive,
+        m_recording_id_from_counter,
+        m_replayChannel.c_str(),
+        m_replayStreamId,
+        &replay_params));
+    EXPECT_FALSE(idle_state.stalled) << "aeron_archive_replay did not invoke the client";
+
+    aeron_subscription_t *response_replay_subscription;
+    arm_stall_detection(&idle_state);
+    ASSERT_EQ_ERR(0, aeron_archive_replay(
+        &response_replay_subscription,
+        m_archive,
+        m_recording_id_from_counter,
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        m_replayStreamId,
+        &replay_params));
+    EXPECT_FALSE(idle_state.stalled) << "aeron_archive_replay via a response channel did not invoke the client";
+
+    DoTearDown();
+
+    ASSERT_EQ_ERR(0, aeron_close(m_aeron));
+    ASSERT_EQ_ERR(0, aeron_context_close(aeron_ctx));
+}
+
 
 // A test for :ARCHIVE_REPLAY_ALL_AND_STOP
 // If there is an empty recording and if a replay is configured with ARCHIVE_REPLAY_ALL_AND_STOP,
@@ -4812,6 +4983,28 @@ TEST_F(AeronCArchiveTest, shouldNotExitWhenFollowingAnEmptyLiveRecording)
     ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
 }
 
+TEST_F(AeronCArchiveTest, shouldRejectReplayMergeWhenReplayDestinationHasNoEndpoint)
+{
+    connect();
+
+    aeron_subscription_t *subscription = addSubscription("aeron:udp?control-mode=manual", m_recordingStreamId);
+    ASSERT_NE(nullptr, subscription);
+
+    aeron_archive_replay_merge_t *replay_merge = nullptr;
+    ASSERT_EQ(-1, aeron_archive_replay_merge_init(
+        &replay_merge,
+        subscription,
+        m_archive,
+        "aeron:udp?session-id=1",
+        "aeron:udp?control=localhost:23268",
+        "aeron:udp?endpoint=localhost:23267|control=localhost:23265",
+        0,
+        0,
+        aeron_epoch_clock(),
+        REPLAY_MERGE_PROGRESS_TIMEOUT_DEFAULT_MS));
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("replay destination must have an endpoint"));
+}
+
 class AeronArchiveClientNameTest : public AeronCArchiveTestBase, public testing::TestWithParam<std::string>
 {
 };
@@ -4907,4 +5100,65 @@ TEST_F(AeronArchiveClientNameTest, shouldHaveErrorMessagesForArchiveErrorCodes)
     EXPECT_STREQ("failed to connect for replication", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
     EXPECT_STREQ("recording is empty", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
     EXPECT_STREQ("invalid position", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
+}
+
+TEST_F(AeronCArchiveTest, shouldReleaseArchiveLockWhenPollingForRecordingSignalsFails)
+{
+    connect();
+
+    // a message with a foreign SBE schema id makes the control response poller fail; it is delivered on a separate
+    // subscription because the archive's control response publication is exclusive to the control session
+    const char *foreign_channel = "aeron:ipc";
+    const int32_t foreign_stream_id = 4321;
+    aeron_subscription_t *foreign_subscription = addSubscription(foreign_channel, foreign_stream_id);
+    aeron_publication_t *foreign_publication = addPublication(foreign_channel, foreign_stream_id);
+
+    uint8_t message[32] = {};
+    const uint16_t foreign_schema_id = 999;
+    std::memcpy(message + 4, &foreign_schema_id, sizeof(foreign_schema_id)); // SBE header: block length, template id, schema id, version
+    while (aeron_publication_offer(foreign_publication, message, sizeof(message), nullptr, nullptr) < 0)
+    {
+        idle();
+    }
+
+    aeron_subscription_t *control_response_subscription = m_archive->control_response_poller->subscription;
+    m_archive->control_response_poller->subscription = foreign_subscription;
+
+    int32_t count = 0;
+    int rc;
+    while (0 == (rc = aeron_archive_poll_for_recording_signals(&count, m_archive)))
+    {
+        idle();
+    }
+
+    m_archive->control_response_poller->subscription = control_response_subscription;
+    ASSERT_EQ(-1, rc);
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("found schema id: 999"));
+
+    // the archive lock is recursive, so only another thread observes a lock left held by the failed call
+    std::atomic<bool> completed(false);
+    std::thread other_thread(
+        [&]()
+        {
+            char buffer[256];
+            aeron_archive_poll_for_error_response(m_archive, buffer, sizeof(buffer));
+            completed = true;
+        });
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!completed && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const bool completed_in_time = completed;
+    if (!completed_in_time)
+    {
+        aeron_mutex_unlock(&m_archive->lock); // release the lock left held by this thread so the other thread can finish
+    }
+
+    other_thread.join();
+    EXPECT_TRUE(completed_in_time) << "another thread could not use the archive client after the failed poll";
+
+    ASSERT_EQ_ERR(0, aeron_publication_close(foreign_publication, nullptr, nullptr));
 }

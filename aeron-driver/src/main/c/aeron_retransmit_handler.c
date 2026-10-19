@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#if defined(__linux__)
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "concurrent/aeron_counters_manager.h"
 #include "protocol/aeron_udp_protocol.h"
 #include "util/aeron_error.h"

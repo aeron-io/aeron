@@ -93,6 +93,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntConsumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
@@ -722,6 +723,37 @@ class ArchiveTest
 
     @Test
     @InterruptAfter(10)
+    void shouldTerminateWithActiveRecordingWhenArchiveClientTimesOut()
+    {
+        final AtomicLong clockOffsetMs = new AtomicLong();
+        final MediaDriver.Context driverCtx = new MediaDriver.Context().dirDeleteOnStart(true);
+        final Archive.Context archiveCtx = TestContexts.localhostArchive()
+            .epochClock(() -> System.currentTimeMillis() + clockOffsetMs.get())
+            .deleteArchiveOnStart(true)
+            .threadingMode(SHARED);
+
+        try (ArchivingMediaDriver ignore = ArchivingMediaDriver.launch(driverCtx, archiveCtx);
+            AeronArchive archive = AeronArchive.connect(TestContexts.localhostAeronArchive()))
+        {
+            final Publication publication = archive.addRecordedPublication("aeron:ipc", 7);
+            Tests.awaitRecordingCounterId(
+                archive.context().aeron().countersReader(), publication.sessionId(), archive.archiveId());
+
+            // step the archive's clock past the driver timeout, as after a process stall
+            clockOffsetMs.set(archiveCtx.aeron().context().driverTimeoutMs() + 1);
+
+            // the archive marks itself terminated after closing its recordings
+            Tests.await(() -> NULL_VALUE == archiveCtx.archiveMarkFile().activityTimestampVolatile());
+        }
+        finally
+        {
+            archiveCtx.deleteDirectory();
+            driverCtx.deleteDirectory();
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
     void shouldReplayPaddingGreaterThanMaxMessageLengthDueToFragmentationNearEndOfTerm() throws IOException
     {
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
@@ -1242,6 +1274,7 @@ class ArchiveTest
                     .controlResponseChannel(responseChannel)
                     .controlResponseStreamId(9191)
                     .aeron(aeron)
+                    .ownsAeronClient(false)
                     .agentInvoker(archive.invoker()));
 
             AeronArchive aeronArchive;

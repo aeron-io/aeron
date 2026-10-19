@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1281,11 +1281,12 @@ TEST_F(ClientConductorTest, shouldAddClientInfoToTheHeartbeatCounterLabelUpToMax
 
     doWorkForNs((int64_t)m_context->keepalive_interval_ns * 2, true);
 
-    ASSERT_GT(aeron_counters_reader_counter_label(
-        &m_conductor.counters_reader, counter_id, counterLabel, sizeof(counterLabel)), label.length());
+    const int label_length = aeron_counters_reader_counter_label(
+        &m_conductor.counters_reader, counter_id, counterLabel, sizeof(counterLabel));
+    ASSERT_EQ(AERON_COUNTER_MAX_LABEL_LENGTH, label_length);
     ASSERT_EQ(
-        label + std::string(" name=test").append(366, 'p'),
-        std::string(counterLabel));
+        label + std::string(" name=test").append(367, 'p'),
+        std::string(counterLabel, (size_t)label_length));
 }
 
 TEST_F(ClientConductorTest, shouldAddStaticCounterSuccessfully)

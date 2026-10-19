@@ -22,8 +22,7 @@ endif ()
 if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
     set(BUILD_SHARED_LIBS ON)
-    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi Psapi)
-    set(WSAPOLL_PROTOTYPE_EXISTS True)
+    set(AERON_LIB_WINSOCK_LIBS ws2_32 Iphlpapi Psapi)
 endif ()
 
 if (NOT MSVC)
@@ -41,10 +40,6 @@ else()
     # Because dlsym() is used to load strategies.
     set(AERON_STATIC_LIB_LINK_OPTS "-rdynamic")
 endif()
-
-if (WSAPOLL_PROTOTYPE_EXISTS)
-    add_definitions(-DHAVE_WSAPOLL)
-endif ()
 
 check_include_file("bsd/stdlib.h" BSDSTDLIB_H_EXISTS)
 find_library(LIBBSD_EXISTS NAMES bsd libbsd)

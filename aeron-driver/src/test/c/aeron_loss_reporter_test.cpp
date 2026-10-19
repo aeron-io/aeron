@@ -309,3 +309,54 @@ TEST_F(LossReporterTest, shouldReadTwoEntries)
     EXPECT_EQ(aeron_loss_reporter_read(m_ptr, CAPACITY, LossReporterTest::on_loss_entry, this), 2u);
     EXPECT_EQ(called, 2u);
 }
+
+TEST_F(LossReporterTest, shouldReadEntriesWhenChannelPaddingCrossesEntryAlignment)
+{
+    ASSERT_EQ(aeron_loss_reporter_init(&m_reporter, m_ptr, CAPACITY), 0);
+
+    // with a 5 byte channel the 4 byte alignment of the channel adds 3 bytes, which takes the first entry from
+    // 62 to 65 bytes, past the 64 byte entry alignment
+    const char *channels[] = { "aeron", "aeron:udp?endpoint=localhost:20121", "aeron" };
+    const char *source = "127.0.0.1";
+
+    for (int i = 0; i < 3; i++)
+    {
+        ASSERT_GE(aeron_loss_reporter_create_entry(
+            &m_reporter,
+            100 * (i + 1),
+            i,
+            SESSION_ID + i,
+            STREAM_ID + i,
+            channels[i],
+            strlen(channels[i]),
+            source,
+            strlen(source)), 0);
+    }
+
+    size_t called = 0;
+    m_on_loss_entry =
+        [&](
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *read_channel,
+            int32_t channel_length,
+            const char *read_source,
+            int32_t source_length)
+        {
+            ASSERT_LT(called, 3u);
+            EXPECT_EQ(observation_count, 1);
+            EXPECT_EQ(total_bytes_lost, 100 * (int64_t)(called + 1));
+            EXPECT_EQ(session_id, SESSION_ID + (int32_t)called);
+            EXPECT_EQ(stream_id, STREAM_ID + (int32_t)called);
+            EXPECT_EQ(std::string(read_channel, (size_t)channel_length), channels[called]);
+            EXPECT_EQ(std::string(read_source, (size_t)source_length), source);
+            called++;
+        };
+
+    EXPECT_EQ(aeron_loss_reporter_read(m_ptr, CAPACITY, LossReporterTest::on_loss_entry, this), 3u);
+    EXPECT_EQ(called, 3u);
+}

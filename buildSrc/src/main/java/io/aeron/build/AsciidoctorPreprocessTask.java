@@ -21,6 +21,7 @@ import org.asciidoctor.Options;
 import org.asciidoctor.SafeMode;
 import org.asciidoctor.ast.Document;
 import org.asciidoctor.extension.PreprocessorReader;
+import org.asciidoctor.extension.Reader;
 import org.asciidoctor.log.Severity;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.tasks.Input;
@@ -172,7 +173,7 @@ public class AsciidoctorPreprocessTask extends DefaultTask
                 asciidoctor.javaExtensionRegistry().preprocessor(
                     new org.asciidoctor.extension.Preprocessor()
                     {
-                        public void process(final Document document, final PreprocessorReader reader)
+                        public Reader process(final Document document, final PreprocessorReader reader)
                         {
                             String line;
                             while (null != (line = reader.readLine()))
@@ -186,6 +187,8 @@ public class AsciidoctorPreprocessTask extends DefaultTask
                                     output.println(line);
                                 }
                             }
+
+                            return reader;
                         }
                     });
 

@@ -1358,7 +1358,11 @@ abstract class ArchiveConductor
         }
         closeSession(session);
         recordingSessionByIdMap.remove(recordingId);
-        ctx.recordingSessionCounter().decrementRelease();
+        final Counter recordingSessionCounter = ctx.recordingSessionCounter();
+        if (!recordingSessionCounter.isClosed())
+        {
+            recordingSessionCounter.decrementRelease();
+        }
     }
 
     void closeReplaySession(final ReplaySession session)
@@ -1378,7 +1382,11 @@ abstract class ArchiveConductor
         replaySessionByIdMap.remove(session.sessionId());
         onReplayEnd();
         closeSession(session);
-        ctx.replaySessionCounter().decrementRelease();
+        final Counter replaySessionCounter = ctx.replaySessionCounter();
+        if (!replaySessionCounter.isClosed())
+        {
+            replaySessionCounter.decrementRelease();
+        }
     }
 
     void replicate(

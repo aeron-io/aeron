@@ -222,6 +222,10 @@ subprojects {
     def mockitoAgent = configurations.create('mockitoAgent') { transitive = false }
     mockitoAgent.withDependencies {it.add(libs.mockito.get()) }
 
+    // Resolve these at project-configuration time, outside configureEach
+    def testSuiteClassesDirs = testing.suites.test.sources.output.classesDirs
+    def testSuiteClasspath = testing.suites.test.sources.runtimeClasspath
+
     tasks.withType(Test).configureEach { test ->
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
@@ -232,8 +236,8 @@ subprojects {
         // A C media driver launched by the tests inherits the environment, so an AERON_* change must rerun them.
         inputs.property('aeronEnvironment', providers.environmentVariablesPrefixedBy('AERON_'))
 
-        testClassesDirs = testing.suites.test.sources.output.classesDirs
-        classpath = testing.suites.test.sources.runtimeClasspath
+        testClassesDirs = testSuiteClassesDirs
+        classpath = testSuiteClasspath
 
         def baseLogFileName = "${layout.buildDirectory.get()}/${layout.projectDirectory.asFile.getName()}-${test.name}-%p"
         jvmArgs("-XX:MaxDirectMemorySize=2g",
@@ -285,6 +289,7 @@ subprojects {
             'io.aeron.shadow.net.bytebuddy.safe': 'true',
             'java.net.preferIPv4Stack': 'true',
             'aeron.fallback.logger': 'no_op',
+            'aeron.additional.configuration.property': 'foobar',
             'aeron.test.system.aeronmd.path': System.getProperty('aeron.test.system.aeronmd.path'),
             'aeron.test.system.binding.remote.host': System.getProperty('aeron.test.system.binding.remote.host'),
             'aeron.test.system.binding.local.host': System.getProperty('aeron.test.system.binding.local.host'),

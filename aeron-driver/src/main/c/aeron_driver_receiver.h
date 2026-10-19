@@ -26,6 +26,15 @@
 
 #define AERON_DRIVER_RECEIVER_PENDING_SETUP_TIMEOUT_NS (1000 * 1000 * 1000LL)
 
+#if !defined(HAVE_STRUCT_MMSGHDR)
+#define HAVE_STRUCT_MMSGHDR
+struct mmsghdr
+{
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+#endif
+
 typedef struct aeron_driver_receiver_image_entry_stct
 {
     aeron_publication_image_t *image;
@@ -54,6 +63,7 @@ typedef struct aeron_driver_receiver_stct
         uint8_t *buffers[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
         struct iovec iov[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
         struct sockaddr_storage addrs[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
+        struct mmsghdr mmsghdr[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
     }
     recv_buffers;
 
@@ -80,6 +90,12 @@ typedef struct aeron_driver_receiver_stct
     aeron_udp_channel_transport_recvmmsg_func_t recvmmsg_func;
     aeron_distinct_error_log_t *error_log;
     int64_t re_resolution_deadline_ns;
+    int64_t slow_tick_work_deadline_ns;
+    int64_t status_message_send_timeout_ns;
+    size_t duty_cycle_counter;
+    size_t duty_cycle_ratio;
+    int32_t images_per_cycle_limit;
+    int32_t next_image_index;
 
     int64_t *errors_counter;
     int64_t *invalid_frames_counter;

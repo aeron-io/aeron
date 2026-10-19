@@ -488,6 +488,25 @@ class PublicationImageTest
         assertEquals(1, ctx.systemCounters().get(INVALID_PACKETS).get());
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {-32, 0, 1, 2, 4, 8, 16, 24, 31})
+    void shouldRejectPacketIfItFramesWithFrameLengthLessThan32Bytes(final int frameLength)
+    {
+        final int termId = 42;
+        final int termOffset = 1024;
+        writeFrame(0, termOffset, termId, 64, BEGIN_AND_END_FLAGS, HDR_TYPE_DATA, 0);
+        writeFrame(96, termOffset + 96, termId, 0, BEGIN_AND_END_FLAGS, HDR_TYPE_DATA, 0);
+        headerFlyweight.wrap(buffer, 96, HEADER_LENGTH);
+        headerFlyweight.frameLength(frameLength);
+        final InetSocketAddress srcAddress = mock(InetSocketAddress.class);
+
+        assertEquals(
+            0,
+            image.insertPacket(termId, termOffset, buffer, 128, TRANSPORT_INDEX, srcAddress));
+
+        assertEquals(1, ctx.systemCounters().get(INVALID_PACKETS).get());
+    }
+
     @Test
     void shouldAcceptPacketThatEndsWithPaddingFrameExceedingThePacketLength()
     {

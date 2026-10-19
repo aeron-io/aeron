@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -82,6 +83,7 @@ class UntetheredSubscriptionTest
     private static final int STREAM_ID = 1001;
     private static final int FRAGMENT_COUNT_LIMIT = 10;
     private static final int MESSAGE_LENGTH = 512 - DataHeaderFlyweight.HEADER_LENGTH;
+    private static final long IMAGE_LIVENESS_TIMEOUT = TimeUnit.SECONDS.toNanos(3);
 
     @RegisterExtension
     final SystemTestWatcher testWatcher = new SystemTestWatcher();
@@ -96,7 +98,7 @@ class UntetheredSubscriptionTest
         CloseHelper.closeAll(aeron, driver);
     }
 
-    private void launch(final String channel)
+    private void launch(final String channel, final long imageLivenessTimeoutNs)
     {
         final MediaDriver.Context context = new MediaDriver.Context()
             .aeronDirectoryName(CommonContext.generateRandomDirName())
@@ -105,6 +107,7 @@ class UntetheredSubscriptionTest
             .dirDeleteOnStart(true)
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(3))
             .statusMessageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(50))
+            .imageLivenessTimeoutNs(imageLivenessTimeoutNs)
             .threadingMode(ThreadingMode.SHARED);
 
         final ChannelUri channelUri = ChannelUri.parse(channel);
@@ -135,7 +138,7 @@ class UntetheredSubscriptionTest
     @InterruptAfter(10)
     void shouldBecomeUnavailableWhenNotKeepingUp(final String channel)
     {
-        launch(channel);
+        launch(channel, IMAGE_LIVENESS_TIMEOUT);
 
         final FragmentHandler fragmentHandler = (buffer, offset, length, header) -> {};
         final AtomicBoolean unavailableCalled = new AtomicBoolean();
@@ -193,7 +196,7 @@ class UntetheredSubscriptionTest
     @InterruptAfter(10)
     void shouldRejoinAfterResting(final String channel)
     {
-        launch(channel);
+        launch(channel, IMAGE_LIVENESS_TIMEOUT);
 
         final AtomicInteger unavailableImageCount = new AtomicInteger();
         final AtomicInteger availableImageCount = new AtomicInteger();
@@ -263,7 +266,7 @@ class UntetheredSubscriptionTest
     void shouldStoreUntetheredTimeoutsInLogBufferMetadata()
     {
         final String channel = "aeron:udp?term-length=64k|endpoint=localhost:5555";
-        launch("aeron:ipc");
+        launch("aeron:ipc", IMAGE_LIVENESS_TIMEOUT);
 
         final int streamId = 1142;
         final ChannelUriStringBuilder publicationBuilder = new ChannelUriStringBuilder(channel)
@@ -305,7 +308,7 @@ class UntetheredSubscriptionTest
     {
         final String channel =
             "aeron:udp?endpoint=localhost:5596|term-length=64k|ssc=" + spiesSimulateConnection;
-        launch(channel);
+        launch(channel, IMAGE_LIVENESS_TIMEOUT);
 
         final AtomicLong spyUnavailableImageCount = new AtomicLong();
         final AtomicLong spyAvailableImageCount = new AtomicLong();
@@ -387,7 +390,7 @@ class UntetheredSubscriptionTest
     {
         final String channel =
             "aeron:ipc?endpoint=localhost:5596|term-length=64k|untethered-resting-timeout=300ms";
-        launch(channel);
+        launch(channel, IMAGE_LIVENESS_TIMEOUT);
 
         final AtomicLong unavailableImageCount = new AtomicLong();
         final AtomicLong availableImageCount = new AtomicLong();
@@ -450,7 +453,7 @@ class UntetheredSubscriptionTest
     @InterruptAfter(10)
     void shouldNotRejoinAfterRestingIfRejoinIsFalse(final String channel)
     {
-        launch(channel);
+        launch(channel, IMAGE_LIVENESS_TIMEOUT);
 
         final AtomicInteger unavailableImageCount = new AtomicInteger();
         final AtomicInteger availableImageCount = new AtomicInteger();
@@ -521,6 +524,93 @@ class UntetheredSubscriptionTest
                     aeron.conductorAgentInvoker().invoke();
                 }
             }
+
+            awaitCounterClosed(untetheredSubPosCounterId);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {
+        "aeron:udp?endpoint=localhost:7777|term-length=64k|eos=true," +
+            "aeron:udp?endpoint=localhost:7777|rejoin=true|tether=true," +
+            "aeron:udp?endpoint=localhost:7777|rejoin=true|rcv-wnd=4k|tether=false|" +
+            "untethered-window-limit-timeout=100ms|untethered-linger-timeout=1200ms|untethered-resting-timeout=0s," +
+            "4k",
+        "aeron:udp?endpoint=localhost:5555|term-length=64k|eos=true|pub-wnd=4k|" +
+            "untethered-window-limit-timeout=0s|untethered-linger-timeout=1331ms|untethered-resting-timeout=0s," +
+            "aeron:udp?endpoint=localhost:5555|rejoin=true|tether=true," +
+            "aeron-spy:aeron:udp?endpoint=localhost:5555|rejoin=true|tether=false," +
+            "4k",
+        "aeron:ipc?term-length=64k|eos=true|" +
+            "untethered-window-limit-timeout=20ms|untethered-linger-timeout=991ms|untethered-resting-timeout=0s," +
+            "aeron:ipc?rejoin=true|tether=true," +
+            "aeron:ipc?rejoin=true|tether=false," +
+            "32k", })
+    @InterruptAfter(10)
+    void imageShouldCompleteDrainStateEvenIfThereAreNonActiveUntetheredSubscriptions(
+        final String pubChannel, final String subChannel, final String untetheredSubChannel, final String windowSize)
+    {
+        launch(pubChannel, TimeUnit.MILLISECONDS.toNanos(750));
+
+        final AtomicInteger unavailableImageCount = new AtomicInteger();
+        final AtomicInteger availableImageCount = new AtomicInteger();
+        final UnavailableImageHandler unavailableHandler = (image) -> unavailableImageCount.incrementAndGet();
+        final AvailableImageHandler availableHandler = (image) -> availableImageCount.incrementAndGet();
+        final FragmentHandler fragmentHandler = (buffer, offset, length, header) -> {};
+
+        final UnsafeBuffer srcBuffer = new UnsafeBuffer(new byte[1024 - DataHeaderFlyweight.HEADER_LENGTH]);
+        ThreadLocalRandom.current().nextBytes(srcBuffer.byteArray());
+
+        try (Subscription untetheredSub = aeron.addSubscription(
+                untetheredSubChannel, STREAM_ID, availableHandler, unavailableHandler);
+            Subscription tetheredSub = aeron.addSubscription(subChannel, STREAM_ID);
+            Publication publication = aeron.addPublication(pubChannel, STREAM_ID))
+        {
+            while (!tetheredSub.isConnected() || !untetheredSub.isConnected())
+            {
+                Tests.yield();
+                aeron.conductorAgentInvoker().invoke();
+            }
+
+            final Image tetheredImage = tetheredSub.imageBySessionId(publication.sessionId());
+            final Image untetheredImage = untetheredSub.imageBySessionId(publication.sessionId());
+            final int untetheredSubPosCounterId = untetheredImage.subscriberPositionId();
+            final long targetWindowLength = SystemUtil.parseSize("window", windowSize);
+
+            while (0 == unavailableImageCount.get())
+            {
+                if (publication.position() < targetWindowLength && publication.offer(srcBuffer) < 0)
+                {
+                    Tests.yield();
+                }
+
+                if (0 == tetheredImage.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT))
+                {
+                    Tests.yield();
+                }
+
+                aeron.conductorAgentInvoker().invoke();
+
+            }
+
+            final long eosPos = publication.position();
+            if (ChannelUri.parse(pubChannel).isUdp())
+            {
+                final int sndPosCounterId = aeron.countersReader().findByTypeIdAndRegistrationId(
+                    AeronCounters.DRIVER_SENDER_POSITION_TYPE_ID, publication.registrationId());
+                assertEquals(eosPos, aeron.countersReader().getCounterValue(sndPosCounterId));
+            }
+
+            while (tetheredImage.position() < eosPos)
+            {
+                if (0 == tetheredImage.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT))
+                {
+                    Tests.yield();
+                }
+                aeron.conductorAgentInvoker().invoke();
+            }
+
+            CloseHelper.close(publication); // force image to switch to DRAINING state
 
             awaitCounterClosed(untetheredSubPosCounterId);
         }

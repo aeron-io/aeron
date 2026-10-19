@@ -28,11 +28,13 @@ import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.test.Tests;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.collections.MutableInteger;
+import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 
 import java.util.function.Supplier;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -142,6 +144,7 @@ class ArchiveSystemTests
         {
             if (0 == aeronArchive.pollForRecordingSignals())
             {
+                runInvokers(aeronArchive);
                 Tests.yieldingIdle(errorMessage);
             }
         }
@@ -190,8 +193,14 @@ class ArchiveSystemTests
         try (Publication publication = aeronArchive.addRecordedPublication(channel, streamId))
         {
             final CountersReader countersReader = aeronArchive.context().aeron().countersReader();
-            final int counterId = Tests.awaitRecordingCounterId(
-                    countersReader, publication.sessionId(), aeronArchive.archiveId());
+            int counterId;
+            while (NULL_VALUE == (counterId = RecordingPos.findCounterIdBySession(
+                countersReader, publication.sessionId(), aeronArchive.archiveId())))
+            {
+                runInvokers(aeronArchive);
+                Tests.yield();
+            }
+
             recordingId = RecordingPos.getRecordingId(countersReader, counterId);
 
             int messageCount = totalMessageCount;
@@ -207,6 +216,7 @@ class ArchiveSystemTests
                 }
                 else
                 {
+                    runInvokers(aeronArchive);
                     aeronArchive.checkForErrorResponse();
                     Tests.yield();
                 }
@@ -217,7 +227,7 @@ class ArchiveSystemTests
 
             while (countersReader.getCounterValue(counterId) < position)
             {
-                Tests.yield();
+                runInvokers(aeronArchive);
             }
 
             testRecordingSignalConsumer.reset();
@@ -226,6 +236,20 @@ class ArchiveSystemTests
         awaitSignal(aeronArchive, testRecordingSignalConsumer, recordingId, RecordingSignal.STOP);
 
         return new RecordingResult(position, halfWayPosition, recordingId, streamId);
+    }
+
+    private static void runInvokers(final AeronArchive aeronArchive)
+    {
+        final AgentInvoker agentInvoker = aeronArchive.context().agentInvoker();
+        if (null != agentInvoker)
+        {
+            agentInvoker.invoke();
+        }
+        final AgentInvoker conductorAgentInvoker = aeronArchive.context().aeron().conductorAgentInvoker();
+        if (null != conductorAgentInvoker)
+        {
+            conductorAgentInvoker.invoke();
+        }
     }
 
     record RecordingResult(long position, long halfwayPosition, long recordingId, int streamId)

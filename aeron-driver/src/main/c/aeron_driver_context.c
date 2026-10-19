@@ -198,6 +198,8 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_FLOW_CONTROL_GROUP_MIN_SIZE_DEFAULT (0)
 #define AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_NS_DEFAULT (5 * 1000 * 1000 * INT64_C(1000))
 #define AERON_SEND_TO_STATUS_POLL_RATIO_DEFAULT (6)
+#define AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT INT32_C(10)
+#define AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT INT32_C(16)
 #define AERON_RCV_STATUS_MESSAGE_TIMEOUT_NS_DEFAULT (200 * 1000 * INT64_C(1000))
 #define AERON_MULTICAST_FLOWCONTROL_SUPPLIER_DEFAULT ("aeron_max_multicast_flow_control_strategy_supplier")
 #define AERON_UNICAST_FLOWCONTROL_SUPPLIER_DEFAULT ("aeron_unicast_flow_control_strategy_supplier")
@@ -243,13 +245,13 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_DEFAULT UINT32_C(4)
 #define AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT UINT32_C(1)
 #define AERON_CPU_AFFINITY_DEFAULT (-1)
-#define AERON_DRIVER_CPUSET_AFFINITY_DEFAULT (false)
-#define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT (false)
+#define AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT (false)
+#define AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT (false)
 #define AERON_DRIVER_CONNECT_DEFAULT (true)
 #define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT (false)
 #define AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT (INT32_MAX)
-#define AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT (5)
-
+#define AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT UINT32_C(5)
+#define AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT_DEFAULT INT32_C(4)
 
 int aeron_driver_context_init(aeron_driver_context_t **context)
 {
@@ -487,6 +489,8 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->flow_control.group_min_size = AERON_FLOW_CONTROL_GROUP_MIN_SIZE_DEFAULT;
     _context->flow_control.receiver_timeout_ns = AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_NS_DEFAULT;
     _context->send_to_sm_poll_ratio = AERON_SEND_TO_STATUS_POLL_RATIO_DEFAULT;
+    _context->receiver_poll_to_slow_work_ratio = AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT;
+    _context->receiver_images_per_duty_cycle_limit = AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT;
     _context->status_message_timeout_ns = AERON_RCV_STATUS_MESSAGE_TIMEOUT_NS_DEFAULT;
     _context->image_liveness_timeout_ns = AERON_IMAGE_LIVENESS_TIMEOUT_NS_DEFAULT;
     _context->initial_window_length = AERON_RCV_INITIAL_WINDOW_LENGTH_DEFAULT;
@@ -532,11 +536,12 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->sender_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->receiver_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->native_resource_agent_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
-    _context->cpuset_affinity = AERON_DRIVER_CPUSET_AFFINITY_DEFAULT;
-    _context->cpuset_warnings_as_errors = AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
+    _context->thread_affinity_use_cpuset_offsets = AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT;
+    _context->thread_affinity_fail_on_validation_errors = AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT;
     _context->enable_experimental_features = AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT;
     _context->stream_session_limit = AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
     _context->udp_channel_transport_poller_iteration_threshold = AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT;
+    _context->udp_channel_transport_poller_socket_poll_limit = AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT_DEFAULT;
 
     char *value = NULL;
 
@@ -815,16 +820,32 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         255);
     _context->native_resource_agent_cpu_affinity_resolved = _context->native_resource_agent_cpu_affinity_no;
 
-    _context->cpuset_affinity = aeron_parse_bool(
-        getenv(AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR), AERON_DRIVER_CPUSET_AFFINITY_DEFAULT);
+    _context->thread_affinity_use_cpuset_offsets = aeron_parse_bool(
+        getenv(AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_ENV_VAR),
+        AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT);
 
-    _context->cpuset_warnings_as_errors = aeron_parse_bool(
-        getenv(AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR), AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT);
+    _context->thread_affinity_fail_on_validation_errors = aeron_parse_bool(
+        getenv(AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_ENV_VAR),
+        AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT);
 
-    _context->send_to_sm_poll_ratio = (uint8_t)aeron_config_parse_uint64(
+    _context->send_to_sm_poll_ratio = (size_t)aeron_config_parse_uint64(
         AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR,
         getenv(AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR),
         _context->send_to_sm_poll_ratio,
+        1,
+        INT32_MAX);
+
+    _context->receiver_poll_to_slow_work_ratio = (size_t)aeron_config_parse_uint64(
+        AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_ENV_VAR,
+        getenv(AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_ENV_VAR),
+        _context->receiver_poll_to_slow_work_ratio,
+        1,
+        INT32_MAX);
+
+    _context->receiver_images_per_duty_cycle_limit = aeron_config_parse_int32(
+        AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_ENV_VAR,
+        getenv(AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_ENV_VAR),
+        _context->receiver_images_per_duty_cycle_limit,
         1,
         INT32_MAX);
 
@@ -1313,6 +1334,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         _context->udp_channel_transport_poller_iteration_threshold,
         0,
         SIZE_MAX);
+
+    _context->udp_channel_transport_poller_socket_poll_limit = aeron_config_parse_int32(
+        AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT_ENV_VAR,
+        getenv(AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT_ENV_VAR),
+        _context->udp_channel_transport_poller_socket_poll_limit,
+        1,
+        16);
 
 #ifdef HAVE_UUID_GENERATE
     uuid_t id;
@@ -2109,6 +2137,32 @@ int aeron_driver_context_set_send_to_status_poll_ratio(aeron_driver_context_t *c
 size_t aeron_driver_context_get_send_to_status_poll_ratio(aeron_driver_context_t *context)
 {
     return NULL != context ? context->send_to_sm_poll_ratio : AERON_SEND_TO_STATUS_POLL_RATIO_DEFAULT;
+}
+
+int aeron_driver_context_set_receiver_poll_to_slow_work_ratio(aeron_driver_context_t *context, size_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->receiver_poll_to_slow_work_ratio = value;
+    return 0;
+}
+
+size_t aeron_driver_context_get_receiver_poll_to_slow_work_ratio(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->receiver_poll_to_slow_work_ratio : AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT;
+}
+
+int aeron_driver_context_set_receiver_images_per_duty_cycle_limit(aeron_driver_context_t *context, int32_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->receiver_images_per_duty_cycle_limit = value;
+    return 0;
+}
+
+int32_t aeron_driver_context_get_receiver_images_per_duty_cycle_limit(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->receiver_images_per_duty_cycle_limit : AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT;
 }
 
 int aeron_driver_context_set_rcv_status_message_timeout_ns(aeron_driver_context_t *context, uint64_t value)
@@ -3332,7 +3386,6 @@ int32_t aeron_driver_context_get_stream_session_limit(aeron_driver_context_t *co
     return NULL != context ? context->stream_session_limit : AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
 }
 
-
 int aeron_driver_context_set_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context, size_t value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
@@ -3344,6 +3397,19 @@ int aeron_driver_context_set_udp_channel_transport_poller_iteration_threshold(ae
 size_t aeron_driver_context_get_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context)
 {
     return NULL != context ? context->udp_channel_transport_poller_iteration_threshold : AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT;
+}
+
+int aeron_driver_context_set_udp_channel_transport_poller_socket_poll_limit(aeron_driver_context_t *context, int32_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->udp_channel_transport_poller_socket_poll_limit = value;
+    return 0;
+}
+
+int32_t aeron_driver_context_get_udp_channel_transport_poller_socket_poll_limit(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->udp_channel_transport_poller_socket_poll_limit : AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT_DEFAULT;
 }
 
 int aeron_driver_context_bindings_clientd_find_first_free_index(aeron_driver_context_t *context)
@@ -3568,30 +3634,32 @@ int32_t aeron_driver_context_get_native_resource_agent_cpu_affinity(aeron_driver
     return NULL != context ? context->native_resource_agent_cpu_affinity_no : AERON_CPU_AFFINITY_DEFAULT;
 }
 
-int aeron_driver_context_set_cpuset_affinity(aeron_driver_context_t *context, bool value)
+int aeron_driver_context_set_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context, bool value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->cpuset_affinity = value;
+    context->thread_affinity_use_cpuset_offsets = value;
     return 0;
 }
 
-bool aeron_driver_context_get_cpuset_affinity(aeron_driver_context_t *context)
+bool aeron_driver_context_get_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context)
 {
-    return NULL != context ? context->cpuset_affinity : AERON_DRIVER_CPUSET_AFFINITY_DEFAULT;
+    return NULL != context ?
+        context->thread_affinity_use_cpuset_offsets : AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_DEFAULT;
 }
 
-int aeron_driver_context_set_cpuset_warnings_as_errors(aeron_driver_context_t *context, bool value)
+int aeron_driver_context_set_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context, bool value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->cpuset_warnings_as_errors = value;
+    context->thread_affinity_fail_on_validation_errors = value;
     return 0;
 }
 
-bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *context)
+bool aeron_driver_context_get_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context)
 {
-    return NULL != context ? context->cpuset_warnings_as_errors : AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
+    return NULL != context ?
+        context->thread_affinity_fail_on_validation_errors : AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_DEFAULT;
 }
 
 static int aeron_driver_context_apply_cpuset_affinity_per_cpu(

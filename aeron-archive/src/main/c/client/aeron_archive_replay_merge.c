@@ -123,6 +123,23 @@ int aeron_archive_replay_merge_init(
             AERON_SET_ERR(EINVAL, "Subscription URI must have 'control-mode=manual' uri=%s", constants.channel);
             return -1;
         }
+
+        aeron_uri_string_builder_t builder;
+        if (aeron_uri_string_builder_init_on_string(&builder, replay_destination) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        const bool has_replay_endpoint =
+            NULL != aeron_uri_string_builder_get(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY);
+        aeron_uri_string_builder_close(&builder);
+
+        if (!has_replay_endpoint)
+        {
+            AERON_SET_ERR(EINVAL, "replay destination must have an endpoint: %s", replay_destination);
+            return -1;
+        }
     }
 
     aeron_archive_replay_merge_t *_replay_merge;
@@ -165,7 +182,8 @@ int aeron_archive_replay_merge_init(
     }
 
     {
-        if (strncmp(":0", &_replay_merge->replay_endpoint[replay_endpoint_len - 2], 2) == 0)
+        if (replay_endpoint_len >= 2 &&
+            strncmp(":0", &_replay_merge->replay_endpoint[replay_endpoint_len - 2], 2) == 0)
         {
             _replay_merge->state = RESOLVE_REPLAY_PORT;
         }

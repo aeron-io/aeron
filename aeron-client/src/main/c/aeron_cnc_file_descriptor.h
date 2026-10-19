@@ -103,14 +103,24 @@ inline bool aeron_cnc_is_file_length_sufficient(aeron_mapped_file_t *cnc_mmap)
     }
 
     aeron_cnc_metadata_t *metadata = (aeron_cnc_metadata_t *)cnc_mmap->addr;
-    size_t cnc_length = AERON_CNC_VERSION_AND_META_DATA_LENGTH +
-        (size_t)metadata->to_driver_buffer_length +
-        (size_t)metadata->to_clients_buffer_length +
-        (size_t)metadata->counter_metadata_buffer_length +
-        (size_t)metadata->counter_values_buffer_length +
-        (size_t)metadata->error_log_buffer_length;
+    if (metadata->to_driver_buffer_length < 0 ||
+        metadata->to_clients_buffer_length < 0 ||
+        metadata->counter_metadata_buffer_length < 0 ||
+        metadata->counter_values_buffer_length < 0 ||
+        metadata->error_log_buffer_length < 0)
+    {
+        return false;
+    }
 
-    return cnc_mmap->length >= cnc_length;
+    // the sum of five non-negative int32 lengths cannot overflow uint64_t
+    uint64_t cnc_length = AERON_CNC_VERSION_AND_META_DATA_LENGTH +
+        (uint64_t)metadata->to_driver_buffer_length +
+        (uint64_t)metadata->to_clients_buffer_length +
+        (uint64_t)metadata->counter_metadata_buffer_length +
+        (uint64_t)metadata->counter_values_buffer_length +
+        (uint64_t)metadata->error_log_buffer_length;
+
+    return (uint64_t)cnc_mmap->length >= cnc_length;
 }
 
 int32_t aeron_cnc_version_volatile(aeron_cnc_metadata_t *metadata);

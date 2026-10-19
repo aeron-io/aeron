@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1200,7 +1200,7 @@ malformed_command:
 static int aeron_counter_heartbeat_timestamp_find_counter_id_by_registration_id(
     aeron_counters_reader_t *counters_reader, int32_t type_id, int64_t registration_id)
 {
-    for (size_t i = 0, size = (size_t)counters_reader->max_counter_id; i < size; i++)
+    for (size_t i = 0, max_id = (size_t)counters_reader->max_counter_id; i <= max_id; i++)
     {
         aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)(
             counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(i));
@@ -1339,14 +1339,15 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
 
                 char *extended_info;
                 size_t available_label_length = AERON_COUNTER_MAX_LABEL_LENGTH - counter_metadata->label_length;
-                if (aeron_alloc((void **)&extended_info, available_label_length) < 0)
+                // One more byte for snprintf's terminator, which is not copied into the label.
+                if (aeron_alloc((void **)&extended_info, available_label_length + 1) < 0)
                 {
                     AERON_APPEND_ERR("%s", "");
                     return -1;
                 }
                 size_t total_length = snprintf(
                     extended_info,
-                    available_label_length,
+                    available_label_length + 1,
                     " name=%s version=%s commit=%s",
                     conductor->client_name,
                     aeron_version_text(),
@@ -1354,7 +1355,8 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
                 size_t extended_info_length = AERON_MIN(total_length, available_label_length);
 
                 memcpy(counter_metadata->label + counter_metadata->label_length, extended_info, extended_info_length);
-                counter_metadata->label_length += (int32_t)extended_info_length;
+                AERON_SET_RELEASE(
+                    counter_metadata->label_length, counter_metadata->label_length + (int32_t)extended_info_length);
 
                 aeron_free(extended_info);
 

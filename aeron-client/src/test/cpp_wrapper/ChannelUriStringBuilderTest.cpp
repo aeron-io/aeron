@@ -17,6 +17,10 @@
 #include "gtest/gtest.h"
 
 #include "ChannelUriStringBuilder.h"
+extern "C"
+{
+#include "uri/aeron_uri.h"
+}
 
 using namespace aeron;
 
@@ -128,6 +132,20 @@ TEST(ChannelUriStringBuilderTest, shouldGenerateReceiverWindowLength)
         "aeron:udp?endpoint=localhost:9999|rcv-wnd=4096");
 }
 
+TEST(ChannelUriStringBuilderTest, shouldGenerateUntetheredLingerTimeout)
+{
+    ChannelUriStringBuilder builder;
+
+    builder
+        .media(UDP_MEDIA)
+        .endpoint("localhost:9999")
+        .untetheredLingerTimeout(123456789);
+
+    ASSERT_EQ(
+        builder.build(),
+        "aeron:udp?endpoint=localhost:9999|untethered-linger-timeout=123456789");
+}
+
 TEST(ChannelUriStringBuilderTest, shouldGenerateOffsets)
 {
     ChannelUriStringBuilder builder;
@@ -185,4 +203,79 @@ TEST(ChannelUriStringBuilderTest, shouldHandleMaxRetransmits)
 
     std::shared_ptr<ChannelUri> channelUri = ChannelUri::parse(uriString);
     ASSERT_NE(std::string::npos, channelUri->toString().find("max-resend=123"));
+}
+
+TEST(ChannelUriStringBuilderTest, shouldThrowWhenBuildingWithoutMedia)
+{
+    ChannelUriStringBuilder builder;
+
+    EXPECT_THROW(builder.build(), IllegalStateException);
+}
+
+TEST(ChannelUriStringBuilderTest, shouldClearOnlyRejoin)
+{
+    ChannelUriStringBuilder builder;
+
+    builder
+        .media(UDP_MEDIA)
+        .reliable(true)
+        .rejoin(false)
+        .rejoin(nullptr);
+
+    ASSERT_EQ(builder.build(), "aeron:udp?reliable=true");
+}
+
+class InitialPositionTest : public testing::TestWithParam<std::tuple<std::int64_t, std::int32_t, std::int32_t, std::int32_t, std::int32_t>>
+{
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    InitialPositionTests,
+    InitialPositionTest,
+    testing::Values(
+        std::make_tuple(64 * 1024, INT32_MAX, 64 * 1024, INT32_MIN, 0),
+        std::make_tuple(0, -5, 1024 * 1024, -5, 0),
+        std::make_tuple(4 * 1024 * 1024 + 256, -19, 128 * 1024, 13, 256)
+    ));
+
+TEST_P(InitialPositionTest, shouldWrapTermIdOfInitialPosition)
+{
+    ChannelUriStringBuilder builder;
+
+    std::int64_t position = std::get<0>(GetParam());
+    std::int32_t initialTermId = std::get<1>(GetParam());
+    std::int32_t termLength = std::get<2>(GetParam());
+    std::int32_t expectedTermId = std::get<3>(GetParam());
+    std::int32_t expectedTermOffset = std::get<4>(GetParam());
+
+    builder
+        .media(IPC_MEDIA)
+        .initialPosition(position, initialTermId, termLength);
+
+    auto channel = builder.build();
+
+    aeron_uri_t uri;
+    EXPECT_EQ(0, aeron_uri_parse(channel.length(), channel.c_str(), &uri));
+    EXPECT_STREQ(std::to_string(initialTermId).c_str(), aeron_uri_find_param_value(&uri.params.ipc.additional_params, AERON_URI_INITIAL_TERM_ID_KEY));
+    EXPECT_STREQ(std::to_string(expectedTermId).c_str(), aeron_uri_find_param_value(&uri.params.ipc.additional_params, AERON_URI_TERM_ID_KEY));
+    EXPECT_STREQ(std::to_string(expectedTermOffset).c_str(), aeron_uri_find_param_value(&uri.params.ipc.additional_params, AERON_URI_TERM_OFFSET_KEY));
+    aeron_uri_close(&uri);
+}
+
+TEST(ChannelUriTest, shouldRejectInvalidCharacterInMediaWithTheCharacterInTheMessage)
+{
+    for (const char c : { ':', '|', '=' })
+    {
+        const std::string uri = std::string("aeron:ud") + c + "p";
+        try
+        {
+            ChannelUri::parse(uri);
+            FAIL() << "expected IllegalArgumentException for " << uri;
+        }
+        catch (const IllegalArgumentException &ex)
+        {
+            EXPECT_NE(std::string::npos, std::string(ex.what()).find(std::string("encountered '") + c + "'"))
+                << ex.what();
+        }
+    }
 }

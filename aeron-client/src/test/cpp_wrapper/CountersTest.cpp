@@ -258,3 +258,16 @@ TEST_F(CountersTest, shouldErrorCreatingAStaticCounterIfSessionCounterAlreadyExi
         }
     }, AeronException );
 }
+
+TEST_F(CountersTest, shouldRejectCounterIdOutOfRangeWhenWrappingCounter)
+{
+    Context ctx;
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    CountersReader &countersReader = aeron->countersReader();
+
+    EXPECT_THROW(Counter(countersReader, 0, -1), util::IllegalArgumentException);
+    EXPECT_THROW(Counter(countersReader, 0, countersReader.maxCounterId() + 1), util::IllegalArgumentException);
+
+    Counter counter(countersReader, 0, countersReader.maxCounterId());
+    EXPECT_EQ(countersReader.maxCounterId(), counter.id());
+}

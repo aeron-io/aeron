@@ -209,8 +209,6 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
     public void onClose()
     {
-        aeron.removeCloseHandler(closeHandlerRegistrationId);
-
         if (isAbort)
         {
             ctx.abortLatch().countDown();
@@ -240,6 +238,8 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
                 disconnectEgress(errorHandler);
             }
         }
+
+        aeron.removeCloseHandler(closeHandlerRegistrationId);
 
         markFile.signalTerminated();
         ctx.close();

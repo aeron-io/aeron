@@ -56,6 +56,10 @@ import static io.aeron.driver.Configuration.NAK_MAX_BACKOFF_DEFAULT_NS;
 import static io.aeron.driver.Configuration.NAK_MULTICAST_MAX_BACKOFF_PROP_NAME;
 import static io.aeron.driver.Configuration.NAK_UNICAST_DELAY_MIN_VALUE_NS;
 import static io.aeron.driver.Configuration.NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME;
+import static io.aeron.driver.Configuration.RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT;
+import static io.aeron.driver.Configuration.RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME;
+import static io.aeron.driver.Configuration.RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT;
+import static io.aeron.driver.Configuration.RECEIVER_POLL_TO_SLOW_WORK_RATIO_PROP_NAME;
 import static io.aeron.driver.Configuration.UNTETHERED_LINGER_TIMEOUT_PROP_NAME;
 import static io.aeron.driver.Configuration.UNTETHERED_WINDOW_LIMIT_TIMEOUT_DEFAULT_NS;
 import static io.aeron.driver.Configuration.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME;
@@ -66,6 +70,7 @@ import static io.aeron.driver.ThreadingMode.SHARED_NETWORK;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -543,5 +548,78 @@ class MediaDriverContextTest
         final ArithmeticException exception =
             assertThrowsExactly(ArithmeticException.class, context::conclude);
         assertEquals("long overflow", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { Integer.MIN_VALUE, -3, 0 })
+    void shouldRejectInvalidSendToStatusMessagePollRatio(final int ratio)
+    {
+        context.sendToStatusMessagePollRatio(ratio);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertThat(exception.getMessage(), startsWith("ERROR - sendToStatusMessagePollRatio less than min size of 1:"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { Integer.MIN_VALUE, -42, -1, 0 })
+    void shouldRejectInvalidReceiverPollToSlowWorkRatio(final int ratio)
+    {
+        context.receiverPollToSlowWorkRatio(ratio);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertThat(exception.getMessage(), startsWith("ERROR - receiverPollToSlowWorkRatio less than min size of 1:"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { -5, 0 })
+    void shouldRejectInvalidReceiverImagesPerDutyCycleLimit(final int limit)
+    {
+        context.receiverImagesPerDutyCycleLimit(limit);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertThat(
+            exception.getMessage(), startsWith("ERROR - receiverImagesPerDutyCycleLimit less than min size of 1:"));
+    }
+
+    @Test
+    void receiverPollToSlowWorkRatioDefaultValue()
+    {
+        assertEquals(RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT, context.receiverPollToSlowWorkRatio());
+    }
+
+    @Test
+    void receiverPollToSlowWorkRatioFromSystemProperty()
+    {
+        System.setProperty(RECEIVER_POLL_TO_SLOW_WORK_RATIO_PROP_NAME, "41");
+        try
+        {
+            final Context context = new Context();
+            assertEquals(41, context.receiverPollToSlowWorkRatio());
+        }
+        finally
+        {
+            System.clearProperty(RECEIVER_POLL_TO_SLOW_WORK_RATIO_PROP_NAME);
+        }
+    }
+
+    @Test
+    void receiverImagesPerDutyCycleLimitDefaultValue()
+    {
+        assertEquals(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT, context.receiverImagesPerDutyCycleLimit());
+    }
+
+    @Test
+    void receiverImagesPerDutyCycleLimitFromSystemProperty()
+    {
+        System.setProperty(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME, "8");
+        try
+        {
+            final Context context = new Context();
+            assertEquals(8, context.receiverImagesPerDutyCycleLimit());
+        }
+        finally
+        {
+            System.clearProperty(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME);
+        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,6 +259,40 @@ TEST_F(FileUtilTest, rawLogMapExistingShouldHandleMaxTermBufferLength)
     EXPECT_EQ(nullptr, mapped_raw_log.mapped_file.addr);
     EXPECT_EQ((size_t)0, mapped_raw_log.mapped_file.length);
     EXPECT_EQ((int64_t)-1, aeron_file_length(file));
+}
+
+TEST_F(FileUtilTest, rawLogMapExistingShouldRejectFileShorterThanMetadata)
+{
+    aeron_mapped_raw_log_t mapped_raw_log = {};
+    const char *file = "test_raw_log_map_existing_short_file.log";
+    aeron_mapped_file_t mapped_file = { nullptr, 100 };
+    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, true, AERON_LOGBUFFER_META_DATA_LENGTH)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_unmap(&mapped_file)) << aeron_errmsg();
+
+    EXPECT_EQ(-1, aeron_raw_log_map_existing(&mapped_raw_log, file, false));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    std::string expected = "Raw log file length less than min length of ";
+    expected.append(std::to_string(AERON_LOGBUFFER_MIN_FILE_SIZE));
+    EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find(file));
+    EXPECT_EQ(nullptr, mapped_raw_log.mapped_file.addr);
+    EXPECT_EQ(0, remove(file));
+}
+
+TEST_F(FileUtilTest, rawLogMapExistingShouldRejectFileShorterThanItsTerms)
+{
+    aeron_mapped_raw_log_t mapped_raw_log = {};
+    const char *file = "test_raw_log_map_existing_short_terms.log";
+    const size_t file_length = AERON_LOGBUFFER_TERM_MIN_LENGTH + AERON_LOGBUFFER_META_DATA_LENGTH;
+    aeron_mapped_file_t mapped_file = { nullptr, file_length };
+    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
+    auto metadata = (aeron_logbuffer_metadata_t *)((uint8_t *)mapped_file.addr + AERON_LOGBUFFER_TERM_MIN_LENGTH);
+    metadata->term_length = AERON_LOGBUFFER_TERM_MIN_LENGTH;
+    metadata->page_size = AERON_PAGE_MIN_SIZE;
+    ASSERT_EQ(0, aeron_unmap(&mapped_file)) << aeron_errmsg();
+
+    EXPECT_EQ(-1, aeron_raw_log_map_existing(&mapped_raw_log, file, false));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ(0, remove(file));
 }
 
 TEST_F(FileUtilTest, mapNewFileShouldCreateANonSparseFile)

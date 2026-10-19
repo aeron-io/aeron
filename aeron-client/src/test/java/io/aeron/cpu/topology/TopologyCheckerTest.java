@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CapturingPrintStream;
-import io.aeron.topology.TopologyTestUtils.Pair;
+import io.aeron.cpu.topology.CpuSelection.CpusetSelection;
+import io.aeron.cpu.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,16 +33,16 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.TopologyTestUtils.countWarnings;
-import static io.aeron.topology.TopologyTestUtils.setupDieLocality;
-import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
-import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
+import static io.aeron.cpu.topology.TopologyTestUtils.countWarnings;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupDieLocality;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupL3Peers;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupSiblingThreads;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class CGroupValidatorTest
+class TopologyCheckerTest
 {
     @ParameterizedTest
     @MethodSource("validationScenarios")
@@ -60,23 +61,23 @@ class CGroupValidatorTest
         final IntArrayList cpuList = new IntArrayList();
         cpuList.wrap(cpus, cpus.length);
 
+        final CpusetSelection selection = new CpusetSelection(new Cpuset(cpuList, cpuList.toString()));
         final CapturingPrintStream out = new CapturingPrintStream();
-        new CGroupValidator(sysfsTestDir).validate(
-            new Cpuset(cpuList, cpuList.toString()), false, out.resetAndGetPrintStream());
+        new TopologyChecker(sysfsTestDir).validate(selection, false, out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
 
         if (0 < expectedWarningCount)
         {
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
-                () -> new CGroupValidator(sysfsTestDir).validate(
-                    new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
+                () -> new TopologyChecker(sysfsTestDir).validate(
+                    selection, true, new PrintStream(new ByteArrayOutputStream())));
             assertTrue(ex.getMessage().contains(expectedWarningCount + " warnings"));
         }
         else
         {
-            assertDoesNotThrow(() -> new CGroupValidator(sysfsTestDir).validate(
-                new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
+            assertDoesNotThrow(() -> new TopologyChecker(sysfsTestDir).validate(
+                selection, true, new PrintStream(new ByteArrayOutputStream())));
         }
     }
 

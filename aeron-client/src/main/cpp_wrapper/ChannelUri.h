@@ -70,6 +70,7 @@ static constexpr const char CHANNEL_SND_TIMESTAMP_OFFSET_PARAM_NAME[] = "channel
 static constexpr const char RESPONSE_CORRELATION_ID_PARAM_NAME[] = "response-correlation-id";
 static constexpr const char NAK_DELAY_PARAM_NAME[] = "nak-delay";
 static constexpr const char UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME[] = "untethered-window-limit-timeout";
+static constexpr const char UNTETHERED_LINGER_TIMEOUT_PARAM_NAME[] = "untethered-linger-timeout";
 static constexpr const char UNTETHERED_RESTING_TIMEOUT_PARAM_NAME[] = "untethered-resting-timeout";
 static constexpr const char MAX_RESEND_PARAM_NAME[] = "max-resend";
 
@@ -268,8 +269,8 @@ public:
                         case ':':
                         case '|':
                         case '=':
-                            throw IllegalStateException(
-                                "encountered '" + std::to_string(c) + "' within media definition at index " +
+                            throw IllegalArgumentException(
+                                "encountered '" + std::string(1, c) + "' within media definition at index " +
                                     std::to_string(i) + " in " + uri, SOURCEINFO, EINVAL);
 
                         default:

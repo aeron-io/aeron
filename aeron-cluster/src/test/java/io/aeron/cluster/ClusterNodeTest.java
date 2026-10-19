@@ -40,6 +40,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.concurrent.atomic.AtomicLong;
+
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.cluster.ClusterTestConstants.CLUSTER_MEMBERS;
 import static io.aeron.cluster.ClusterTestConstants.INGRESS_ENDPOINTS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -226,6 +229,25 @@ class ClusterNodeTest
         awaitResponse(messageCount);
 
         ClusterTests.failOnClusterError();
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldTerminateServiceWhenServiceClientTimesOut()
+    {
+        final AtomicLong clockOffsetMs = new AtomicLong();
+        final ClusteredServiceContainer.Context containerCtx = new ClusteredServiceContainer.Context()
+            .clusteredService(new StubClusteredService())
+            .epochClock(() -> System.currentTimeMillis() + clockOffsetMs.get());
+
+        container = ClusteredServiceContainer.launch(containerCtx);
+        aeronCluster = connectToCluster(null);
+
+        // step the service's clock past the driver timeout, as after a process stall
+        clockOffsetMs.set(containerCtx.aeron().context().driverTimeoutMs() + 1);
+
+        // the service marks itself terminated once it has closed
+        Tests.await(() -> NULL_VALUE == containerCtx.clusterMarkFile().activityTimestampVolatile());
     }
 
     private void offerMessage(final ExpandableArrayBuffer msgBuffer, final String msg)

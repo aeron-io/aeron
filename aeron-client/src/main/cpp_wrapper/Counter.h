@@ -49,7 +49,7 @@ public:
     /// @endcond
 
     Counter(CountersReader &reader, std::int64_t registrationId, std::int32_t counterId) :
-        AtomicCounter(reader.getCounterAddress(counterId), registrationId, counterId),
+        AtomicCounter(counterAddress(reader, counterId), registrationId, counterId),
         m_reader(reader),
         m_registrationId(registrationId)
     {
@@ -89,6 +89,19 @@ public:
     /// @endcond
 
 private:
+    static std::int64_t *counterAddress(CountersReader &reader, std::int32_t counterId)
+    {
+        if (counterId < 0 || counterId > reader.maxCounterId())
+        {
+            throw util::IllegalArgumentException(
+                "counter id " + std::to_string(counterId) +
+                " out of range: maxCounterId=" + std::to_string(reader.maxCounterId()),
+                SOURCEINFO, EINVAL);
+        }
+
+        return reader.getCounterAddress(counterId);
+    }
+
     std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     CountersReader &m_reader;
     std::int64_t m_registrationId;

@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#if defined(__linux__)
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "concurrent/aeron_logbuffer_unblocker.h"
 
 bool aeron_logbuffer_unblocker_unblock(

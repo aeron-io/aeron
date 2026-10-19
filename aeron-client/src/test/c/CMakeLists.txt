@@ -15,7 +15,7 @@
 #
 
 if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
-    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi)
+    set(AERON_LIB_WINSOCK_LIBS ws2_32 Iphlpapi)
 endif ()
 
 include_directories(${AERON_C_CLIENT_SOURCE_PATH})
@@ -75,8 +75,10 @@ if (AERON_UNIT_TESTS)
     aeron_c_client_test(image_fragment_assembler_test aeron_image_fragment_assembler_test.cpp)
     aeron_c_client_test(controlled_fragment_assembler_test aeron_controlled_fragment_assembler_test.cpp)
     aeron_c_client_test(controlled_image_fragment_assembler_test aeron_controlled_image_fragment_assembler_test.cpp)
+    aeron_c_client_test(socket_test aeron_socket_test.cpp)
     aeron_c_client_test(aeron_fileutil_test util/aeron_fileutil_test.cpp)
     aeron_c_client_test(aeron_uri_test aeron_uri_test.cpp)
+    aeron_c_client_test(aeron_local_sockaddr_test aeron_local_sockaddr_test.cpp)
     aeron_c_client_test(version_test aeron_version_test.cpp)
     aeron_c_client_test(bitutil_test util/aeron_bitutil_test.cpp)
     aeron_c_client_test(deque_test util/aeron_deque_test.cpp)

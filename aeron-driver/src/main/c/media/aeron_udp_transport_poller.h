@@ -36,6 +36,7 @@ typedef struct aeron_udp_transport_poller_stct
     transports;
 
     size_t iteration_threshold;
+    int32_t socket_poll_limit;
     int fd;
     void *bindings_clientd;
 }

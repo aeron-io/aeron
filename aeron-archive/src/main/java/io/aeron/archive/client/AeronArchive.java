@@ -4347,22 +4347,14 @@ public final class AeronArchive implements AutoCloseable
 
             final long deadlineNs = aeron.context().nanoClock().nanoTime() + context.messageTimeoutNs();
 
-            while (!publication.isConnected())
+            while (publication.availableWindow() <= 0)
             {
-                checkDeadline(
-                    idleStrategy,
-                    aeron.context().nanoClock(),
-                    deadlineNs,
-                    "timed out waiting to establish replay connection");
-            }
+                if (deadlineNs <= nanoClock.nanoTime())
+                {
+                    throw new ArchiveException("timed out waiting to establish replay connection");
+                }
 
-            while (0 == publication.positionLimit())
-            {
-                checkDeadline(
-                    idleStrategy,
-                    aeron.context().nanoClock(),
-                    deadlineNs,
-                    "timed out waiting for replay connection to have available publication limit");
+                idleStrategy.idle(context.runInvokers());
             }
 
             if (!responseArchiveProxy.replay(
@@ -4373,19 +4365,5 @@ public final class AeronArchive implements AutoCloseable
 
             return pollForResponse(lastCorrelationId);
         }
-    }
-
-    private static void checkDeadline(
-        final IdleStrategy idleStrategy,
-        final NanoClock nanoClock,
-        final long deadlineNs,
-        final String msg)
-    {
-        if (deadlineNs <= nanoClock.nanoTime())
-        {
-            throw new ArchiveException(msg);
-        }
-
-        idleStrategy.idle();
     }
 }

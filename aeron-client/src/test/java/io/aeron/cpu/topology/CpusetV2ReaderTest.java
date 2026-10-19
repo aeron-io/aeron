@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,7 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupCpuSet;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 class CpusetV2ReaderTest

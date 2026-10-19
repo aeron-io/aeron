@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#if defined(__linux__)
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <inttypes.h>
 #include "uri/aeron_driver_uri.h"
 #include "util/aeron_arrayutil.h"

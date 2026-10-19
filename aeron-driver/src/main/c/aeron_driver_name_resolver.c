@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "util/aeron_platform.h"
-
 #if defined(__linux__)
 #define _BSD_SOURCE
 #define _GNU_SOURCE
 #endif
+
+#include "util/aeron_platform.h"
 
 #include <string.h>
 #include <inttypes.h>

@@ -76,7 +76,7 @@ public final class Sender extends SenderRhsPadding implements Agent
     private final CachedNanoClock cachedNanoClock;
     private final DriverConductorProxy conductorProxy;
     private final DutyCycleTracker dutyCycleTracker;
-    private String roleName;
+    private final String roleName;
 
     Sender(final MediaDriver.Context ctx)
     {
@@ -126,36 +126,18 @@ public final class Sender extends SenderRhsPadding implements Agent
         cachedNanoClock.update(nowNs);
         dutyCycleTracker.measureAndUpdate(nowNs);
 
-        int workCount = 0;
-        final Runnable command = commandQueue.poll();
-        if (null != command)
-        {
-            command.run();
-            workCount++;
-        }
+        final long shortSendsBefore = shortSends.getPlain();
+        int workCount = doSend(nowNs);
 
-        final long shortSendsBefore = shortSends.get();
-        final int bytesSent = doSend(nowNs);
-        int bytesReceived = 0;
-
-        if (0 == bytesSent ||
+        if (0 == workCount ||
             ++dutyCycleCounter >= dutyCycleRatio ||
-            (controlPollDeadlineNs - nowNs < 0) ||
-            shortSendsBefore < shortSends.get())
+            controlPollDeadlineNs <= nowNs ||
+            shortSendsBefore < shortSends.getPlain())
         {
-            bytesReceived = controlTransportPoller.pollTransports();
-
-            dutyCycleCounter = 0;
-            controlPollDeadlineNs = nowNs + statusMessageReadTimeoutNs;
+            workCount += slowTickWork(nowNs);
         }
 
-        if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
-        {
-            reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
-            controlTransportPoller.checkForReResolutions(nowNs, conductorProxy);
-        }
-
-        return workCount + bytesSent + bytesReceived;
+        return workCount;
     }
 
     /**
@@ -244,5 +226,30 @@ public final class Sender extends SenderRhsPadding implements Agent
         totalBytesSent.getAndAddRelease(bytesSent);
 
         return bytesSent;
+    }
+
+    private int slowTickWork(final long nowNs)
+    {
+        int workCount = 0;
+        final Runnable command = commandQueue.poll();
+        if (null != command)
+        {
+            command.run();
+            workCount++;
+        }
+
+        workCount += controlTransportPoller.pollTransports();
+
+        dutyCycleCounter = 0;
+        controlPollDeadlineNs = nowNs + statusMessageReadTimeoutNs;
+
+        if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
+        {
+            reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
+            controlTransportPoller.checkForReResolutions(nowNs, conductorProxy);
+            workCount++;
+        }
+
+        return workCount;
     }
 }

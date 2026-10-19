@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,9 +22,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static io.aeron.topology.DieLocalityValidator.DIE_ID_DIRECTORY;
-import static io.aeron.topology.L3TopologyValidator.SHARED_CPU_LIST_DIRECTORY;
-import static io.aeron.topology.ThreadAlignmentValidator.THREAD_SIBLING_LIST;
+import static io.aeron.cpu.topology.DieLocalityValidator.DIE_ID_DIRECTORY;
+import static io.aeron.cpu.topology.L3TopologyValidator.SHARED_CPU_LIST_DIRECTORY;
+import static io.aeron.cpu.topology.ThreadAlignmentValidator.THREAD_SIBLING_LIST;
 
 class TopologyTestUtils
 {
@@ -35,7 +35,7 @@ class TopologyTestUtils
             final Pair siblingPair = siblings.get(cpu);
             final Path threadSiblingListPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(THREAD_SIBLING_LIST);
             Files.createDirectories(threadSiblingListPath.getParent());
-            Files.writeString(threadSiblingListPath, "%d-%d".formatted(siblingPair.first, siblingPair.second));
+            Files.writeString(threadSiblingListPath, "%d-%d\n".formatted(siblingPair.first, siblingPair.second));
         }
     }
 
@@ -46,7 +46,7 @@ class TopologyTestUtils
             final Pair peer = peers.get(cpu);
             final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
             Files.createDirectories(sharedCpuPath.getParent());
-            Files.writeString(sharedCpuPath, "%d-%d".formatted(peer.first, peer.second));
+            Files.writeString(sharedCpuPath, "%d-%d\n".formatted(peer.first, peer.second));
         }
     }
 
@@ -57,7 +57,7 @@ class TopologyTestUtils
             final int dieId = dieIds.get(cpu);
             final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(DIE_ID_DIRECTORY);
             Files.createDirectories(sharedCpuPath.getParent());
-            Files.writeString(sharedCpuPath, Integer.toString(dieId));
+            Files.writeString(sharedCpuPath, dieId + "\n");
         }
     }
 
@@ -67,13 +67,21 @@ class TopologyTestUtils
         final int pid,
         final String cpuset) throws IOException
     {
-        final Path procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
+        final Path procCgroupFilePath;
+        if (0 == pid)
+        {
+            procCgroupFilePath = testProcPath.resolve("self/cgroup");
+        }
+        else
+        {
+            procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
+        }
         Files.createDirectories(procCgroupFilePath.getParent());
         Files.writeString(procCgroupFilePath, "0::/user.slice");
 
         final Path effectiveCgroupFilePath = testCgroupPath.resolve("user.slice/cpuset.cpus.effective");
         Files.createDirectories(effectiveCgroupFilePath.getParent());
-        Files.writeString(effectiveCgroupFilePath, cpuset);
+        Files.writeString(effectiveCgroupFilePath, cpuset + "\n");
     }
 
     static long countWarnings(final ByteArrayOutputStream byteStream)

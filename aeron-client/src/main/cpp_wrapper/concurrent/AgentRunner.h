@@ -84,7 +84,7 @@ public:
      */
     inline bool isRunning() const
     {
-        return m_isRunning.load(std::memory_order_acquire);
+        return STATE_RUNNING == m_state.load(std::memory_order_acquire);
     }
 
     /**
@@ -135,13 +135,11 @@ public:
      */
     inline void run()
     {
-        m_isRunning.store(true, std::memory_order_release);
-
-        util::OnScopeExit tidy(
-            [&]()
-            {
-                m_isClosed.store(true, std::memory_order_release);
-            });
+        int expected = STATE_NOT_EXECUTED;
+        if (!m_state.compare_exchange_strong(expected, STATE_RUNNING, std::memory_order_seq_cst))
+        {
+            return;
+        }
 
         try
         {
@@ -149,11 +147,11 @@ public:
         }
         catch (const std::exception &exception)
         {
-            m_isRunning.store(false, std::memory_order_release);
+            m_state.store(STATE_STOPPED, std::memory_order_release);
             m_exceptionHandler(exception);
         }
 
-        while (m_isRunning.load(std::memory_order_acquire))
+        while (STATE_RUNNING == m_state.load(std::memory_order_acquire))
         {
             try
             {
@@ -161,7 +159,7 @@ public:
             }
             catch (const util::AgentTerminationException &exception)
             {
-                m_isRunning.store(false, std::memory_order_release);
+                m_state.store(STATE_STOPPED, std::memory_order_release);
                 if (!exception.isExpected())
                 {
                     m_exceptionHandler(exception);
@@ -191,9 +189,12 @@ public:
         bool expected = false;
         if (m_isClosed.compare_exchange_strong(expected, true, std::memory_order_seq_cst))
         {
-            m_isRunning.store(false, std::memory_order_release);
+            int expectedState = STATE_RUNNING;
+            while (!m_state.compare_exchange_strong(expectedState, STATE_STOPPED, std::memory_order_seq_cst))
+            {
+            }
 
-            if (!m_isStarted.load(std::memory_order_acquire))
+            if (STATE_NOT_EXECUTED == expectedState)
             {
                 try
                 {
@@ -204,23 +205,26 @@ public:
                     m_exceptionHandler(exception);
                 }
             }
-        }
-
-        if (m_isStarted.load(std::memory_order_acquire))
-        {
-            if (m_thread.joinable())
+            else if (m_isStarted.load(std::memory_order_acquire))
             {
-                m_thread.join();
+                if (m_thread.joinable())
+                {
+                    m_thread.join();
+                }
             }
         }
     }
 
 private:
+    static constexpr int STATE_NOT_EXECUTED = 0;
+    static constexpr int STATE_RUNNING = 1;
+    static constexpr int STATE_STOPPED = 2;
+
     Agent &m_agent;
     IdleStrategy &m_idleStrategy;
     util::exception_handler_t &m_exceptionHandler;
     std::atomic<bool> m_isStarted = { false };
-    std::atomic<bool> m_isRunning = { false };
+    std::atomic<int> m_state = { STATE_NOT_EXECUTED };
     std::atomic<bool> m_isClosed = { false };
     std::thread m_thread;
     const std::string m_name;

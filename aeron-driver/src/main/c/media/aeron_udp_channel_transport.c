@@ -436,12 +436,17 @@ static inline int aeron_udp_channel_transport_recvmsg(
         char buf[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX][CMSG_SPACE(sizeof(struct timespec))],
         sizeof(struct cmsghdr));
 
-    if (transport->timestamp_flags)
+    for (int i = 0; i < (int)vlen; i++)
     {
-        for (int i = 0; i < (int)vlen; i++)
+        if (transport->timestamp_flags)
         {
             msgvec[i].msg_hdr.msg_control = (void *)buf[i];
             msgvec[i].msg_hdr.msg_controllen = CMSG_LEN(sizeof(struct timespec));
+        }
+        else
+        {
+            msgvec[i].msg_hdr.msg_control = NULL;
+            msgvec[i].msg_hdr.msg_controllen = 0;
         }
     }
 #endif
@@ -578,12 +583,17 @@ int aeron_udp_channel_transport_recvmmsg(
             char buf[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX][CMSG_SPACE(sizeof(struct timespec))],
             sizeof(struct cmsghdr));
 
-        if (transport->timestamp_flags)
+        for (int i = 0; i < (int)vlen; i++)
         {
-            for (int i = 0; i < (int)vlen; i++)
+            if (transport->timestamp_flags)
             {
                 msgvec[i].msg_hdr.msg_control = (void *)buf[i];
                 msgvec[i].msg_hdr.msg_controllen = CMSG_LEN(sizeof(struct timespec));
+            }
+            else
+            {
+                msgvec[i].msg_hdr.msg_control = NULL;
+                msgvec[i].msg_hdr.msg_controllen = 0;
             }
         }
 #endif

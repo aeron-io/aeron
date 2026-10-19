@@ -1050,7 +1050,26 @@ TEST_F(PublicationImageTest, shouldRejectPacketIfFrameOffsetIsIncorrect)
     EXPECT_EQ(1, invalid_packets);
 }
 
-TEST_F(PublicationImageTest, shouldRejectPacketIfFrameLengthIsNegative)
+class FrameLengthValidationTest : public ReceiverTestBase, public testing::TestWithParam<int32_t>
+{
+public:
+    void SetUp() final
+    {
+        DoSetUp();
+    }
+
+    void TearDown() final
+    {
+        DoTearDown();
+    }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    FrameLengthValidationTests,
+    FrameLengthValidationTest,
+    testing::Values(-32, 0, 1, 2, 3, 4, 8, 16, 20, 24, 29, 31));
+
+TEST_P(FrameLengthValidationTest, shouldRejectPacketIfFrameLengthIsLessThan32Bytes)
 {
     sockaddr_storage addr;
     uint8_t data[128];
@@ -1074,14 +1093,14 @@ TEST_F(PublicationImageTest, shouldRejectPacketIfFrameLengthIsNegative)
     frame1->term_offset = term_offset;
 
     auto *frame2 = reinterpret_cast<aeron_data_header_t *>(&data[frame1->frame_header.frame_length]);
-    frame2->frame_header.frame_length = -64;
+    frame2->frame_header.frame_length = GetParam();
     frame2->frame_header.type = AERON_HDR_TYPE_DATA;
     frame2->frame_header.version = AERON_FRAME_HEADER_VERSION;
     frame2->frame_header.flags = 0;
     frame2->term_offset = term_offset + frame1->frame_header.frame_length;
 
     EXPECT_EQ(0, aeron_publication_image_insert_packet(
-        &image, &destination, term_id, term_offset, data, 128, &addr, nullptr));
+        &image, &destination, term_id, term_offset, data, 96, &addr, nullptr));
     EXPECT_EQ(1, invalid_packets);
 }
 

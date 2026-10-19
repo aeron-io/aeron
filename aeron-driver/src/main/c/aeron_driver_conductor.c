@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-#include "util/aeron_platform.h"
-
 #if defined(__linux__)
 #define _BSD_SOURCE
 #define _GNU_SOURCE
 #endif
+
+#include "util/aeron_platform.h"
 
 #include <stdio.h>
 #include <inttypes.h>
 #if !defined(AERON_COMPILER_MSVC)
 #include <unistd.h>
 #endif
-
 
 #include "util/aeron_math.h"
 #include "util/aeron_arrayutil.h"
@@ -3160,8 +3159,25 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
         case AERON_COMMAND_ADD_COUNTER:
         {
             aeron_counter_command_t *command = (aeron_counter_command_t *)message;
+            const size_t min_command_length = sizeof(aeron_counter_command_t) + 2 * sizeof(int32_t);
 
-            if (length < sizeof(aeron_counter_command_t))
+            if (length < min_command_length)
+            {
+                goto malformed_command;
+            }
+
+            int32_t key_length;
+            size_t aligned_key_length;
+            memcpy(&key_length, (uint8_t *)message + sizeof(aeron_counter_command_t), sizeof(int32_t));
+            if (key_length < 0 ||
+                length < min_command_length + (aligned_key_length = AERON_ALIGN(key_length, sizeof(int32_t))))
+            {
+                goto malformed_command;
+            }
+
+            int32_t label_length;
+            memcpy(&label_length, (uint8_t *)message + sizeof(aeron_counter_command_t) + sizeof(int32_t) + aligned_key_length, sizeof(int32_t));
+            if (label_length < 0 || length < min_command_length + aligned_key_length + (size_t)label_length)
             {
                 goto malformed_command;
             }
@@ -3217,8 +3233,25 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
         case AERON_COMMAND_ADD_STATIC_COUNTER:
         {
             aeron_static_counter_command_t *command = (aeron_static_counter_command_t *)message;
+            const size_t min_command_length = sizeof(aeron_static_counter_command_t) + 2 * sizeof(int32_t);
 
-            if (length < sizeof(aeron_static_counter_command_t))
+            if (length < min_command_length)
+            {
+                goto malformed_command;
+            }
+
+            int32_t key_length;
+            size_t aligned_key_length;
+            memcpy(&key_length, (uint8_t *)message + sizeof(aeron_static_counter_command_t), sizeof(int32_t));
+            if (key_length < 0 ||
+                length < min_command_length + (aligned_key_length = AERON_ALIGN(key_length, sizeof(int32_t))))
+            {
+                goto malformed_command;
+            }
+
+            int32_t label_length;
+            memcpy(&label_length, (uint8_t *)message + sizeof(aeron_static_counter_command_t) + sizeof(int32_t) + aligned_key_length, sizeof(int32_t));
+            if (label_length < 0 || length < min_command_length + aligned_key_length + (size_t)label_length)
             {
                 goto malformed_command;
             }
@@ -5606,7 +5639,7 @@ int aeron_driver_conductor_on_remove_send_destination(
     aeron_driver_conductor_schedule_client_command(conductor, (aeron_driver_conductor_client_command_t *)async_client_command);
 
     async_client_command->async_resolve.uri_param_name = AERON_UDP_CHANNEL_ENDPOINT_KEY;
-    async_client_command->async_resolve.is_re_resolution = true;
+    async_client_command->async_resolve.is_re_resolution = false;
     COPY_ENDPOINT_NAME(async_client_command->async_resolve.endpoint_name, uri_params.params.udp.endpoint);
 
     async_client_command->base.execute = aeron_driver_conductor_execute_remove_send_destination;

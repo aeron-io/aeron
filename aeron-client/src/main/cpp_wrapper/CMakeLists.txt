@@ -21,7 +21,6 @@ endif ()
 SET(HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/Aeron.h
     ${CMAKE_CURRENT_SOURCE_DIR}/AeronCounters.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/BufferBuilder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/ChannelUri.h
     ${CMAKE_CURRENT_SOURCE_DIR}/ChannelUriStringBuilder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/ClientConductor.h

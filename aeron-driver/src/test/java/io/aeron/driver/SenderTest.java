@@ -164,6 +164,8 @@ class SenderTest
             false);
 
         assertTrue(senderCommandQueue.offer(() -> sender.onNewNetworkPublication(publication)));
+
+        sender.doWork(); // process command
     }
 
     @AfterEach
@@ -503,7 +505,7 @@ class SenderTest
         receivedFrames.remove();                   // skip data (heartbeat) frame
 
         nanoClock.advance(Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS - 1);
-        assertEquals(0, sender.doWork());
+        assertEquals(1, sender.doWork());
         assertThat(receivedFrames.size(), is(0));  // should not send yet
 
         nanoClock.advance(10);

@@ -31,7 +31,6 @@ public:
         aeron_archive_replication_params_init(&m_params);
         liveDestination("");
         replicationChannel("");
-        m_params.encoded_credentials = &m_encoded_credentials_t;
     }
 
     std::int64_t stopPosition() const
@@ -133,6 +132,7 @@ public:
     {
         m_encodedCredentials = encodedCredentials;
         m_encoded_credentials_t = { m_encodedCredentials.first, m_encodedCredentials.second };
+        m_params.encoded_credentials = &m_encoded_credentials_t;
         return *this;
     }
 
@@ -142,8 +142,8 @@ private:
     std::string m_liveDestination;
     std::string m_replicationChannel;
 
-    std::pair<const char *, std::uint32_t> m_encodedCredentials;
-    aeron_archive_encoded_credentials_t m_encoded_credentials_t;
+    std::pair<const char *, std::uint32_t> m_encodedCredentials = {};
+    aeron_archive_encoded_credentials_t m_encoded_credentials_t = {};
 
 };
 

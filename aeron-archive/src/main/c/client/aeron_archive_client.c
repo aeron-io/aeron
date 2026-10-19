@@ -422,6 +422,7 @@ int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *
     if (aeron_archive_control_response_poller_poll(poller) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_mutex_unlock(&aeron_archive->lock);
         return -1;
     }
 
@@ -607,6 +608,8 @@ int aeron_archive_add_recorded_publication(
     {
         aeron_archive_idle(aeron_archive);
 
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+
         if (aeron_async_add_publication_poll(&_publication, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
@@ -687,6 +690,8 @@ int aeron_archive_add_recorded_exclusive_publication(
     while (NULL == _exclusive_publication)
     {
         aeron_archive_idle(aeron_archive);
+
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_exclusive_publication_poll(&_exclusive_publication, async) < 0)
         {
@@ -1493,6 +1498,8 @@ static int aeron_archive_replay_locked(
     while (NULL == subscription)
     {
         aeron_archive_idle(aeron_archive);
+
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
 
         if (aeron_async_add_subscription_poll(&subscription, async_add_subscription) < 0)
         {
@@ -2334,6 +2341,8 @@ int aeron_archive_replay_via_response_channel(
 
         aeron_archive_idle(aeron_archive);
 
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+
         if (aeron_async_add_subscription_poll(&replay_subscription, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
@@ -2364,6 +2373,8 @@ int aeron_archive_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
     }
 
     *subscription_p = replay_subscription;
@@ -2450,6 +2461,7 @@ int aeron_archive_initiate_replay_via_response_channel(
     aeron_uri_string_builder_t builder;
 
     bool failure = aeron_uri_string_builder_init_on_string(&builder, aeron_archive->ctx->control_request_channel) < 0 ||
+        aeron_uri_string_builder_put(&builder, AERON_URI_SESSION_ID_KEY, NULL) < 0 ||
         aeron_uri_string_builder_put(&builder, AERON_URI_TERM_OFFSET_KEY, NULL) < 0 ||
         aeron_uri_string_builder_put(&builder, AERON_URI_TERM_ID_KEY, NULL) < 0 ||
         aeron_uri_string_builder_put(&builder, AERON_URI_INITIAL_TERM_ID_KEY, NULL) < 0 ||
@@ -2497,6 +2509,8 @@ int aeron_archive_initiate_replay_via_response_channel(
 
         aeron_archive_idle(aeron_archive);
 
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+
         if (aeron_async_add_exclusive_publication_poll(&exclusive_publication, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
@@ -2536,6 +2550,8 @@ int aeron_archive_initiate_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
     }
 
     int64_t *pub_limit_counter = aeron_counters_reader_addr(counters_reader, pub_limit_counter_id);
@@ -2549,6 +2565,8 @@ int aeron_archive_initiate_replay_via_response_channel(
         }
 
         aeron_archive_idle(aeron_archive);
+
+        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
     }
 
     // using the newly created proxy (based on the newly created exclusive publisher), send the replay request

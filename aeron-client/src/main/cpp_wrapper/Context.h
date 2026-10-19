@@ -682,7 +682,24 @@ private:
     {
         try
         {
-            AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW(errcode, message);
+            // the C client conductor passes positive AERON_CLIENT_ERROR_* codes to the error handler, whereas
+            // AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW expects them negated as returned by aeron_errcode()
+            int code = errcode;
+            switch (errcode)
+            {
+                case AERON_CLIENT_ERROR_DRIVER_TIMEOUT:
+                case AERON_CLIENT_ERROR_CLIENT_TIMEOUT:
+                case AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT:
+                case AERON_CLIENT_ERROR_BUFFER_FULL:
+                case AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL:
+                    code = -errcode;
+                    break;
+
+                default:
+                    break;
+            }
+
+            AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW(code, message);
         }
         catch (SourcedException &exception)
         {

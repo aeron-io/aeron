@@ -15,6 +15,9 @@
  */
 
 #include <functional>
+#include <string>
+#include <typeinfo>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -68,4 +71,37 @@ TEST_F(SystemTest, shouldReportClosedIfTimedOut)
     std::this_thread::sleep_for(std::chrono::nanoseconds(2 * m_livenessTimeoutNs));
     invoker.invoke();
     ASSERT_TRUE(aeron->isClosed());
+}
+
+TEST_F(SystemTest, shouldReportConductorServiceTimeoutExceptionIfTimedOut)
+{
+    std::vector<std::string> errors;
+    bool conductorServiceTimeoutReported = false;
+
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+    ctx.errorHandler(
+        [&](const std::exception &exception)
+        {
+            errors.emplace_back(std::string(typeid(exception).name()) + ": " + exception.what());
+            if (nullptr != dynamic_cast<const ConductorServiceTimeoutException *>(&exception))
+            {
+                conductorServiceTimeoutReported = true;
+            }
+        });
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor>& invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+    invoker.invoke();
+    std::this_thread::sleep_for(std::chrono::nanoseconds(2 * m_livenessTimeoutNs));
+    invoker.invoke();
+    ASSERT_TRUE(aeron->isClosed());
+
+    std::string reported;
+    for (const std::string &error : errors)
+    {
+        reported += error + "\n";
+    }
+    EXPECT_TRUE(conductorServiceTimeoutReported) << reported;
 }

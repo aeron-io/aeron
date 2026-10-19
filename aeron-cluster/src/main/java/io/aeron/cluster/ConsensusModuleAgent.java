@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1443,6 +1443,14 @@ final class ConsensusModuleAgent
     void onServiceMessage(final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
     {
         final int serviceId = PendingServiceMessageTracker.serviceIdFromServiceMessage(clusterSessionId);
+        if (serviceId < 0 || serviceId >= pendingServiceMessageTrackers.length)
+        {
+            ctx.countedErrorHandler().onError(new ClusterEvent(
+                "service message dropped, unknown serviceId=" + serviceId +
+                " clusterSessionId=" + clusterSessionId + " serviceCount=" + pendingServiceMessageTrackers.length));
+            return;
+        }
+
         pendingServiceMessageTrackers[serviceId].enqueueMessage((MutableDirectBuffer)buffer, offset, length);
     }
 
@@ -1466,6 +1474,14 @@ final class ConsensusModuleAgent
     void onServiceAck(
         final long logPosition, final long timestamp, final long ackId, final long relevantId, final int serviceId)
     {
+        if (serviceId < 0 || serviceId >= serviceAckQueues.length)
+        {
+            ctx.countedErrorHandler().onError(new ClusterEvent(
+                "service ack dropped, unknown serviceId=" + serviceId + " ackId=" + ackId +
+                " serviceCount=" + serviceAckQueues.length));
+            return;
+        }
+
         logOnServiceAck(memberId, logPosition, timestamp, clusterTimeUnit, ackId, relevantId, serviceId);
         captureServiceAck(logPosition, ackId, relevantId, serviceId);
 

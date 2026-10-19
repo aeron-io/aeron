@@ -632,8 +632,8 @@ private:
     {
         try
         {
-            PersistentSubscription *self = reinterpret_cast<PersistentSubscription *>(clientd);
-            Context &ctx = self->m_context;
+            const PersistentSubscription *self = static_cast<PersistentSubscription *>(clientd);
+            const Context &ctx = self->m_context;
             if (ctx.m_onLiveJoined)
             {
                 ctx.m_onLiveJoined();
@@ -649,8 +649,8 @@ private:
     {
         try
         {
-            PersistentSubscription *self = reinterpret_cast<PersistentSubscription *>(clientd);
-            Context &ctx = self->m_context;
+            const PersistentSubscription *self = static_cast<PersistentSubscription *>(clientd);
+            const Context &ctx = self->m_context;
             if (ctx.m_onLiveLeft)
             {
                 ctx.m_onLiveLeft();

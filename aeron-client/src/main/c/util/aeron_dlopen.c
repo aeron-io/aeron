@@ -60,6 +60,10 @@ const char *aeron_dlinfo_func(void (*func)(void), char *buffer, size_t max_buffe
 
 #elif defined(AERON_COMPILER_MSVC)
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include "concurrent/aeron_counters_manager.h"
 #include "aeronc.h"
 #include <Windows.h>

@@ -268,6 +268,23 @@ int aeron_driver_context_set_send_to_status_poll_ratio(aeron_driver_context_t *c
 size_t aeron_driver_context_get_send_to_status_poll_ratio(aeron_driver_context_t *context);
 
 /**
+ * Ratio of receiving data to slow work (e.g. draining command queue, sending pending status messages etc.) in the
+ * Receiver.
+ */
+#define AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO_ENV_VAR "AERON_RECEIVER_POLL_TO_SLOW_WORK_RATIO"
+
+int aeron_driver_context_set_receiver_poll_to_slow_work_ratio(aeron_driver_context_t *context, size_t value);
+size_t aeron_driver_context_get_receiver_poll_to_slow_work_ratio(aeron_driver_context_t *context);
+
+/**
+ * Limit the number of images that the Receiver can process in a single duty cycle.
+ */
+#define AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_ENV_VAR "AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT"
+
+int aeron_driver_context_set_receiver_images_per_duty_cycle_limit(aeron_driver_context_t *context, int32_t value);
+int32_t aeron_driver_context_get_receiver_images_per_duty_cycle_limit(aeron_driver_context_t *context);
+
+/**
  * Status Message timeout in nanoseconds.
  */
 #define AERON_RCV_STATUS_MESSAGE_TIMEOUT_ENV_VAR "AERON_RCV_STATUS_MESSAGE_TIMEOUT"
@@ -751,12 +768,21 @@ aeron_udp_channel_transport_bindings_t *aeron_driver_context_get_udp_channel_tra
     aeron_driver_context_t *context);
 
 /**
- * The threshold beyond which individual channel/socket polling will swap to using selectors
+ * The threshold beyond which individual channel/socket polling will swap to using selectors.
  */
 #define AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR "AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD"
 
 int aeron_driver_context_set_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context, size_t value);
 size_t aeron_driver_context_get_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context);
+
+/**
+ * The max number of loop iterations over a single socket before polling the next one. If a socket has data it will be
+ * polled up to the limit number of times.
+ */
+#define AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT_ENV_VAR "AERON_UDP_CHANNEL_TRANSPORT_POLLER_SOCKET_POLL_LIMIT"
+
+int aeron_driver_context_set_udp_channel_transport_poller_socket_poll_limit(aeron_driver_context_t *context, int32_t value);
+int32_t aeron_driver_context_get_udp_channel_transport_poller_socket_poll_limit(aeron_driver_context_t *context);
 
 #define AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS_ENV_VAR "AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS"
 #define AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS_ENV_VAR "AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS"
@@ -982,13 +1008,13 @@ int32_t aeron_driver_context_get_sender_cpu_affinity(aeron_driver_context_t *con
 int aeron_driver_context_set_native_resource_agent_cpu_affinity(aeron_driver_context_t *context, int32_t value);
 int32_t aeron_driver_context_get_native_resource_agent_cpu_affinity(aeron_driver_context_t *context);
 
-#define AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR "AERON_DRIVER_CPUSET_AFFINITY"
-int aeron_driver_context_set_cpuset_affinity(aeron_driver_context_t *context, bool value);
-bool aeron_driver_context_get_cpuset_affinity(aeron_driver_context_t *context);
+#define AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS_ENV_VAR "AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS"
+int aeron_driver_context_set_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_thread_affinity_use_cpuset_offsets(aeron_driver_context_t *context);
 
-#define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR "AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS"
-int aeron_driver_context_set_cpuset_warnings_as_errors(aeron_driver_context_t *context, bool value);
-bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *context);
+#define AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_ENV_VAR "AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS"
+int aeron_driver_context_set_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_thread_affinity_fail_on_validation_errors(aeron_driver_context_t *context);
 
 /**
  * Set the list of filenames to dynamic libraries to load upon context init.

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <errno.h>
+#include <inttypes.h>
+#include <string.h>
+
 #include "util/aeron_error.h"
 #include "concurrent/aeron_counters_manager.h"
 
@@ -33,7 +37,7 @@ typedef bool (*key_matcher_func_t)(struct aeron_archive_recording_pos_key_defn *
 
 static int32_t find_counter_id(aeron_counters_reader_t *counters_reader, key_matcher_func_t matcher, void *clientd)
 {
-    for (int32_t i = 0, size = aeron_counters_reader_max_counter_id(counters_reader); i < size; i++)
+    for (int32_t i = 0, max_id = aeron_counters_reader_max_counter_id(counters_reader); i <= max_id; i++)
     {
         int32_t counter_state;
 
@@ -138,18 +142,33 @@ int aeron_archive_recording_pos_get_source_identity(aeron_counters_reader_t *cou
         return -1;
     }
 
-    int32_t len = 0;
+    size_t len = 0;
 
     if (AERON_COUNTER_RECORD_ALLOCATED == state &&
         AERON_ARCHIVE_RECORDING_POSITION_TYPE_ID == type_id)
     {
-        len = (int32_t)*len_p;
+        const int32_t source_identity_length = key->source_identity_length;
+        if (source_identity_length < 0)
+        {
+            AERON_SET_ERR(
+                EINVAL,
+                "invalid source identity length %" PRId32 " for counter id %" PRId32,
+                source_identity_length,
+                counter_id);
+            return -1;
+        }
 
-        // use the shorter of the two
-        len = key->source_identity_length < len ? key->source_identity_length : len;
+        // the source identity is followed by the archive id in the key, as written by RecordingPos.allocate
+        const size_t max_source_identity_length =
+            AERON_COUNTER_MAX_KEY_LENGTH - sizeof(struct aeron_archive_recording_pos_key_defn) - sizeof(int64_t);
+
+        // use the shortest of the stored length, the space in the key and the caller's buffer
+        len = (size_t)source_identity_length;
+        len = len < max_source_identity_length ? len : max_source_identity_length;
+        len = len < *len_p ? len : *len_p;
 
         // the source_identity string comes right after the key definition
-        memcpy((void *)dst,((uint8_t *)key + sizeof(struct aeron_archive_recording_pos_key_defn)),len);
+        memcpy((void *)dst, ((uint8_t *)key + sizeof(struct aeron_archive_recording_pos_key_defn)), len);
     }
 
     *len_p = len;

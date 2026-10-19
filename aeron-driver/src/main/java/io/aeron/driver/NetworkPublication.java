@@ -1047,7 +1047,7 @@ public final class NetworkPublication
         {
             for (final ReadablePosition spyPosition : spyPositions)
             {
-                if (spyPosition.getVolatile() < eosPosition)
+                if (spyPosition.getAcquire() < eosPosition)
                 {
                     return false;
                 }
@@ -1074,13 +1074,14 @@ public final class NetworkPublication
         return (spiesSimulateConnection && hasSpies) || (hasReceivers && flowControl.hasRequiredReceivers());
     }
 
-    private void checkUntetheredSubscriptions(final long nowNs, final DriverConductor conductor)
+    private void checkUntetheredSubscriptions(
+        final long nowNs, final DriverConductor conductor, final boolean allowRejoin)
     {
         final ArrayList<UntetheredSubscription> untetheredSubscriptions = this.untetheredSubscriptions;
         final int untetheredSubscriptionsSize = untetheredSubscriptions.size();
         if (untetheredSubscriptionsSize > 0)
         {
-            final long senderPosition = this.senderPosition.getVolatile();
+            final long senderPosition = this.senderPosition.getAcquire();
             final long untetheredWindowLimit = (senderPosition - termWindowLength) + (termWindowLength >> 2);
 
             for (int lastIndex = untetheredSubscriptionsSize - 1, i = lastIndex; i >= 0; i--)
@@ -1088,7 +1089,7 @@ public final class NetworkPublication
                 final UntetheredSubscription untethered = untetheredSubscriptions.get(i);
                 if (UntetheredSubscription.State.ACTIVE == untethered.state)
                 {
-                    if (untethered.position.getVolatile() > untetheredWindowLimit)
+                    if (untethered.position.getAcquire() > untetheredWindowLimit)
                     {
                         untethered.timeOfLastUpdateNs = nowNs;
                     }
@@ -1103,7 +1104,7 @@ public final class NetworkPublication
                     if ((untethered.timeOfLastUpdateNs + untetheredLingerTimeoutNs) - nowNs <= 0)
                     {
                         removeSpyPosition(untethered.position);
-                        if (untethered.subscriptionLink.isRejoin())
+                        if (allowRejoin && untethered.subscriptionLink.isRejoin())
                         {
                             untethered.state(UntetheredSubscription.State.RESTING, nowNs, streamId, sessionId);
                         }
@@ -1116,18 +1117,26 @@ public final class NetworkPublication
                 }
                 else if (UntetheredSubscription.State.RESTING == untethered.state)
                 {
-                    if ((untethered.timeOfLastUpdateNs + untetheredRestingTimeoutNs) - nowNs <= 0)
+                    if (allowRejoin)
                     {
-                        addSpyPosition(untethered.position);
-                        conductor.notifyAvailableImageLink(
-                            registrationId,
-                            sessionId,
-                            untethered.subscriptionLink,
-                            untethered.position.id(),
-                            senderPosition,
-                            rawLog.fileName(),
-                            CommonContext.IPC_CHANNEL);
-                        untethered.state(UntetheredSubscription.State.ACTIVE, nowNs, streamId, sessionId);
+                        if ((untethered.timeOfLastUpdateNs + untetheredRestingTimeoutNs) - nowNs <= 0)
+                        {
+                            addSpyPosition(untethered.position);
+                            conductor.notifyAvailableImageLink(
+                                registrationId,
+                                sessionId,
+                                untethered.subscriptionLink,
+                                untethered.position.id(),
+                                senderPosition,
+                                rawLog.fileName(),
+                                CommonContext.IPC_CHANNEL);
+                            untethered.state(UntetheredSubscription.State.ACTIVE, nowNs, streamId, sessionId);
+                        }
+                    }
+                    else
+                    {
+                        ArrayListUtil.fastUnorderedRemove(untetheredSubscriptions, i, lastIndex--);
+                        untethered.position.close();
                     }
                 }
             }
@@ -1163,7 +1172,7 @@ public final class NetworkPublication
                 }
                 else
                 {
-                    checkUntetheredSubscriptions(timeNs, conductor);
+                    checkUntetheredSubscriptions(timeNs, conductor, true);
                     updateConnectedState(hasSubscribers());
                     final long producerPosition = producerPosition();
                     publisherPos.setRelease(producerPosition);
@@ -1177,9 +1186,10 @@ public final class NetworkPublication
 
             case DRAINING:
             {
+                checkUntetheredSubscriptions(timeNs, conductor, false);
                 final long producerPosition = producerPosition();
                 publisherPos.setRelease(producerPosition);
-                final long senderPosition = this.senderPosition.getVolatile();
+                final long senderPosition = this.senderPosition.getAcquire();
                 if (producerPosition > senderPosition)
                 {
                     if (LogBufferUnblocker.unblock(termBuffers, metaDataBuffer, senderPosition, termBufferLength))

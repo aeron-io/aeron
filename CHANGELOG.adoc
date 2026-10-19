@@ -7,10 +7,61 @@
 * **[Java/C]** Add UDP socket traffic class configuration. (https://github.com/aeron-io/aeron/pull/2152[#2152])
 
 * **[Driver/C]** Allow poller transport iteration threshold to be configured from driver context.
+* Add thread affinity support for Java threads across all modules/components, configurable via the following system
+properties:
++
+--
+** Media Driver - `aeron.conductor.cpu.affinity`, `aeron.sender.cpu.affinity`, `aeron.receiver.cpu.affinity`, and
+`aeron.driver.native.resource.agent.cpu.affinity`. As with the C Media Driver, the conductor affinity is applied to the
+shared thread in `SHARED` threading mode and the sender affinity to the shared network thread in `SHARED_NETWORK`
+threading mode.
+** Archive - `aeron.archive.conductor.cpu.affinity`, `aeron.archive.recorder.cpu.affinity`, and
+`aeron.archive.replayer.cpu.affinity`. Recorder and replayer affinities only apply in `DEDICATED` threading mode.
+** Cluster - `aeron.cluster.cpu.affinity` (consensus module) and `aeron.cluster.service.cpu.affinity` (clustered
+service container).
+--
+
+* **[Java]** Validate the CPU affinities of all Aeron threads within the same JVM against
+each other and the CPU topology. Validation issues are reported as warnings by default.
+
+* **[Java/C]** Add global thread affinity configuration shared by the Java and C Media Drivers:
+`aeron.thread.affinity.use.cpuset.offsets` (`AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS`) to treat the configured CPU
+affinities as offsets into the effective cgroup cpuset, and `aeron.thread.affinity.fail.on.validation.errors`
+(`AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`) to fail on startup instead of warning when affinity validation
+finds a problem.
+
+* **Breaking:** **[Driver/C]** Rename the cpuset affinity configuration to match the Java Media Driver:
+`AERON_DRIVER_CPUSET_AFFINITY` is now `AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS`
+(`aeron_driver_context_set/get_thread_affinity_use_cpuset_offsets`), and `AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS` is
+now `AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`
+(`aeron_driver_context_set/get_thread_affinity_fail_on_validation_errors`).
+
+* **[Driver/C]** Remove linking to wsock32 in favor of only using ws2_32. This is to avoid header weirdness: https://learn.microsoft.com/en-us/archive/blogs/wndp/winsock-header-weirdness.
 
 === Changelog
 
-* **[Archive/C{plus}{plus} Wrapper]** Add getters and setters for Archive client client_name, recording_events_stream_id, control_term_buffer_length, control_mtu_length, and control_term_buffer_sparse.
+* **[Archive/Java]** Fix SIGSEGV when closing sessions after the archive's Aeron client times out. (https://github.com/aeron-io/aeron/pull/2204[#2204])
+* **[Cluster]** Fix 15s deadlock when the clustered service's Aeron client times out. (https://github.com/aeron-io/aeron/pull/2205[#2205])
+* **[Archive/Java]** Invoke `AgentInvokers` while waiting for the replay control publication to connect when starting replay using response channels.
+* **[Archive/C]** Invoke the client while waiting in the archive client's publication, subscription and replay wait loops. (https://github.com/aeron-io/aeron/pull/2203[#2203])
+* **[Archive/C]** Release the archive lock when polling for recording signals fails. (https://github.com/aeron-io/aeron/pull/2202[#2202])
+* **[Driver/Java]** Prevent an untethered subscription in `LINGER` state from keeping an image, network publication (spy) or
+an IPC publication stuck in `DRAINING` state forever.
+* **[Driver/C]** Do not set `is_re_resolution` flag when resolving destination address during `on_remove_send_destination`.
+* **[Driver/C]** Move `mmsghdr` array creation to initialization time (`aeron_driver_receiver_init`), i.e. avoid paying
+allocation costs on every duty cycle.
+* **[Driver/C]** Poll each socket up to `aeron.udp.channel.transport.poller.socket.poll.limit` times (default value is
+`4` and max value is `16`) as long as socket has more data to read.
+* **[Driver/C]** Increase max number of packets that can be sent/received in one go to 64.
+* **[Driver/C]** Optimize message send path.
+* **[Driver/C]** Optimize message receive path
+* **[Driver/Java]** Optimize message send path.
+* **[Driver/Java]** Optimize message receive path
+* **[Client/C{plus}{plus} Wrapper]** Remove `BufferBuilder` since assemblers delegate to C code which has its own implementation.
+* **[Client/C{plus}{plus} Wrapper]** Add untethered linger timeout to `ChannelUriStringBuilder`. (https://github.com/aeron-io/aeron/pull/2200[#2200])
+* **[Driver/C]** Add `#define _BSD_SOURCE` and `#define _GNU_SOURCE` to all C source files on Linux
+* **[Archive/C{plus}{plus} Wrapper]** Add getters and setters for Archive client `client_name`,
+`recording_events_stream_id`, `control_term_buffer_length`, `control_mtu_length`, and `control_term_buffer_sparse`.
 * **[Archive/C]** Set archive's aeron client name to client name of the archive context.
 * **[Archive]** Fsync the catalog on close even when the closing thread is interrupted. (https://github.com/aeron-io/aeron/pull/2166[#2166])
 * **[Samples/Java]** Delegate `SamplesUtil#mapExistingFileReadOnly` to `IOUtil#mapExistingFile`.
@@ -75,14 +126,18 @@ channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/is
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
-* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.1[Agrona 2.6.1].
-* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.40.2[SBE 1.40.2].
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.0[Agrona 2.7.0].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.41.0[SBE 1.41.0].
 * **[Java]** Upgrade to `Gradle` 9.8.1.
 * **[Java]** Upgrade to `Mockito` 5.24.0.
-* **[Java]** Upgrade to `ByteBuddy` 1.18.14.
-* **[Java]** Upgrade to `Versions` 0.65.0.
-* **[Java]** Upgrade to `jackson-dataformat-cbor` 3.2.3.
-* **[C]** Upgrade to `CMake` 4.4.3.
+* **[Java]** Upgrade to `ByteBuddy` 1.18.15.
+* **[Java]** Upgrade to `Versions` 0.66.0.
+* **[Java]** Upgrade to `jackson-dataformat-cbor` 3.2.4.
+* **[Java]** Upgrade to `ASM` 9.11.
+* **[Java]** Upgrade to `JGit` 7.8.0.202609011348-r.
+* **[Java]** Upgrade to `AsciidoctorJ` 3.0.1.
+* **[Java]** Upgrade to `JSON` 20260814.
+* **[C]** Upgrade to `CMake` 4.4.4.
 
 == 1.53.3 (2026-09-25)
 

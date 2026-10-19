@@ -52,11 +52,11 @@
 #define AERON_COMMAND_RB_RESERVE (1024)
 #define AERON_COMMAND_DRAIN_LIMIT (1)
 
-#define AERON_DRIVER_SENDER_IO_VECTOR_LENGTH_MAX (16)
+#define AERON_DRIVER_SENDER_IO_VECTOR_LENGTH_MAX (64)
 
-#define AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND (16)
+#define AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND (64)
 
-#define AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX (16)
+#define AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX (64)
 #define AERON_DRIVER_RECEIVER_MAX_UDP_PACKET_LENGTH (64 * 1024)
 
 #define AERON_TO_CONDUCTOR_BUFFER_LENGTH_DEFAULT (1024 * 1024 + AERON_RB_TRAILER_LENGTH)
@@ -219,6 +219,7 @@ typedef struct aeron_driver_context_stct
     size_t socket_sndbuf;                                   /* aeron.socket.so_sndbuf = 0 */
     int32_t socket_tos;                                     /* aeron.socket.tos = -1 */
     size_t send_to_sm_poll_ratio;                           /* aeron.send.to.status.poll.ratio = 6 */
+    size_t receiver_poll_to_slow_work_ratio;                /* aeron.receiver.poll.to.slow.work.ratio = 10 */
     size_t initial_window_length;                           /* aeron.rcv.initial.window.length = 128KB */
     size_t loss_report_length;                              /* aeron.loss.report.buffer.length = 1MB */
     size_t file_page_size;                                  /* aeron.file.page.size = 4KB */
@@ -226,6 +227,7 @@ typedef struct aeron_driver_context_stct
     int32_t publication_reserved_session_id_low;            /* aeron.publication.reserved.session.id.low = -1 */
     int32_t publication_reserved_session_id_high;           /* aeron.publication.reserved.session.id.high = 1000 */
     uint8_t multicast_ttl;                                  /* aeron.socket.multicast.ttl = 0 */
+    int32_t receiver_images_per_duty_cycle_limit;           /* aeron.receiver.images.per.duty.cycle.limit = 16 */
     uint32_t receiver_io_vector_capacity;                   /* aeron.receiver.io.vector.capacity = 4 */
     uint32_t sender_io_vector_capacity;                     /* aeron.sender.io.vector.capacity = 4 */
     uint32_t network_publication_max_messages_per_send;     /* aeron.network.publication.max.messages.per.send = 4 */
@@ -241,8 +243,8 @@ typedef struct aeron_driver_context_stct
     int32_t native_resource_agent_cpu_affinity_no;          /* aeron.driver.native.resource.agent.cpu.affinity = -1 */
     int32_t native_resource_agent_cpu_affinity_resolved;
     int32_t stream_session_limit;                           /* aeron.driver.stream.session.limit = INT32_MAX */
-    bool cpuset_affinity;                                   /* aeron.driver.cpuset.affinity = false */
-    bool cpuset_warnings_as_errors;                         /* aeron.driver.cpuset.warnings_as_errors = false */
+    bool thread_affinity_use_cpuset_offsets;                /* aeron.thread.affinity.use.cpuset.offsets = false */
+    bool thread_affinity_fail_on_validation_errors;         /* aeron.thread.affinity.fail.on.validation.errors = false */
     bool enable_experimental_features;                      /* aeron.enable.experimental.features = false */
 
     struct                                                  /* aeron.receiver.receiver.tag = <unset> */
@@ -368,7 +370,8 @@ typedef struct aeron_driver_context_stct
     aeron_udp_channel_transport_bindings_t *conductor_udp_channel_transport_bindings;
     aeron_udp_channel_interceptor_bindings_t *udp_channel_outgoing_interceptor_bindings;
     aeron_udp_channel_interceptor_bindings_t *udp_channel_incoming_interceptor_bindings;
-    size_t udp_channel_transport_poller_iteration_threshold; /* aeron.udp.channel.transport.poller.iteration.threshold = 5 */
+    size_t udp_channel_transport_poller_iteration_threshold;       /* aeron.udp.channel.transport.poller.iteration.threshold = 5 */
+    int32_t udp_channel_transport_poller_socket_poll_limit;        /* aeron.udp.channel.transport.poller.socket.poll.limit = 4 */
 
     int64_t next_receiver_id;
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
@@ -22,9 +22,8 @@ import org.agrona.collections.IntHashSet;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
-import java.util.Optional;
 
-import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
+import static io.aeron.cpu.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
 
 class L3TopologyValidator implements TopologyValidator
 {
@@ -44,21 +43,17 @@ class L3TopologyValidator implements TopologyValidator
         this.perCpuListReader = new PerCpuListReader(sysfsRoot, SHARED_CPU_LIST_DIRECTORY);
     }
 
-    public int validate(final Cpuset cpuset, final PrintStream warningStream)
+    public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         try
         {
-            final IntArrayList cpuList = cpuset.cpus();
+            final IntArrayList cpuList = selection.cpus();
             final IntHashSet expectedPeers = this.perCpuListReader.loadCpuList(cpuList.get(0));
-            final Optional<Integer> missing = cpuList
-                .stream()
-                .filter(cpu -> !expectedPeers.contains(cpu))
-                .findFirst();
-            if (missing.isPresent())
+            if (cpuList.stream().anyMatch(cpu -> !expectedPeers.contains(cpu)))
             {
                 warningStream.printf(
                     "WARNING: %s spans multiple L3 cache domains, configuration: %s%n",
-                    "cpuset", cpuset.formattedCpus());
+                    selection.kind(), selection.configuration());
                 return 1;
             }
         }

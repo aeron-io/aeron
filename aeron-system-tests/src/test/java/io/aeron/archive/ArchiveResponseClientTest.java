@@ -22,6 +22,8 @@ import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ReplayParams;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
+import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -54,6 +56,8 @@ public class ArchiveResponseClientTest
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
+    private final MediaDriver.Context driverCtx = new MediaDriver.Context();
+    private final Archive.Context archiveContext = TestContexts.localhostArchive();
     private TestMediaDriver driver;
     private Archive archive;
 
@@ -62,7 +66,7 @@ public class ArchiveResponseClientTest
     {
         final int termLength = 64 * 1024;
 
-        final MediaDriver.Context driverCtx = new MediaDriver.Context()
+        driverCtx
             .termBufferSparseFile(true)
             .publicationTermBufferLength(termLength)
             .sharedIdleStrategy(YieldingIdleStrategy.INSTANCE)
@@ -72,7 +76,7 @@ public class ArchiveResponseClientTest
             .publicationReservedSessionIdLow(0)
             .publicationReservedSessionIdHigh(1000);
 
-        final Archive.Context archiveContext = TestContexts.localhostArchive()
+        archiveContext
             .aeronDirectoryName(driverCtx.aeronDirectoryName())
             .controlChannel("aeron:udp?endpoint=localhost:10001")
             .catalogCapacity(ArchiveSystemTests.CATALOG_CAPACITY)
@@ -82,10 +86,10 @@ public class ArchiveResponseClientTest
             .segmentFileLength(1024 * 1024)
             .idleStrategySupplier(YieldingIdleStrategy::new);
 
-        driver = TestMediaDriver.launch(driverCtx, systemTestWatcher);
+        driver = TestMediaDriver.launch(driverCtx.clone(), systemTestWatcher);
         systemTestWatcher.dataCollector().add(driverCtx.aeronDirectory());
 
-        archive = Archive.launch(archiveContext);
+        archive = Archive.launch(archiveContext.clone());
         systemTestWatcher.dataCollector().add(archiveContext.archiveDir());
     }
 
@@ -220,16 +224,79 @@ public class ArchiveResponseClientTest
             assertEquals(aeronArchive.controlResponsePoller().relevantId(), replaySessionId);
 
             final MutableLong replayPosition = new MutableLong();
+            final FragmentHandler fragmentHandler = (buffer, offset, length, header) ->
+            {
+                assertEquals((int)replaySessionId, header.sessionId());
+                replayPosition.set(header.position());
+            };
+
             while (replayPosition.get() < recordingResult.position())
             {
-                if (0 == replay.poll((buffer, offset, length, header) ->
-                {
-                    assertEquals((int)replaySessionId, header.sessionId());
-                    replayPosition.set(header.position());
-                }, 10))
+                if (0 == replay.poll(fragmentHandler, 10))
                 {
                     Tests.yield();
                 }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        "aeron:udp?control-mode=response|control=localhost:10003|session-id=5",
+    })
+    @InterruptAfter(10)
+    void shouldStartReplayUsingResponseChannelInTheInvokerMode(final String replayChannel)
+    {
+        tearDown();
+
+        driver = TestMediaDriver.launch(driverCtx.clone()
+            .threadingMode(ThreadingMode.INVOKER), systemTestWatcher);
+        archive = Archive.launch(archiveContext.clone()
+            .threadingMode(ArchiveThreadingMode.INVOKER)
+            .mediaDriverAgentInvoker(driver.sharedAgentInvoker()));
+
+        final int replayStreamId = 10001;
+        final ChannelUri uri = ChannelUri.parse(replayChannel);
+        uri.remove(SESSION_ID_PARAM_NAME);
+        final String sanitisedChannel = uri.toString();
+
+        try (Aeron aeron = Aeron.connect(new Aeron.Context()
+            .aeronDirectoryName(driver.aeronDirectoryName())
+            .useConductorAgentInvoker(true)
+            .driverAgentInvoker(driver.sharedAgentInvoker()));
+            AeronArchive aeronArchive = AeronArchive.connect(new AeronArchive.Context()
+                .aeron(aeron)
+                .ownsAeronClient(false)
+                .agentInvoker(archive.invoker())
+                .controlRequestChannel(archive.context().controlChannel())
+                .controlResponseChannel("aeron:udp?control-mode=response|control=localhost:10002"));
+            Subscription replay = aeron.addSubscription(sanitisedChannel, replayStreamId))
+        {
+            final ArchiveSystemTests.RecordingResult recordingResult = ArchiveSystemTests.recordData(aeronArchive);
+            final ReplayParams replayParams = new ReplayParams();
+            replayParams.subscriptionRegistrationId(replay.registrationId());
+
+            final long replaySessionId =
+                aeronArchive.startReplay(recordingResult.recordingId(), replayChannel, replayStreamId, replayParams);
+            assertEquals(aeronArchive.controlResponsePoller().relevantId(), replaySessionId);
+
+            final MutableLong replayPosition = new MutableLong();
+            final FragmentHandler fragmentHandler = (buffer, offset, length, header) ->
+            {
+                assertEquals((int)replaySessionId, header.sessionId());
+                replayPosition.set(header.position());
+            };
+
+            while (replayPosition.get() < recordingResult.position())
+            {
+                if (0 == replay.poll(fragmentHandler, 10))
+                {
+                    Tests.yield();
+                }
+
+                archive.invoker().invoke();
+                aeron.conductorAgentInvoker().invoke();
             }
         }
     }
