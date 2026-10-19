@@ -276,6 +276,13 @@ int aeron_driver_receiver_do_work(void *clientd)
     {
         work_count += aeron_driver_receiver_slow_tick_work(receiver, now_ns);
     }
+    else if (0 < bytes_received)
+    {
+        for (size_t i = 0; i < receiver->recv_buffers.vector_capacity; i++)
+        {
+           receiver->recv_buffers.mmsghdr[i].msg_hdr.msg_namelen = sizeof(receiver->recv_buffers.addrs[i]);
+        }
+    }
 
     return work_count;
 }
