@@ -118,6 +118,9 @@ ssize_t aeron_send(aeron_socket_t fd, const void *buf, size_t len, int flags);
 
 ssize_t aeron_recvmsg(aeron_socket_t fd, struct msghdr *msghdr, int flags);
 
+ssize_t aeron_recvfrom(
+    aeron_socket_t fd, void *buf, size_t len, int flags, struct sockaddr *address, socklen_t *address_length);
+
 int aeron_poll(struct pollfd *fds, unsigned long nfds, int timeout);
 
 #endif //AERON_SOCKET_H
