@@ -127,7 +127,11 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☑ |
 | 3d | Remaining cross-project reach-ins: Javadoc and `aeron-all` sources aggregation move to proper dependency resolution. | ☑ |
 | 3e | Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback and the root `subprojects*.test` reach-in. | ☑ |
-| 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
+| 4 | Make the build configuration-cache safe, then enable the configuration cache. Done in the slices below, one commit each. | ◐ |
+| 4a | Javadoc offline links: replace the `doFirst` that resolves `javadocLinks` and copies files at execution time with a typed `ExtractJavadocLinksTask`. | ☑ |
+| 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☐ |
+| 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☐ |
+| 4d | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
 ## Log
@@ -726,6 +730,47 @@ pre-3a times.
 - **More wiring:** about 25 lines per module (source set, `api` file dependency, jar, sources jar,
   `mainSourceElements` artifact) where A has 2. All of it is declarative and inferred, though, with no raw paths or
   manual task dependencies.
+
+### Step 4: finding configuration cache problems
+
+These task sets were run with `--configuration-cache --configuration-cache-problems=warn`:
+
+- `assemble`, `javadoc` and `publishToMavenLocal`;
+- `:aeron-client:test` and `:aeron-driver:loggingTest`;
+- `generateCppCodecs`;
+- the client's config-doc and validation tasks;
+- `testReport`, `tarTestLogs` and `asciidoctorGithub`.
+
+Only one problem was reported: the `doFirst` in every module's `javadoc` task called `configurations` at execution
+time, which also made `javadoc` and `publishToMavenLocal` fail. Everything else stored without problems.
+
+Tasks that can't be run locally were checked by reading the code:
+
+- `TutorialPublishTask` calls `getProject()` in its task action, which isn't allowed (step 4b).
+- `AsciidoctorPreprocessTask` (field initialisers) and `SonatypeCentralPortalUploadRepositoryTask` (constructor) only
+  call `getProject()` while the task is being created, which is allowed.
+
+### Step 4a: Javadoc offline links
+
+Previously the `javadoc` task's `doFirst` resolved `javadocLinks`, unzipped each javadoc jar's `element-list` and
+`package-list` into `build/javadoc-links/<name>`, and added `-linkoffline` options. Resolving configurations and
+calling `copy`/`zipTree` at execution time isn't supported by the configuration cache.
+
+- **`ExtractJavadocLinksTask`** (in `buildSrc`) does the extraction. It takes the resolved artifacts through
+  `ArtifactCollection.getResolvedArtifacts()` and the jars as inputs, uses the injected `ArchiveOperations` and
+  `FileSystemOperations`, and writes to the same `build/javadoc-links/<name>` directories.
+- **`javadoc`** takes that task's output as an input, which also gives it the task dependency. It sets
+  `linksOffline` when configured, from the declared `javadocLinks` dependencies, which need no resolution. The link URL
+  now uses the declared version rather than the resolved one. They are the same here, because the build forces the
+  Agrona version and fails on version conflicts.
+
+Verified:
+
+- **Artifacts:** 0 differences against a same-SHA baseline at `6894cb9be1`. The Javadoc jars' HTML contains the Agrona
+  links, so they are covered.
+- **Configuration cache:** `publishToMavenLocal` stores its entry with no problems. Running `javadoc` twice stores the
+  entry, then reuses it with every task up to date.
+- **Extracted files:** `element-list` is extracted to `build/javadoc-links/agrona` as before.
 
 ## Decisions
 
