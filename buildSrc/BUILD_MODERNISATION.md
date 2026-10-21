@@ -449,3 +449,44 @@ Still to do, in later steps:
 - **The `evaluationDependsOn` calls are a symptom of reaching into other projects' source sets** (Javadoc and sources
   aggregation in `aeron-all`, cluster and samples). Step 3 should replace those reach-ins with proper
   configurations, and then the `evaluationDependsOn` calls can go.
+
+### Performance check after step 2
+
+Same method as the check after 2d:
+
+- Fresh clones of `master` (`5bc29c38af`) and the branch (`4ad0282609`), each with a clean working tree, measured back
+  to back after a warm-up build.
+- 3 runs per scenario; figures are seconds, with the median after the runs.
+- JDK 26, 18-core Mac.
+
+| Scenario | `master` | branch |
+|---|---|---|
+| Configuration only (`help`) | 0.98 / 0.81 / 0.80 → 0.81 | 0.79 / 0.78 / 0.77 → 0.78 |
+| `clean assemble -x javadoc`, no build cache | 9.18 / 8.87 / 8.72 → 8.87 | 8.10 / 8.12 / 8.11 → 8.11 |
+| `clean assemble -x javadoc`, build cache | 8.66 / 8.48 / 8.55 → 8.55 (cache off) | 4.63 / 4.64 / 4.64 → **4.64** |
+| No-op `assemble -x javadoc` | 1.36 / 1.28 / 1.23 → 1.28 | 1.25 / 1.27 / 1.28 → 1.27 |
+| Method body edit in `aeron-client`, `assemble -x javadoc` | 6.20 / 1.34 / 1.24 → 1.34 | 7.10 / 1.32 / 1.26 → 1.32 |
+| Edit in `aeron-cluster`, `assemble -x javadoc` | 3.10 / 1.23 / 1.22 → 1.23 | 3.15 / 1.29 / 1.26 → 1.29 |
+| `clean assemble -x javadoc`, no build cache, `--parallel` | 5.45 / 5.51 / 5.46 → 5.46 | 5.18 / 5.12 / 5.26 → 5.18 |
+| `clean javadoc`, no build cache | 21.55 / 21.50 / 20.95 → 21.50 | 21.94 / 21.23 / 20.99 → 21.23 |
+| `clean publishToMavenLocal`, no build cache | 24.31 / 24.60 / 25.33 → 24.60 | 26.07 / 25.21 / 24.55 → 25.21 |
+| Change to compiled code in `buildSrc`, then `help` | 2.96 / 2.69 / 2.55 → 2.69 | 1.47 / 1.38 / 1.42 → **1.42** |
+
+Reading the table:
+
+- **Build cache:** a clean build is about 46% faster when the cache has the outputs (8.55s to 4.64s).
+- **Editing build logic:** about 47% faster. After a `buildSrc` change Gradle recompiles every build script. That is
+  one 1,400-line script on `master`, and 10 small scripts plus 3 precompiled plugins on the branch. The likely
+  explanation is that one huge script compiles more slowly, but this hasn't been profiled.
+- **Everything else** (configuration, clean builds without the cache, no-op and incremental builds, Javadoc,
+  publishing) is within run-to-run noise of `master`. The `publishToMavenLocal` median is 0.6s higher, but the runs
+  overlap.
+- **First edit after a commit:** about 1s slower on the branch for a client edit, as explained in the step 1
+  trade-off. `aeron-annotations` is recompiled as well as the downstream modules.
+
+Not covered: test execution time. The tests themselves are unchanged and their configuration was verified identical
+in 2c and 2f, so any difference would be noise from the tests rather than the build.
+
+A comment-only change in `buildSrc` was tried first, but it doesn't change the compiled classes, so Gradle doesn't
+recompile the build scripts and the scenario measured nothing. The scenario above adds a new method with a unique name
+on each run, so a cached script compilation can't be reused.
