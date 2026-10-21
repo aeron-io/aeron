@@ -963,6 +963,7 @@ uint64_t aeron_usable_fs_space(const char *path)
 
 int aeron_create_file(const char *path, size_t length, bool sparse_file)
 {
+    // codeql[cpp/world-writable-file-creation]
     int fd = open(path, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     if (fd < 0)
     {
