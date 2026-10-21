@@ -100,6 +100,7 @@ Modern approach: register the generator task's output as a source dir, e.g.
   likely never collects any core dumps.
 - The Javadoc footer copyright year is hard-coded (2014-2025).
 - The wrapper uses the `-all` distribution; `-bin` is smaller.
+- The `mockitoAgent` configuration is created in every module but never used: no `-javaagent` refers to it.
 
 ## Plan
 
@@ -116,7 +117,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 2 | Extract convention plugins (Java defaults, publishing/signing, SBE codec generation, config-doc tasks) into `buildSrc`, and give each module its own build file. Done in the slices below, one commit each. | ◐ |
 | 2a | Safety net: capture the published artifacts before the change, and diff them after each slice. | ☑ |
 | 2b | Publishing and signing → `aeron.publishing` convention plugin. | ☑ |
-| 2c | Shared Java, test and Checkstyle setup (the `subprojects {}` block) → `aeron.java-conventions`. | ☐ |
+| 2c | Shared Java, test and Checkstyle setup (the `subprojects {}` block) → `aeron.java-conventions`. | ☑ |
 | 2d | SBE `JavaExec` tasks → typed `SbeGenerate` task. | ☐ |
 | 2e | `generateConfigDoc` and `validate*Expectations` → shared registration. | ☐ |
 | 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☐ |
@@ -230,3 +231,41 @@ Verified:
   three scenarios (snapshot, snapshot with credentials, release with credentials).
 
 Not verified: an actual upload to Sonatype or a real signing run, because that needs credentials and a GPG key.
+
+### Step 2c: `aeron.java-conventions` convention plugin
+
+`buildSrc/src/main/groovy/aeron.java-conventions.gradle` now holds what was the body of the root `subprojects {}`
+block:
+
+- the `base`, `java-library` and `checkstyle` plugins;
+- the toolchain, release level and compiler options;
+- the shared test dependencies;
+- all `Test` task configuration, including `slowTest`, `bindingsTest` and `topologyTest`;
+- the Javadoc options;
+- the `testJar` and `tests` configuration.
+
+The root `subprojects {}` block now only sets `group` and `version` and applies the plugin. Supporting changes:
+
+- **Java version parsing** moved into `BuildJavaVersion` in `buildSrc`. The root script still uses it for the
+  `JavaExec` launcher in `allprojects {}`.
+- **Git SHA:** the plugin creates its own `GitShaValueSource` provider, pointed at `layout.settingsDirectory`.
+- **Version catalog:** the plugin reads it through `VersionCatalogsExtension`. While the plugin is applied from the
+  root `subprojects {}` block, the subprojects don't have the catalog extension yet, so it falls back to the root
+  project's catalog. This fallback goes away in 2f.
+- **Unchanged on purpose:** the unused `mockitoAgent` configuration and the execution-time `doFirst` in `javadoc`.
+  This slice preserves behaviour; those belong to step 4 and step 5.
+
+Verification adds a second check alongside the artifact diff: an init script that registers a `dumpConfig` task in
+every project. It prints about 2,500 facts covering:
+
+- for compile, test, Javadoc, jar and `JavaExec` tasks: options, JVM arguments, system properties, JUnit tags,
+  classpaths and toolchains;
+- for each configuration: its dependencies and artifacts;
+- each project's plugins and task names.
+
+Results:
+
+- **Configuration:** identical to the parent commit, apart from each module's plugin list now including the new
+  plugin.
+- **Artifacts:** 0 differences.
+- **Checks:** `checkstyleMain`, `checkstyleTest`, `:aeron-client:test` and `:aeron-driver:loggingTest` pass.

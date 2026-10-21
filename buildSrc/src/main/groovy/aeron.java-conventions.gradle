@@ -1,0 +1,263 @@
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import io.aeron.build.AeronVersionArgumentProvider
+import io.aeron.build.BuildJavaVersion
+import io.aeron.build.GitShaValueSource
+
+// Shared Java, test, Javadoc and Checkstyle configuration for every Aeron module.
+plugins {
+    id 'base'
+    id 'java-library'
+    id 'checkstyle'
+}
+
+// The catalog extension is only registered on a project when its own build file is evaluated, so while this plugin is
+// applied from the root `subprojects {}` block it has to be read from the root project.
+def libs = (extensions.findByType(VersionCatalogsExtension) ?: rootProject.extensions.getByType(VersionCatalogsExtension))
+    .named('libs')
+int buildJavaVersion = BuildJavaVersion.major()
+boolean isEarlyAccessJavaVersion = BuildJavaVersion.isEarlyAccess()
+def toolchainLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(buildJavaVersion)
+}
+def aeronVersion = providers.provider { project.version.toString() }
+def gitSha = providers.of(GitShaValueSource) { parameters.projectDir = layout.settingsDirectory }
+
+checkstyle.toolVersion = libs.findVersion('checkstyle').get().requiredVersion
+
+configurations {
+    javadocLinks
+}
+
+dependencies {
+    testImplementation libs.findLibrary('hamcrest').get()
+    testImplementation libs.findLibrary('mockito').get()
+    testImplementation platform(libs.findLibrary('junit-bom').get())
+    testImplementation "org.junit.jupiter:junit-jupiter-params"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    javadocLinks("org.agrona:agrona:${libs.findVersion('agrona').get().requiredVersion}:javadoc@jar")
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(buildJavaVersion)
+    }
+    sourceCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(Jar).configureEach {
+    enabled = true
+    includeEmptyDirs = false
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.deprecation = true
+    options.release = java.sourceCompatibility.majorVersion.toInteger()
+    options.compilerArgs.addAll(['-Xlint:all,-processing', '-Werror', '-parameters']) // Enable all warnings and treat them as errors
+    options.compilerArgumentProviders.add(new AeronVersionArgumentProvider(aeronVersion, gitSha))
+}
+
+def mockitoAgent = configurations.create('mockitoAgent') { transitive = false }
+mockitoAgent.withDependencies {it.add(libs.findLibrary('mockito').get().get()) }
+
+// Resolve these at project-configuration time, outside configureEach
+def testSuiteClassesDirs = testing.suites.test.sources.output.classesDirs
+def testSuiteClasspath = testing.suites.test.sources.runtimeClasspath
+
+tasks.withType(Test).configureEach { test ->
+    jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
+    if (buildJavaVersion >= 21) {
+        jvmArgs('-XX:+EnableDynamicAgentLoading')
+    }
+
+    // A C media driver launched by the tests inherits the environment, so an AERON_* change must rerun them.
+    inputs.property('aeronEnvironment', providers.environmentVariablesPrefixedBy('AERON_'))
+
+    testClassesDirs = testSuiteClassesDirs
+    classpath = testSuiteClasspath
+
+    def baseLogFileName = "${layout.buildDirectory.get()}/${layout.projectDirectory.asFile.getName()}-${test.name}-%p"
+    jvmArgs("-XX:MaxDirectMemorySize=2g",
+            "-Xms2048m",
+            "-Xmx2048m",
+            "-Xmn1536m",
+            "-XX:+CreateCoredumpOnCrash",
+            "-XX:+HeapDumpOnOutOfMemoryError",
+            "-XX:+CrashOnOutOfMemoryError",
+            "-XX:HeapDumpPath=${baseLogFileName}-heap.hprof",
+            "-XX:+UseParallelGC",
+            "-Xlog:gc*,safepoint=info,arguments=info:file=${baseLogFileName}-gc.log:time",
+            "-XX:ErrorFile=${baseLogFileName}-crash.log",
+            "-Xshare:off")
+
+    useJUnitPlatform {
+        if (test.name != 'slowTest' && test.name != 'bindingsTest'
+                && test.name != 'topologyTest' && !test.name.startsWith('loggingTest'))
+        {
+            excludeTags 'any()'
+        }
+    }
+
+    testLogging {
+        for (def level : LogLevel.values())
+        {
+            def testLogging = get(level)
+            testLogging.exceptionFormat = 'full'
+            testLogging.events = ["FAILED", "STANDARD_OUT", "STANDARD_ERROR"]
+        }
+    }
+
+    systemProperties(
+        'java.util.logging.config.class': 'io.aeron.test.DisableJavaUtilLogging',
+        'aeron.shared.idle.strategy': 'yield',
+        'aeron.conductor.idle.strategy': 'yield',
+        'aeron.sender.idle.strategy': 'yield',
+        'aeron.receiver.idle.strategy': 'yield',
+        'aeron.use.windows.high.res.timer': 'true',
+        'aeron.timer.interval': '100ms',
+        'aeron.dir.delete.on.start': 'true',
+        'aeron.term.buffer.sparse.file': 'true',
+        'aeron.perform.storage.checks': 'false',
+        'agrona.disable.bounds.checks': 'false',
+        'agrona.strict.alignment.checks': 'true',
+        'net.bytebuddy.experimental': 'true',
+        'io.aeron.shadow.net.bytebuddy.experimental': 'true',
+        'net.bytebuddy.safe': 'true',
+        'io.aeron.shadow.net.bytebuddy.safe': 'true',
+        'java.net.preferIPv4Stack': 'true',
+        'aeron.fallback.logger': 'no_op',
+        'aeron.additional.configuration.property': 'foobar',
+        'aeron.test.system.aeronmd.path': System.getProperty('aeron.test.system.aeronmd.path'),
+        'aeron.test.system.binding.remote.host': System.getProperty('aeron.test.system.binding.remote.host'),
+        'aeron.test.system.binding.local.host': System.getProperty('aeron.test.system.binding.local.host'),
+        'aeron.test.system.aeron.dir': System.getProperty('aeron.test.system.aeron.dir'),
+        'aeron.test.system.ats.path': System.getProperty('aeron.test.system.ats.path'),
+        'aeron.test.system.ats.conf.dir': System.getProperty('aeron.test.system.ats.conf.dir'),
+        'aeron.test.system.ats.conf.file': System.getProperty('aeron.test.system.ats.conf.file'),
+        'aeron.test.system.driver.await.counters': System.getProperty('aeron.test.system.driver.await.counters'),
+        'aeron.test.system.persistentsubscription.printresults': System.getProperty('aeron.test.system.persistentsubscription.printresults'))
+
+    javaLauncher.set(toolchainLauncher)
+}
+
+tasks.register('slowTest', Test) {
+    group = 'verification'
+
+    maxParallelForks = 1
+    useJUnitPlatform {
+        includeTags 'slow'
+    }
+
+    systemProperties(
+        'aeron.event.cluster.log': 'all',
+        'aeron.event.cluster.log.disable': 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION',
+        'aeron.event.archive.log': 'all',
+        'aeron.event.log': 'admin',
+        'aeron.debug.timeout': '3600s',
+        'aeron.event.log.reader.classname': 'io.aeron.logging.CollectingEventLogReaderAgent',
+        'aeron.fallback.logger': 'no_op')
+}
+
+tasks.register('bindingsTest', Test) {
+    group = 'verification'
+
+    maxParallelForks = 1
+    useJUnitPlatform {
+        includeTags 'bindings'
+    }
+
+    systemProperty 'aeron.event.cluster.log', 'all'
+    systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
+    systemProperty 'aeron.event.archive.log', 'all'
+    systemProperty 'aeron.event.log', 'admin'
+    systemProperty 'aeron.debug.timeout', '3600s'
+    systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+}
+
+tasks.register('topologyTest', Test) {
+    group = 'verification'
+    maxParallelForks = 1
+    useJUnitPlatform {
+        includeTags 'topology'
+    }
+
+    systemProperty 'aeron.event.cluster.log', 'all'
+    systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
+    systemProperty 'aeron.event.archive.log', 'all'
+    systemProperty 'aeron.event.log', 'admin'
+    systemProperty 'aeron.debug.timeout', '3600s'
+    systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+}
+
+javadoc {
+
+    doFirst {
+        configurations.javadocLinks.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+            def id = artifact.moduleVersion.id
+            def destDir = layout.buildDirectory.dir("javadoc-links/${id.name}").get().asFile
+            copy {
+                from zipTree(artifact.file)
+                into destDir
+                include 'element-list', 'package-list'
+            }
+            options.linksOffline(
+                "https://www.javadoc.io/static/${id.group}/${id.name}/${id.version}/",
+                destDir.absolutePath
+            )
+        }
+    }
+
+    failOnError = true
+    title = '<h1>Aeron</h1>'
+    options.bottom = '<i>Copyright &#169; 2014-2025 Real Logic Limited. All Rights Reserved.</i>'
+    options.encoding = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+    options.charSet = 'UTF-8'
+
+    if (isEarlyAccessJavaVersion) {
+        options.links("https://download.java.net/java/early_access/jdk${buildJavaVersion}/docs/api/")
+    }
+    else {
+        options.links("https://docs.oracle.com/en/java/javase/${buildJavaVersion}/docs/api/")
+    }
+
+    exclude 'io/aeron/archive/codecs/**'
+    exclude 'io/aeron/cluster/codecs/**'
+    exclude 'io/aeron/samples/**'
+    exclude 'io/aeron/test/**'
+
+    options.addStringOption('-release', java.sourceCompatibility.majorVersion)
+    options.addBooleanOption('Werror', true)
+    options.addBooleanOption('Xdoclint:all', true)
+}
+
+tasks.register('testJar', Jar) {
+    dependsOn 'testClasses'
+    archiveClassifier.set("test-${base.archivesName}")
+    from sourceSets.test.output
+}
+
+configurations {
+    tests
+}
+
+artifacts {
+    tests testJar
+}
