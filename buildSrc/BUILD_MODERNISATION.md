@@ -127,13 +127,13 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☑ |
 | 3d | Remaining cross-project reach-ins: Javadoc and `aeron-all` sources aggregation move to proper dependency resolution. | ☑ |
 | 3e | Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback and the root `subprojects*.test` reach-in. | ☑ |
-| 4 | Make the build configuration-cache safe, then enable the configuration cache. Done in the slices below, one commit each. | ◐ |
+| 4 | Make the build configuration-cache safe, then enable the configuration cache. Done in the slices below, one commit each. | ☑ |
 | 4a | Javadoc offline links: replace the `doFirst` that resolves `javadocLinks` and copies files at execution time with a typed `ExtractJavadocLinksTask`. | ☑ |
 | 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☑ |
 | 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☑ |
 | 4d | Signing rule: stop the release-only `onlyIf` reaching `gradle.taskGraph` and `tasks` when the task runs. Found by testing a release version; snapshot builds never reach that code. | ☑ |
 | 4e | Run one test task at a time across the build, with a shared build service, because enabling the configuration cache also makes Gradle run tasks in parallel. | ☑ |
-| 4f | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
+| 4f | Enable the configuration cache in `gradle.properties`, and measure. | ☑ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
 ## Log
@@ -872,6 +872,61 @@ Verified with the configuration cache enabled:
 - the driver's four logging-test variants (`loggingTestAll`, `loggingTestNone`, `loggingTestDisabled`,
   `loggingTestConfigured`), which are separate test tasks in the same project, don't overlap either.
 
+### Step 4f: configuration cache enabled
+
+`org.gradle.configuration-cache=true` is set in `gradle.properties`. Configuration cache problems are reported as
+errors (Gradle's default), so a new incompatibility fails the build instead of being silently ignored.
+
+**CI coverage.** Every Gradle command in `.github/workflows` was checked:
+
+- **Stored with no problems (dry runs):**
+  - the default `clean build` with `-x javadoc`;
+  - `clean assemble -x javadoc`;
+  - `javadoc`;
+  - `slowTest` and `topologyTest`;
+  - `tarTestLogs`.
+- **Executed under the cache:** Checkstyle (`checkstyleMain`, `checkstyleTest`, `checkstyleGenerated`) and
+  `:aeron-system-tests:driverLoggingSystemTest`. Test and logging-test tasks already ran in the step 4 scan.
+- **Falls back:** `publish uploadArtifactsToCentralPortal`, for snapshot and release versions. Gradle reports
+  "Configuration cache disabled because incompatible tasks were found" and runs without the cache. The 8
+  `publish…PublicationToMavenRepository` tasks are incompatible because "Explicit credentials are unsupported with
+  the Configuration Cache": `aeron.publishing` sets the Sonatype username and password on the repository directly.
+  The fallback is the same build as before, and the signing behaviour without the cache was verified in 4d.
+
+  Fixing it needs `credentials(PasswordCredentials)`, which reads Gradle properties (`-P…` or
+  `ORG_GRADLE_PROJECT_…` environment variables). That would mean changing how the release workflows pass the
+  `SONATYPE_CENTRAL_PORTAL_*` secrets, so it is left as question 8 for the engineers.
+- **Not runnable here:** `uploadArtifactsToCentralPortal` on its own stores without problems; its upload needs
+  credentials.
+
+**Performance.** Fresh clones of `master` (`5bc29c38af`) and the branch at `769e90fc1b` plus this setting, each with
+a clean working tree, measured back to back after a warm-up build. Seconds, median of 3 runs (configuration only:
+median of 5); JDK 26, 18-core Mac. Measured before step 4e's test limit, which only affects test tasks, and none of
+these scenarios run tests.
+
+| Scenario | `master` | Branch with configuration cache |
+|---|---|---|
+| Configuration only (`help`) | 0.76 | 0.70 |
+| `clean assemble -x javadoc`, no build cache | 8.96 | **5.54** |
+| `clean assemble -x javadoc`, build cache | 8.80 (cache off) | **2.03** |
+| No-op `assemble -x javadoc` | 1.24 | 1.17 |
+| Method body edit in `aeron-client`, `assemble -x javadoc` | 1.30 | 1.22 |
+| Edit in `aeron-cluster`, `assemble -x javadoc` | 1.25 | 1.18 |
+| `clean assemble -x javadoc`, no build cache, `--parallel` | 5.74 | 5.43 |
+| `clean javadoc`, no build cache | 23.82 | **15.36** |
+| `clean publishToMavenLocal`, no build cache | 24.48 | **16.55** |
+| Change to compiled code in `buildSrc`, then `help` | 2.64 | **1.50** |
+
+Reading the table:
+
+- **Biggest win:** clean builds with the build cache are about 4x faster (8.80s to 2.03s).
+- **Clean builds without the build cache, Javadoc and publishing** are 35–38% faster, because tasks now run in
+  parallel.
+- **No-op and incremental builds** are slightly faster, because configuration is reused.
+- **Changes to build logic** are about 43% faster.
+- **One discarded run:** the third "configuration only" run on the branch in the first benchmark took 298.6s,
+  because the machine went to sleep. That scenario was rerun for both sides (5 runs each).
+
 ## Decisions
 
 ### Test fixtures deferred: keep the source layout (October 2026)
@@ -1027,3 +1082,8 @@ speed up edits in every module that uses them.
      a test jar now. Anything that looked for the old file names would need updating.
    - The same applies to cluster's test output (`io.aeron.cluster.codecs.v5`, `.v12` and `.mark.v0`), though nothing
      in the repo consumes cluster's test jar.
+8. **Publishing credentials and the configuration cache (step 4f).** Uploads to Sonatype fall back to running without
+   the configuration cache, because `aeron.publishing` sets the repository username and password directly. Gradle
+   only supports credentials it looks up itself (`credentials(PasswordCredentials)`), from Gradle properties such as
+   `ORG_GRADLE_PROJECT_sonatypeCentralPortalUsername`/`…Password`. Should the release workflows switch to passing the
+   secrets that way? It is only a speed-up for release builds, which work either way.
