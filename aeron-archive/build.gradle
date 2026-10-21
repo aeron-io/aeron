@@ -109,8 +109,25 @@ tasks.register('generateTestCodecsMarkFileV1', SbeGenerateTask) {
     schemaTransformVersion = '*:1'
 }
 
-// The generated codecs are compiled and packaged with the module's own sources.
-sourceSets.main.java.srcDir(tasks.named('generateCodecs'))
+// The generated codecs are compiled separately from the module's own sources: with --parallel they compile while
+// upstream modules are still compiling, and edits to hand-written code don't recompile them.
+sourceSets {
+    generated {
+        java.srcDir(tasks.named('generateCodecs'))
+        compileClasspath += configurations.codecGeneration
+    }
+}
+
+dependencies {
+    api files(sourceSets.generated.output)
+}
+
+// Projects aggregating this module's sources (Javadoc, the aeron-all sources jar) need the codecs too.
+configurations.named('mainSourceElements') {
+    outgoing.artifact(tasks.named('generateCodecs').flatMap { it.outputDir }) {
+        type = 'directory'
+    }
+}
 
 // The versioned test codecs are compiled with the module's tests.
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsV6'))
@@ -118,6 +135,8 @@ sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV0'))
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV1'))
 
 jar {
+    from sourceSets.generated.output
+
     manifest.attributes(
         'Automatic-Module-Name': 'io.aeron.archive',
         'Implementation-Title': 'Aeron',
@@ -130,6 +149,10 @@ jar {
 java {
     withSourcesJar()
     withJavadocJar()
+}
+
+tasks.named('sourcesJar') {
+    from sourceSets.generated.allSource
 }
 
 // aeron-system-tests uses a few of archive's test helpers, so the test classes are shared through this configuration.
