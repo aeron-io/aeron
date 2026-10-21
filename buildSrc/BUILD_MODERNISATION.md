@@ -633,6 +633,52 @@ Verified:
 - **Artifacts:** 0 differences.
 - **Builds and tests:** `assemble`, Checkstyle, `compileTestJava` and `:aeron-client:test` pass.
 
+### Performance check after step 3
+
+Same method as after step 2. Fresh clones of `master` (`5bc29c38af`) and the branch (`ea4e5f595a`), each with a
+clean working tree, measured back to back after a warm-up build. Seconds, median of 3 runs unless stated; JDK 26,
+18-core Mac.
+
+| Scenario | `master` | branch |
+|---|---|---|
+| Configuration only (`help`) | 0.98 | 0.79 |
+| `clean assemble -x javadoc`, no build cache | 9.25 | 8.03 |
+| `clean assemble -x javadoc`, build cache | 8.73 (cache off) | **4.80** |
+| No-op `assemble -x javadoc` | 1.28 | 1.27 |
+| Method body edit in `aeron-client`, `assemble -x javadoc` | 1.32 | 1.35 |
+| Edit in `aeron-cluster`, `assemble -x javadoc` | 1.26 | 1.36 |
+| `clean assemble -x javadoc`, no build cache, `--parallel` (6 runs, middle two) | 5.46 / 5.52 | **5.82 / 5.91** |
+| `clean javadoc`, no build cache | 21.37 | 21.98 |
+| `clean publishToMavenLocal`, no build cache | 24.67 | 23.88 |
+| Change to compiled code in `buildSrc`, then `help` | 2.61 | **1.41** |
+
+Reading the table:
+
+- **Still faster:** the build cache (about 45% faster on a clean build when the cache has the outputs) and changes
+  to build logic (about 46% faster).
+- **Cluster edits:** about 0.1s slower, which is the per-edit cost of step 3a seen through a full `assemble`.
+- **New regression, parallel clean builds:** about 0.35s slower than `master`, where after step 2 the branch was
+  about 0.3s faster. Timing the commits either side of 3a pins it down: 6 runs each give 5.0–5.5s just before 3a
+  (`28ceb081e6`) and 5.6–5.8s just after (`7c58114e8a`).
+
+  Gradle's `--profile` report shows why:
+
+  | Task | Before 3a | After 3a |
+  |---|---|---|
+  | `:aeron-archive:compileJava` | 0.32s | 0.53s |
+  | `:aeron-cluster:compileJava` | 0.41s | 0.69s |
+  | `compileGeneratedJava` | 0.32–0.38s each, separate tasks | (removed) |
+
+  Before 3a, the separate `compileGeneratedJava` tasks needed only `generateCodecs`, so with `--parallel` they ran
+  alongside the client and driver compiles. Now the codecs are compiled inside `compileJava`, which sits on the
+  client → driver → archive → cluster chain, adding about 0.5s to it. Serial builds do the same total work, so
+  they're unaffected. CI doesn't use `--parallel` today.
+- **Everything else** is within noise of `master`.
+
+This changes the 3a trade-off, so question 1 for the engineers has been updated. Option B (keep the codecs in a
+separate compile task, wired through source set outputs) would avoid both 3a costs; option C (incremental processors)
+only the per-edit one.
+
 ## Decisions
 
 ### Test fixtures deferred: keep the source layout (October 2026)
@@ -744,8 +790,13 @@ than done here. Option B, compiling the codecs separately again but wired throug
 
 ## Questions for the Aeron engineers
 
-1. **Generated codecs in `main` (step 3a).** Is about +0.3s per edit in archive and cluster acceptable in exchange for
-   a simpler build and (expected) better IDE navigation? The alternative is to keep the codecs in a separate compile
+1. **Generated codecs in `main` (step 3a).** Are these two costs acceptable in exchange for a simpler build and
+   (expected) better IDE navigation?
+   - about +0.3s per edit in archive and cluster;
+   - about +0.5s on parallel clean builds (see the performance check after step 3). The codec compilation now sits on
+     the client → driver → archive → cluster critical path instead of running alongside it.
+
+   Option C (incremental processors) would remove the first cost but not the second. The alternative is to keep the codecs in a separate compile
    step, wired through source set outputs rather than raw build paths. That avoids the cost but keeps a separate
    module in the IDE. Could someone who uses IntelliJ check navigation to the codecs after a Gradle sync?
 2. **Incremental annotation processors.** Would the team accept making the `aeron-annotations` processors
