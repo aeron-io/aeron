@@ -112,8 +112,14 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 
 | # | Step | Status |
 |---|---|---|
-| 1 | Move compiler arguments out of `doFirst` so they're real inputs; compute the git SHA once per build; enable build cache and parallel execution. Measure clean and incremental build times before and after. | ◐ |
-| 2 | Extract convention plugins (Java defaults, publishing/signing, SBE codec generation, config-doc tasks) into `buildSrc`, and give each module its own build file. | ☐ |
+| 1 | Move compiler arguments out of `doFirst` so they're real inputs; compute the git SHA once per build; enable the build cache. (Parallel execution deferred, see the log.) | ☑ |
+| 2 | Extract convention plugins (Java defaults, publishing/signing, SBE codec generation, config-doc tasks) into `buildSrc`, and give each module its own build file. Done in the slices below, one commit each. | ◐ |
+| 2a | Safety net: capture the published artifacts before the change, and diff them after each slice. | ☑ |
+| 2b | Publishing and signing → `aeron.publishing` convention plugin. | ☑ |
+| 2c | Shared Java, test and Checkstyle setup (the `subprojects {}` block) → `aeron.java-conventions`. | ☐ |
+| 2d | SBE `JavaExec` tasks → typed `SbeGenerate` task. | ☐ |
+| 2e | `generateConfigDoc` and `validate*Expectations` → shared registration. | ☐ |
+| 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☐ |
 | 3 | Wire generated sources through `srcDir(taskProvider)`; replace the `tests` configuration with `java-test-fixtures`. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
@@ -162,3 +168,65 @@ each.
 The last row isn't a like-for-like comparison: the reason for the drop isn't established, so don't count it as a
 gain yet. Verified with `compileTestJava`, `checkstyleMain`, `checkstyleTest` and `:aeron-client:test`, all passing.
 The full CI matrix (JDK 17, 21, 25) has not been run.
+
+### Step 2a: artifact comparison safety net
+
+Every structural slice in step 2 must leave the published output unchanged. The check:
+
+1. Publish to a throwaway local repository rather than `~/.m2`. The build has `mavenLocal()` on its repository list,
+   so publishing to `~/.m2` could affect later dependency resolution.
+
+   ```
+   ./gradlew clean publishToMavenLocal -Dmaven.repo.local=<dir>
+   ```
+
+2. Build the baseline at the slice's parent commit, with the slice's changes stashed and a trivial uncommitted edit
+   (e.g. a space appended to `README.md`). Both builds then embed the same git SHA (`<parent>+guilty`).
+   - The SHA appears in every `*Version` class, and the compiler copies those string constants into the classes that
+     use them (e.g. `ConsensusModule$Context`, `SystemCounterDescriptor`, `TestNode`).
+   - So builds with different SHAs differ in dozens of classes, and excluding them all would hide real changes.
+3. Diff the two repositories. The diff covers:
+   - every published file (9 publications, 41 files, ignoring `maven-metadata-local.xml`);
+   - jar and zip entries by name and CRC, and tar entries by name and size;
+   - POMs as text;
+   - Gradle `.module` files as JSON, ignoring per-file checksums and sizes.
+
+Checked on an unchanged rebuild: 0 differences, so the output is stable between builds and any difference means the
+build changed. The comparison script is not committed. It is a one-off migration aid, and can be added under
+`buildSrc/` if reviewers want to rerun it.
+
+Publishing to a local repository doesn't exercise the release path. So for slices that touch publishing, also compare:
+
+- the publishing repository URL and whether credentials are set, for each project;
+- the publication names and `Sign` tasks (dumped by an init script);
+- the output of `tasks --all` for publish, sign and upload tasks.
+
+Run these comparisons three ways: a snapshot version without credentials, a snapshot version with credentials, and a
+release version (`version.txt` set to `1.54.0`) with credentials.
+
+### Step 2b: `aeron.publishing` convention plugin
+
+`buildSrc/src/main/groovy/aeron.publishing.gradle` is a precompiled Groovy script plugin. `buildSrc` now applies
+`groovy-gradle-plugin`. The plugin:
+
+- applies `maven-publish` and `signing`;
+- sets the shared POM on every `MavenPublication`;
+- configures the Sonatype Central Portal repository, choosing the snapshot or release URL from the project version;
+- signs all publications, and keeps the existing "only sign release versions when `publish` is in the task graph"
+  rule.
+
+Each module still declares its own publication, so publication and task names are unchanged (e.g.
+`publishAeronClientPublicationToMavenRepository`). The root `build.gradle` lost 228 lines: the POM closure, the
+repository URL and signing variables, the `Sign` rule, and 8 copies each of the repository and signing blocks.
+
+The Sonatype credentials and `isReleaseVersion` stay in the root script for now, because the root
+`uploadArtifactsToCentralPortal` task uses them. `getConfigProperty` is duplicated between the root and the plugin
+until that task moves.
+
+Verified:
+
+- artifacts: 0 differences against a same-SHA baseline at `d54a6926e5`;
+- publishing repositories, credentials, publications, `Sign` tasks and the `tasks --all` listing: identical in all
+  three scenarios (snapshot, snapshot with credentials, release with credentials).
+
+Not verified: an actual upload to Sonatype or a real signing run, because that needs credentials and a GPG key.
