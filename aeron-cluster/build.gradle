@@ -32,6 +32,10 @@ dependencies {
     annotationProcessor project(':aeron-annotations')
     testImplementation project(':aeron-test-support')
     testImplementation libs.jackson.cbor
+    javadocSource project(':aeron-annotations')
+    javadocSource project(':aeron-client')
+    javadocSource project(':aeron-driver')
+    javadocSource project(':aeron-archive')
 }
 
 def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
@@ -105,12 +109,6 @@ jar {
     )
 }
 
-javadoc {
-    source += project(':aeron-annotations').sourceSets.main.allJava
-    source += project(':aeron-client').sourceSets.main.allJava
-    source += project(':aeron-driver').sourceSets.main.allJava
-    source += project(':aeron-archive').sourceSets.main.allJava
-}
 
 java {
     withSourcesJar()

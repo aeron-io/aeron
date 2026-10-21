@@ -125,7 +125,8 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 3a | Main generated codecs (archive, cluster): register `generateCodecs` output as a `main` source dir. Then remove the `generated` source set, `api files('build/classes/...')`, the manual `dependsOn` chains and the custom `sourcesJar`. Exclude generated code from Checkstyle. Update the consumers (cluster, samples, `aeron-all`). | ☑ |
 | 3b | Test codecs: give each generator its own output dir (fixes the overlapping outputs) and wire them into the `test` source set. Then remove `generatedTest` and its `files(...)` dependency. | ☑ |
 | 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☑ |
-| 3d | Remaining cross-project reach-ins: Javadoc and sources aggregation, `aeron-all`, and `evaluationDependsOn`, moved to proper configurations. Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback. | ☐ |
+| 3d | Remaining cross-project reach-ins: Javadoc and `aeron-all` sources aggregation move to proper dependency resolution. | ☑ |
+| 3e | Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback and the root `subprojects*.test` reach-in. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
@@ -562,6 +563,42 @@ Verified:
 - **Tests:** `:aeron-system-tests:test --tests io.aeron.archive.ArchiveSystemTest`, which uses `ArchiveTests`,
   `FailControlResponseListener` and `FailRecordingEventsListener`, passes: 9 tests, 0 failures.
 - **Artifacts:** published artifacts are unaffected, because test jars aren't published.
+
+### Step 3d: Javadoc and sources aggregation without reaching into other projects
+
+Previously, client, driver, archive, cluster, samples and `aeron-all` built their Javadoc with
+`source += project(':x').sourceSets.main.allJava`, and `aeron-all`'s sources jar read the other projects'
+`sourceSets.main.allSource`. Both read another project's model directly, which is what blocks Isolated Projects.
+
+They now resolve the `mainSourceElements` variant that the `java` plugin creates for every project. It lists the
+directories of the project's `main` source set, and has the attributes category `verification`, bundling `external`
+and verification type `main-sources`.
+
+- **`MainSourcesVariant`** (in `buildSrc`) applies those attributes to a resolvable configuration and makes it
+  non-transitive. A module lists exactly the projects it wants, as before; transitive resolution would also follow
+  external libraries such as HdrHistogram, which have no such variant.
+- **`aeron.java-conventions`** adds a `javadocSource` dependency scope and a resolvable `javadocSourcePath`. The
+  `javadoc` task takes the `.java` files from it. Modules declare `javadocSource project(':x')` in place of the old
+  `source +=` lines.
+- **`aeron-all`** has a `bundledSource`/`bundledSourcePath` pair for its sources jar. The jar's duplicated
+  `duplicatesStrategy` line and the unused `project(...)` variables are removed.
+- **Workaround for a Gradle limitation:** `mainSourceElements` lists the source directories but not the tasks that
+  produce them. Without a fix, `aeron-all:sourcesJar` failed validation with "uses this output of task
+  ':aeron-archive:generateCodecs' without declaring an explicit or implicit dependency". The conventions plugin now
+  marks every `mainSourceElements` artifact as built by `sourceSets.main.allSource.sourceDirectories`, which carries
+  the `generateCodecs` dependency in archive and cluster, and nothing elsewhere.
+
+No `project(':x').sourceSets` reach-ins remain in any build file.
+
+Verified:
+
+- **Artifacts:** 0 differences from a clean build, including all Javadoc jars and the `aeron-all` sources jar.
+- **Javadoc:** the source file count is identical for every module (`aeron-all` 530, cluster 527, samples 427, archive
+  424, driver 343, client 187, annotations 32).
+- **Configuration:** the only differences are the new configurations, whose dependencies list exactly the projects
+  the old `source +=` lines named.
+- **Task dependencies:** inferred through the variant. A clean `publishToMavenLocal` passes Gradle's
+  implicit-dependency validation.
 
 ## Decisions
 

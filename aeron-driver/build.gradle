@@ -32,6 +32,8 @@ dependencies {
     implementation project(':aeron-annotations')
     annotationProcessor project(':aeron-annotations')
     testImplementation project(':aeron-test-support')
+    javadocSource project(':aeron-annotations')
+    javadocSource project(':aeron-client')
 }
 
 jar {
@@ -59,10 +61,6 @@ LoggingTest.configureLoggingTests(
     project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
     'TEXT_DATA,CMD_IN_ADD_PUBLICATION')
 
-javadoc {
-    source += project(':aeron-annotations').sourceSets.main.allJava
-    source += project(':aeron-client').sourceSets.main.allJava
-}
 
 publishing {
     publications {

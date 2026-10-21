@@ -21,6 +21,10 @@ dependencies {
     api project(':aeron-cluster')
     implementation libs.hdrHistogram
     testImplementation project(':aeron-test-support')
+    javadocSource project(':aeron-annotations')
+    javadocSource project(':aeron-client')
+    javadocSource project(':aeron-driver')
+    javadocSource project(':aeron-archive')
 }
 
 java {
@@ -36,12 +40,6 @@ publishing {
     }
 }
 
-javadoc {
-    source += project(':aeron-annotations').sourceSets.main.allJava
-    source += project(':aeron-client').sourceSets.main.allJava
-    source += project(':aeron-driver').sourceSets.main.allJava
-    source += project(':aeron-archive').sourceSets.main.allJava
-}
 
 tasks.named('test').configure {
     systemProperty 'aeron.event.cluster.log', 'all'
