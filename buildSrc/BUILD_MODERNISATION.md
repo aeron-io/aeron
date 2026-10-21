@@ -124,7 +124,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 3 | Wire generated sources and test sharing properly, and remove the remaining cross-project reach-ins. Done in the slices below, one commit each. | ◐ |
 | 3a | Main generated codecs (archive, cluster): register `generateCodecs` output as a `main` source dir. Then remove the `generated` source set, `api files('build/classes/...')`, the manual `dependsOn` chains and the custom `sourcesJar`. Exclude generated code from Checkstyle. Update the consumers (cluster, samples, `aeron-all`). | ☑ |
 | 3b | Test codecs: give each generator its own output dir (fixes the overlapping outputs) and wire them into the `test` source set. Then remove `generatedTest` and its `files(...)` dependency. | ☑ |
-| 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☐ |
+| 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☑ |
 | 3d | Remaining cross-project reach-ins: Javadoc and sources aggregation, `aeron-all`, and `evaluationDependsOn`, moved to proper configurations. Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
@@ -535,6 +535,34 @@ Verified:
 - **Other checks:** `:aeron-system-tests:compileTestJava` and `checkstyleTest` pass. Published artifacts are
   unaffected, because test classes aren't published.
 
+### Step 3c: test jar sharing, build-only
+
+Previously the conventions plugin built a `testJar` and a `tests` configuration in all 9 modules. Only
+`aeron-system-tests` consumed them, from client and archive. Now:
+
+- **Client:** the system tests no longer depend on client's test jar. None of client's test classes are used by the
+  system tests (checked including same-package references), and no module has test resources, so nothing could be
+  picked up at runtime either.
+- **Conventions plugin:** `testJar` and the `tests` configuration are removed from `aeron.java-conventions`.
+- **Archive:** `aeron-archive` declares its own `testJar` and a `configurations.consumable('tests')` exposing it. The
+  system tests keep using `project(path: ':aeron-archive', configuration: 'tests')`. The explicit
+  `dependsOn 'testClasses'` is gone, because `from sourceSets.test.output` carries that dependency.
+- **Bug fix:** the classifier was `"test-${base.archivesName}"`, which puts the property object rather than its value
+  into the string. The jar was literally named
+  `aeron-archive-1.54.0-SNAPSHOT-test-extension 'base' property 'archivesName'.jar`. It is now
+  `aeron-archive-1.54.0-SNAPSHOT-tests.jar`.
+
+Verified:
+
+- **Configuration:** the only differences are:
+  - `testJar` and `tests` are removed from 8 modules;
+  - archive's test jar has the new name;
+  - the system tests' classpaths no longer have client's test jar;
+  - the system tests' `testImplementation` no longer lists client's `tests`.
+- **Tests:** `:aeron-system-tests:test --tests io.aeron.archive.ArchiveSystemTest`, which uses `ArchiveTests`,
+  `FailControlResponseListener` and `FailRecordingEventsListener`, passes: 9 tests, 0 failures.
+- **Artifacts:** published artifacts are unaffected, because test jars aren't published.
+
 ## Decisions
 
 ### Test fixtures deferred: keep the source layout (October 2026)
@@ -674,5 +702,8 @@ than done here. Option B, compiling the codecs separately again but wired throug
    - Nothing in the repo clashes: those packages exist nowhere else, and the system tests compile.
    - Is anything outside this repo consuming the test jars, for example premium or downstream builds, that could be
      affected by the extra classes?
+   - Since step 3c the jar is also named differently: `aeron-archive-<version>-tests.jar`. It used to be
+     `aeron-archive-<version>-test-extension 'base' property 'archivesName'.jar`, because of a bug. Only archive builds
+     a test jar now. Anything that looked for the old file names would need updating.
    - The same applies to cluster's test output (`io.aeron.cluster.codecs.v5`, `.v12` and `.mark.v0`), though nothing
      in the repo consumes cluster's test jar.

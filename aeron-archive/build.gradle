@@ -133,6 +133,16 @@ java {
     withJavadocJar()
 }
 
+// aeron-system-tests uses a few of archive's test helpers, so the test classes are shared through this configuration.
+def testJar = tasks.register('testJar', Jar) {
+    archiveClassifier = 'tests'
+    from sourceSets.test.output
+}
+
+configurations.consumable('tests') {
+    outgoing.artifact(testJar)
+}
+
 publishing {
     publications {
         aeronArchive(MavenPublication) {

@@ -247,17 +247,3 @@ javadoc {
     options.addBooleanOption('Werror', true)
     options.addBooleanOption('Xdoclint:all', true)
 }
-
-tasks.register('testJar', Jar) {
-    dependsOn 'testClasses'
-    archiveClassifier.set("test-${base.archivesName}")
-    from sourceSets.test.output
-}
-
-configurations {
-    tests
-}
-
-artifacts {
-    tests testJar
-}
