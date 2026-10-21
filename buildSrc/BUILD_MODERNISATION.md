@@ -129,7 +129,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 3e | Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback and the root `subprojects*.test` reach-in. | ☑ |
 | 4 | Make the build configuration-cache safe, then enable the configuration cache. Done in the slices below, one commit each. | ◐ |
 | 4a | Javadoc offline links: replace the `doFirst` that resolves `javadocLinks` and copies files at execution time with a typed `ExtractJavadocLinksTask`. | ☑ |
-| 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☐ |
+| 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☑ |
 | 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☐ |
 | 4d | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
@@ -771,6 +771,20 @@ Verified:
 - **Configuration cache:** `publishToMavenLocal` stores its entry with no problems. Running `javadoc` twice stores the
   entry, then reuses it with every task up to date.
 - **Extracted files:** `element-list` is extracted to `build/javadoc-links/agrona` as before.
+
+### Step 4b: `TutorialPublishTask`
+
+The task action called `getProject()` to find its clone directory (`build/tmp/tutorialPublish`) and the repository's
+`.git` directory. Both are now captured in field initialisers when the task is created, the same style
+`AsciidoctorPreprocessTask` already uses, and the action only uses the fields.
+
+The task clones and pushes to the GitHub wiki, so it can't be run for real here. It was checked with a remote name
+that doesn't exist (`-Paeron.ci.remoteName=no-such-remote`), which makes it stop in `getWikiUri()` before any network
+access:
+
+- **Before:** with `--configuration-cache`, it failed with "Invocation of 'Task.project' by task
+  ':aeron-samples:tutorialPublish' at execution time is unsupported with the configuration cache".
+- **After:** it fails with its own "unable to find origin URI", the same as without the configuration cache.
 
 ## Decisions
 
