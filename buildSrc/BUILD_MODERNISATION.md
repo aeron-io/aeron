@@ -118,7 +118,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 2a | Safety net: capture the published artifacts before the change, and diff them after each slice. | ☑ |
 | 2b | Publishing and signing → `aeron.publishing` convention plugin. | ☑ |
 | 2c | Shared Java, test and Checkstyle setup (the `subprojects {}` block) → `aeron.java-conventions`. | ☑ |
-| 2d | SBE `JavaExec` tasks → typed `SbeGenerate` task. | ☐ |
+| 2d | SBE `JavaExec` tasks → typed `SbeGenerateTask`. | ☑ |
 | 2e | `generateConfigDoc` and `validate*Expectations` → shared registration. | ☐ |
 | 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☐ |
 | 3 | Wire generated sources through `srcDir(taskProvider)`; replace the `tests` configuration with `java-test-fixtures`. | ☐ |
@@ -269,3 +269,48 @@ Results:
   plugin.
 - **Artifacts:** 0 differences.
 - **Checks:** `checkstyleMain`, `checkstyleTest`, `:aeron-client:test` and `:aeron-driver:loggingTest` pass.
+
+### Step 2d: typed `SbeGenerateTask`
+
+`buildSrc/src/main/java/io/aeron/build/SbeGenerateTask.java` extends `JavaExec` and runs `SbeTool`. Its typed
+properties are:
+
+- `schemas`, `validationXsd` and `outputDir`;
+- `targetLanguage`;
+- optionally, `targetNamespace` and `schemaTransformVersion`.
+
+Each of the 10 registrations is now 6–8 lines instead of 15–17, and `build.gradle` is 66 lines shorter. Because the
+task is still a `JavaExec`, the root `allprojects { tasks.withType(JavaExec) … }` toolchain launcher still applies.
+
+Behaviour changes, both deliberate:
+
+- **Bug fix:** cluster `generateCodecs` didn't declare `aeron-cluster-node-state-codecs.xml` as an input, so editing
+  that schema didn't regenerate its codecs. Every schema passed to SBE is now an input. Verified: editing the
+  node-state schema reruns the task.
+- **`--add-opens` removed from code generation:** 7 of the 10 tasks passed
+  `--add-opens java.base/jdk.internal.misc=ALL-UNNAMED`, but 3 never did (cluster `generateCodecs`,
+  `generateTestCodecsV5` and `generateTestCodecsV12`), so SbeTool evidently doesn't need it. All 10 generators,
+  including C and C++, now run without it and produce byte-identical output with no warnings. Tested on JDK 26 only;
+  CI will cover 17, 21 and 25.
+
+The flag remains everywhere it is a runtime requirement of Aeron, because Agrona's `UnsafeApi` uses
+`jdk.internal.misc.Unsafe` (see `CHANGELOG.adoc`):
+
+- the test JVMs, in `aeron.java-conventions`;
+- the sample scripts;
+- the C/C++ test harnesses that launch Java drivers and archives.
+
+Removing it there would need Agrona to change how it accesses `Unsafe`, which is outside the scope of this work.
+
+Verified:
+
+- all 761 generated files are byte-identical to the parent commit: archive and cluster main and test codecs, plus the
+  archive C and C++ codecs written via `-Dcodec.target.dir`;
+- artifacts: 0 differences; configuration dump: identical;
+- archive and cluster `compileTestJava` and Checkstyle pass.
+
+Left for step 3:
+
+- **Overlapping outputs:** archive and cluster each have three test-codec tasks writing into one `generated-test`
+  directory, which Gradle can't track per task.
+- **Shared target directory:** setting `-Dcodec.target.dir` sends the C and the C++ codecs to the same directory.
