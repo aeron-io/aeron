@@ -16,6 +16,7 @@ import io.aeron.build.MainSourcesVariant
  * limitations under the License.
  */
 plugins {
+    id 'aeron.java-conventions'
     id 'aeron.publishing'
     id 'com.gradleup.shadow'
 }

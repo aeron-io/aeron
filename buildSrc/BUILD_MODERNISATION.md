@@ -121,12 +121,12 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 2d | SBE `JavaExec` tasks → typed `SbeGenerateTask`. | ☑ |
 | 2e | `generateConfigDoc` and `validate*Expectations` → `aeron.config-info` convention plugin. | ☑ |
 | 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☑ |
-| 3 | Wire generated sources and test sharing properly, and remove the remaining cross-project reach-ins. Done in the slices below, one commit each. | ◐ |
+| 3 | Wire generated sources and test sharing properly, and remove the remaining cross-project reach-ins. Done in the slices below, one commit each. | ☑ |
 | 3a | Main generated codecs (archive, cluster): register `generateCodecs` output as a `main` source dir. Then remove the `generated` source set, `api files('build/classes/...')`, the manual `dependsOn` chains and the custom `sourcesJar`. Exclude generated code from Checkstyle. Update the consumers (cluster, samples, `aeron-all`). | ☑ |
 | 3b | Test codecs: give each generator its own output dir (fixes the overlapping outputs) and wire them into the `test` source set. Then remove `generatedTest` and its `files(...)` dependency. | ☑ |
 | 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☑ |
 | 3d | Remaining cross-project reach-ins: Javadoc and `aeron-all` sources aggregation move to proper dependency resolution. | ☑ |
-| 3e | Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback and the root `subprojects*.test` reach-in. | ☐ |
+| 3e | Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback and the root `subprojects*.test` reach-in. | ☑ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
@@ -599,6 +599,39 @@ Verified:
   the old `source +=` lines named.
 - **Task dependencies:** inferred through the variant. A clean `publishToMavenLocal` passes Gradle's
   implicit-dependency validation.
+
+### Step 3e: each module applies its conventions; test report without reach-ins
+
+- **Conventions per module:** every module's `plugins {}` block now starts with `id 'aeron.java-conventions'`, so
+  plugins are applied in the same order as before. The root `subprojects {}` block only sets `group` and `version`.
+- **Catalog fallback removed:** a module's own build file applies the plugin, so its version catalog extension
+  already exists, and the plugin no longer reads the root project's catalog.
+- **Test report:** the root `testReport` task is still the same `TestReport` task, with the same output directory.
+  Only its input changed. Instead of `testResults.setFrom(subprojects*.test)`, which reached into every subproject's
+  tasks, it resolves each subproject's `testResultsElementsForTest` variant: the binary results of its `test` task,
+  which the `java` plugin publishes with the attributes category `verification`, test suite name `test` and
+  verification type `test-results`. `TestResultsVariant`, alongside `MainSourcesVariant`, applies those attributes
+  and makes the resolution non-transitive.
+
+  Gradle's `test-report-aggregation` plugin was tried first, but rejected to keep the build as close as possible to
+  the original. It added a `testAggregateTestReport` task, and made `testReport` also run the root project's own
+  (empty) test tasks.
+
+No build file reads another project's model any more. The only `rootProject` reference left is the root script
+reading its own catalog.
+
+Verified:
+
+- **Configuration:** all 9 modules' configuration dumps are identical, including plugin lists. The root only gains
+  the two configurations `subprojectTestResults` and `subprojectTestResultsPath`; its plugins and tasks are unchanged.
+- **Task graph:** `testReport` (dry run) triggers exactly the same 84 tasks as before, including all 9 module `test`
+  tasks.
+- **Report contents:** generated from clean, with the slow modules' `test` tasks excluded, for both the parent commit
+  and this change. The report has the same 10 pages and the same headline figures (18 tests, 0 failures, 5 skipped).
+  With timings normalised, every page is identical apart from the generation timestamp, and the non-HTML files are
+  identical.
+- **Artifacts:** 0 differences.
+- **Builds and tests:** `assemble`, Checkstyle, `compileTestJava` and `:aeron-client:test` pass.
 
 ## Decisions
 

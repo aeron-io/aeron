@@ -26,10 +26,7 @@ plugins {
     id 'checkstyle'
 }
 
-// The catalog extension is only registered on a project when its own build file is evaluated, so while this plugin is
-// applied from the root `subprojects {}` block it has to be read from the root project.
-def libs = (extensions.findByType(VersionCatalogsExtension) ?: rootProject.extensions.getByType(VersionCatalogsExtension))
-    .named('libs')
+def libs = extensions.getByType(VersionCatalogsExtension).named('libs')
 int buildJavaVersion = BuildJavaVersion.major()
 boolean isEarlyAccessJavaVersion = BuildJavaVersion.isEarlyAccess()
 def toolchainLauncher = javaToolchains.launcherFor {

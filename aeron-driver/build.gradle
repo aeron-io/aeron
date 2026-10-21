@@ -16,6 +16,7 @@ import io.aeron.build.LoggingTest
  * limitations under the License.
  */
 plugins {
+    id 'aeron.java-conventions'
     id 'aeron.publishing'
     id 'aeron.config-info'
     id 'application'
