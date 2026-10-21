@@ -132,7 +132,8 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☑ |
 | 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☑ |
 | 4d | Signing rule: stop the release-only `onlyIf` reaching `gradle.taskGraph` and `tasks` when the task runs. Found by testing a release version; snapshot builds never reach that code. | ☑ |
-| 4e | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
+| 4e | Run one test task at a time across the build, with a shared build service, because enabling the configuration cache also makes Gradle run tasks in parallel. | ☑ |
+| 4f | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
 ## Log
@@ -835,6 +836,41 @@ let it through.
 | Release, `publishToMavenLocal` again | — | skipped | skipped (entry reused) |
 | Release, with `publish` | signing runs | runs | runs (entry stored, no problems) |
 | Snapshot, with `publish` | signing skipped | skipped | skipped |
+
+### Step 4e: one test task at a time
+
+When the configuration cache was first enabled (on a benchmark clone, not committed), a clean `assemble` without the
+build cache dropped from about 9.0s to about 5.5s, the same as a `--parallel` build. With the configuration cache
+enabled, Gradle runs tasks in parallel, including tasks from different projects, even without `org.gradle.parallel`.
+
+Checked with the JUnit result timestamps, running `:aeron-client:test --rerun :aeron-driver:test --rerun`:
+
+| Build | Client and driver test suites |
+|---|---|
+| `master`, default | one after the other |
+| `master`, `--parallel` | started 14ms apart, overlapping by 3.4s |
+| Configuration cache enabled, no `--parallel` | started 8ms apart, overlapping by 2.7s |
+
+So enabling the configuration cache would also have brought in parallel test execution, the thing deferred in step 1
+(question 6 for the engineers). The tests start media drivers and share Aeron directories and ports.
+
+Decision (option A of three): enable the configuration cache, but keep test tasks running one at a time.
+
+- `TestExecutionLimitService` (in `buildSrc`) is an empty build service.
+- `aeron.java-conventions` registers it once for the build as `aeronTestExecutionLimit` with
+  `maxParallelUsages = 1`, and every `Test` task declares `usesService` on it.
+- Gradle then runs at most one test task at a time across the whole build, while compiling, Javadoc, publishing and
+  other tasks still run in parallel.
+- If the engineers confirm the tests are safe together, raising `maxParallelUsages` (or removing the service) enables
+  parallel tests.
+
+The rejected options were enabling the cache with parallel tests (B), and not enabling it by default (C).
+
+Verified with the configuration cache enabled:
+
+- client and driver test suites no longer overlap, with or without `--parallel`;
+- the driver's four logging-test variants (`loggingTestAll`, `loggingTestNone`, `loggingTestDisabled`,
+  `loggingTestConfigured`), which are separate test tasks in the same project, don't overlap either.
 
 ## Decisions
 

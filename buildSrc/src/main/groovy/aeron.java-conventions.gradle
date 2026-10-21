@@ -19,6 +19,7 @@ import io.aeron.build.BuildJavaVersion
 import io.aeron.build.ExtractJavadocLinksTask
 import io.aeron.build.GitShaService
 import io.aeron.build.MainSourcesVariant
+import io.aeron.build.TestExecutionLimitService
 
 // Shared Java, test, Javadoc and Checkstyle configuration for every Aeron module.
 plugins {
@@ -79,7 +80,14 @@ mockitoAgent.withDependencies {it.add(libs.findLibrary('mockito').get().get()) }
 def testSuiteClassesDirs = testing.suites.test.sources.output.classesDirs
 def testSuiteClasspath = testing.suites.test.sources.runtimeClasspath
 
+// Run one test task at a time across the whole build, as Gradle did before tasks ran in parallel: the tests start media
+// drivers and share Aeron directories and ports. Raise maxParallelUsages only once tests are known to be safe together.
+def testExecutionLimit = gradle.sharedServices.registerIfAbsent('aeronTestExecutionLimit', TestExecutionLimitService) {
+    maxParallelUsages = 1
+}
+
 tasks.withType(Test).configureEach { test ->
+    usesService(testExecutionLimit)
     jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
     jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
     if (buildJavaVersion >= 21) {
