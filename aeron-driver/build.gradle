@@ -1,0 +1,79 @@
+import io.aeron.build.LoggingTest
+
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+plugins {
+    id 'aeron.publishing'
+    id 'aeron.config-info'
+    id 'application'
+}
+
+aeronConfigInfo.validateConfigExpectations()
+
+application {
+    mainClass.set('io.aeron.driver.MediaDriver')
+}
+
+dependencies {
+    api project(':aeron-client')
+    implementation project(':aeron-annotations')
+    annotationProcessor project(':aeron-annotations')
+    testImplementation project(':aeron-test-support')
+}
+
+jar {
+    manifest.attributes(
+        'Automatic-Module-Name': 'io.aeron.driver',
+        'Implementation-Title': 'Aeron',
+        'Implementation-Vendor': 'Adaptive Financial Consulting Limited',
+        'Implementation-Version': project.version
+    )
+}
+
+jar.finalizedBy assembleDist
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'aeron.event.log', 'all'
+    systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+}
+
+LoggingTest.configureLoggingTests(
+    project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
+    'TEXT_DATA,CMD_IN_ADD_PUBLICATION')
+
+javadoc {
+    source += project(':aeron-annotations').sourceSets.main.allJava
+    source += project(':aeron-client').sourceSets.main.allJava
+}
+
+publishing {
+    publications {
+        aeronDriver(MavenPublication) {
+            from components.java
+            artifact distZip
+            artifact distTar
+        }
+    }
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'aeron.event.log', 'all'
+}

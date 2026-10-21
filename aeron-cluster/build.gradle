@@ -1,0 +1,153 @@
+import io.aeron.build.LoggingTest
+import io.aeron.build.SbeGenerateTask
+
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+plugins {
+    id 'aeron.publishing'
+    id 'aeron.config-info'
+}
+
+// Reads the generated codec source sets of these projects, which their own build files create.
+evaluationDependsOn(':aeron-archive')
+
+configurations{
+    codecGeneration
+}
+
+dependencies {
+    api project(':aeron-archive')
+    api files('build/classes/java/generated')
+    codecGeneration libs.sbe
+    implementation project(':aeron-annotations')
+    annotationProcessor project(':aeron-annotations')
+    testImplementation project(':aeron-test-support')
+    testImplementation files("${layout.buildDirectory.get()}/classes/java/generatedTest")
+    testImplementation libs.jackson.cbor
+}
+
+def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
+def generatedTestDir = file("${layout.buildDirectory.get()}/generated-test")
+
+sourceSets {
+    generated {
+        java.srcDir generatedSrcDir
+        compileClasspath += configurations.codecGeneration
+    }
+    generatedTest {
+        java.srcDir generatedTestDir
+        compileClasspath += configurations.codecGeneration
+    }
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'aeron.event.cluster.log', 'all'
+    systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+}
+
+LoggingTest.configureLoggingTests(project, 'ClusterEventEnablementTest', 'aeron.event.cluster.log',
+    'aeron.event.cluster.log.disable', 'CANVASS_POSITION,COMMIT_POSITION')
+
+def codecsFile = 'src/main/resources/cluster/aeron-cluster-codecs.xml'
+def markCodecsFile = 'src/main/resources/cluster/aeron-cluster-mark-codecs.xml'
+def nodeStateCodecsFile = 'src/main/resources/cluster/aeron-cluster-node-state-codecs.xml'
+def sbeFile = 'src/main/resources/cluster/fpl/sbe.xsd'
+
+tasks.register('generateCodecs', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile, markCodecsFile, nodeStateCodecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedSrcDir
+    targetLanguage = 'Java'
+}
+
+def markCodecsFileV0 = 'src/test/resources/aeron-cluster-mark-codecs-v0.xml'
+tasks.register('generateTestCodecsMarkFileV0', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(markCodecsFileV0)
+    validationXsd = file(sbeFile)
+    outputDir = generatedTestDir
+    targetLanguage = 'Java'
+    targetNamespace = 'io.aeron.cluster.codecs.mark.v0'
+    schemaTransformVersion = '*:0'
+}
+
+tasks.register('generateTestCodecsV5', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedTestDir
+    targetLanguage = 'Java'
+    targetNamespace = 'io.aeron.cluster.codecs.v5'
+    schemaTransformVersion = '*:5'
+}
+
+tasks.register('generateTestCodecsV12', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedTestDir
+    targetLanguage = 'Java'
+    targetNamespace = 'io.aeron.cluster.codecs.v12'
+    schemaTransformVersion = '*:12'
+}
+
+compileJava.dependsOn 'compileGeneratedJava'
+compileGeneratedJava.dependsOn 'generateCodecs'
+compileTestJava.dependsOn 'compileGeneratedTestJava'
+compileGeneratedTestJava.dependsOn 'generateTestCodecsMarkFileV0', 'generateTestCodecsV5', 'generateTestCodecsV12'
+
+jar {
+    from sourceSets.generated.output
+
+    manifest.attributes(
+        'Automatic-Module-Name': 'io.aeron.cluster',
+        'Implementation-Title': 'Aeron',
+        'Implementation-Vendor': 'Adaptive Financial Consulting Limited',
+        'Implementation-Version': project.version
+    )
+}
+
+tasks.register('sourcesJar', Jar) {
+    dependsOn 'generateCodecs'
+    archiveClassifier.set('sources')
+    from sourceSets.main.allSource
+    from sourceSets.generated.allSource
+}
+
+javadoc {
+    source += sourceSets.generated.allJava
+    source += project(':aeron-annotations').sourceSets.main.allJava
+    source += project(':aeron-client').sourceSets.main.allJava
+    source += project(':aeron-driver').sourceSets.main.allJava
+    source += project(':aeron-archive').sourceSets.main.allJava
+    source += project(':aeron-archive').sourceSets.generated.allJava
+}
+
+javadoc.dependsOn generateCodecs
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        aeronCluster(MavenPublication) {
+            from components.java
+        }
+    }
+}

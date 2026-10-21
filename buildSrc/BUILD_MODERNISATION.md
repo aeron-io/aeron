@@ -114,13 +114,13 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | # | Step | Status |
 |---|---|---|
 | 1 | Move compiler arguments out of `doFirst` so they're real inputs; compute the git SHA once per build; enable the build cache. (Parallel execution deferred, see the log.) | ☑ |
-| 2 | Extract convention plugins (Java defaults, publishing/signing, SBE codec generation, config-doc tasks) into `buildSrc`, and give each module its own build file. Done in the slices below, one commit each. | ◐ |
+| 2 | Extract convention plugins (Java defaults, publishing/signing, SBE codec generation, config-doc tasks) into `buildSrc`, and give each module its own build file. Done in the slices below, one commit each. | ☑ |
 | 2a | Safety net: capture the published artifacts before the change, and diff them after each slice. | ☑ |
 | 2b | Publishing and signing → `aeron.publishing` convention plugin. | ☑ |
 | 2c | Shared Java, test and Checkstyle setup (the `subprojects {}` block) → `aeron.java-conventions`. | ☑ |
 | 2d | SBE `JavaExec` tasks → typed `SbeGenerateTask`. | ☑ |
 | 2e | `generateConfigDoc` and `validate*Expectations` → `aeron.config-info` convention plugin. | ☑ |
-| 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☐ |
+| 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☑ |
 | 3 | Wire generated sources through `srcDir(taskProvider)`; replace the `tests` configuration with `java-test-fixtures`. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
@@ -402,3 +402,50 @@ Verified:
 **Observation, not changed:** the validation tasks report missing C `#define`s (e.g. for
 `AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS` in the client) but exit 0, so they never fail the build. They aren't run by
 CI either. Worth asking the team whether these should become real checks.
+
+### Step 2f: a build file per module
+
+Each module now has its own `build.gradle`, holding what was its `project(':x') {}` block in the root script. The root
+`build.gradle` is down from about 1,400 lines at the start to 146. It keeps only build-wide concerns:
+
+- repositories and dependency resolution rules;
+- `group`, `version`, and applying `aeron.java-conventions` to subprojects;
+- test report and test-log collection;
+- `dependencyUpdates` rules;
+- the Central Portal upload task.
+
+How the move was done: the same script handled every module. For each one it:
+
+- turned the block's `apply plugin:` lines into a `plugins {}` block;
+- replaced `aeronVersion` with `project.version`;
+- added the `buildSrc` imports the module uses;
+- added `evaluationDependsOn` wherever the module reads another project's `generated` codec source set (cluster and
+  samples read archive's; `aeron-all` reads archive's and cluster's). That source set is created by the owning
+  project's build file, so it only exists once that project has been evaluated. The root script used to provide the
+  ordering implicitly.
+
+Modules were moved one at a time, with the configuration dump checked after each:
+
+- annotations, test-support, client and driver: identical after each move;
+- archive: the build failed until its consumers (cluster, samples, `aeron-all`) had also moved, because their
+  blocks were still in the root script and the root is evaluated first;
+- after the rest moved: identical.
+
+Verified:
+
+- configuration dump: all 2,544 facts identical, including per-project task names, jar manifests and test settings;
+- artifacts: 0 differences;
+- `assemble`, Checkstyle, `compileTestJava`, `:aeron-client:test` and `:aeron-archive:loggingTest` pass.
+
+The `tasks --all` listing was also compared, but turned out to be unreliable: two runs of the same commit gave
+different listings, because its text format doesn't parse cleanly. The task names in the configuration dump come
+straight from each project's task container, so they are the reliable comparison.
+
+Still to do, in later steps:
+
+- **`aeron.java-conventions` is still applied from the root `subprojects {}` block.** Moving it into each module's
+  `plugins {}` block would let the version catalog fallback in the plugin go. But the root `testReport` and the
+  cross-project Javadoc and sources wiring depend on it being applied early, so it belongs with step 3.
+- **The `evaluationDependsOn` calls are a symptom of reaching into other projects' source sets** (Javadoc and sources
+  aggregation in `aeron-all`, cluster and samples). Step 3 should replace those reach-ins with proper
+  configurations, and then the `evaluationDependsOn` calls can go.
