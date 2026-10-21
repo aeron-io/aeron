@@ -123,7 +123,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☑ |
 | 3 | Wire generated sources and test sharing properly, and remove the remaining cross-project reach-ins. Done in the slices below, one commit each. | ◐ |
 | 3a | Main generated codecs (archive, cluster): register `generateCodecs` output as a `main` source dir. Then remove the `generated` source set, `api files('build/classes/...')`, the manual `dependsOn` chains and the custom `sourcesJar`. Exclude generated code from Checkstyle. Update the consumers (cluster, samples, `aeron-all`). | ☑ |
-| 3b | Test codecs: give each generator its own output dir (fixes the overlapping outputs) and wire them into the `test` source set. Then remove `generatedTest` and its `files(...)` dependency. | ☐ |
+| 3b | Test codecs: give each generator its own output dir (fixes the overlapping outputs) and wire them into the `test` source set. Then remove `generatedTest` and its `files(...)` dependency. | ☑ |
 | 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☐ |
 | 3d | Remaining cross-project reach-ins: Javadoc and sources aggregation, `aeron-all`, and `evaluationDependsOn`, moved to proper configurations. Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
@@ -498,6 +498,43 @@ A comment-only change in `buildSrc` was tried first, but it doesn't change the c
 recompile the build scripts and the scenario measured nothing. The scenario above adds a new method with a unique name
 on each run, so a cached script compilation can't be reused.
 
+### Step 3b: versioned test codecs are part of `test`
+
+The test-codec generators are archive's `generateTestCodecsV6`, `generateTestCodecsMarkFileV0` and
+`generateTestCodecsMarkFileV1`, and cluster's `generateTestCodecsMarkFileV0`, `generateTestCodecsV5` and
+`generateTestCodecsV12`.
+
+- **Separate output directories:** each generator now writes to its own `build/generated-test/<taskName>`. Previously
+  all three in each module shared one directory, so Gradle couldn't tell which files belonged to which task
+  (overlapping outputs).
+- **Wiring:** each output is added to `test` with `sourceSets.test.java.srcDir(tasks.named(...))`.
+- **Removed:** the `generatedTest` source set and its tasks, `testImplementation files(".../generatedTest")`, and the
+  manual `compileTestJava.dependsOn` chains.
+
+There's no per-edit compile cost, unlike 3a. Test compilation has no annotation processors, so it stays incremental:
+an edit to one test reports "Incremental compilation of 1 classes".
+
+Side effect: archive's test jar (consumed by `aeron-system-tests` via the `tests` configuration) is built from `test`
+output, so it now also contains the 117 versioned codec classes. Their packages (`io.aeron.archive.codecs.v6`,
+`io.aeron.archive.codecs.mark.v0` and `.v1`) exist nowhere else, so nothing clashes; the system tests compile. 3c will
+revisit the test jar anyway.
+
+Verified:
+
+- **Clean build:** from clean, `compileTestJava` in archive and cluster runs all six generators via inferred
+  dependencies.
+- **Generated code:** the test codecs are byte-identical to the 2d baseline (117 files in archive, 261 in cluster),
+  with no file produced by more than one task.
+- **Tests:** the tests that use the versioned codecs pass: `ArchiveMarkFileTest`, `ControlSessionAdapterV6Test`,
+  `ClusterMarkFileTest` and both modules' `SessionEventCodecCompatibilityTest`. That's 53 tests, 0 failures, and 4
+  skips declared in the tests themselves.
+- **Configuration:** the only differences are:
+  - the `generatedTest` source set's entries are gone;
+  - the manual `dependsOn` and `files(...)` dependency are gone;
+  - the `build/classes/java/generatedTest` directories have gone from 16 test classpaths.
+- **Other checks:** `:aeron-system-tests:compileTestJava` and `checkstyleTest` pass. Published artifacts are
+  unaffected, because test classes aren't published.
+
 ## Decisions
 
 ### Test fixtures deferred: keep the source layout (October 2026)
@@ -630,3 +667,12 @@ than done here. Option B, compiling the codecs separately again but wired throug
 6. **Parallel execution (step 1).** Can test tasks from different modules safely run at the same time? They start
    media drivers and share Aeron directories and ports. If so, `org.gradle.parallel=true` cut a clean build from about
    8.1s to about 5.2s.
+7. **Contents of the archive test jar (step 3b).** `aeron-archive`'s test jar is consumed by `aeron-system-tests`
+   through the `tests` configuration. It now also contains the 117 versioned test codec classes
+   (`io.aeron.archive.codecs.v6`, `io.aeron.archive.codecs.mark.v0` and `.v1`), which were previously compiled
+   separately and left out.
+   - Nothing in the repo clashes: those packages exist nowhere else, and the system tests compile.
+   - Is anything outside this repo consuming the test jars, for example premium or downstream builds, that could be
+     affected by the extra classes?
+   - The same applies to cluster's test output (`io.aeron.cluster.codecs.v5`, `.v12` and `.mark.v0`), though nothing
+     in the repo consumes cluster's test jar.
