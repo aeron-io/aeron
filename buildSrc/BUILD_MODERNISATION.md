@@ -130,7 +130,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 4 | Make the build configuration-cache safe, then enable the configuration cache. Done in the slices below, one commit each. | ◐ |
 | 4a | Javadoc offline links: replace the `doFirst` that resolves `javadocLinks` and copies files at execution time with a typed `ExtractJavadocLinksTask`. | ☑ |
 | 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☑ |
-| 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☐ |
+| 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☑ |
 | 4d | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
@@ -785,6 +785,26 @@ access:
 - **Before:** with `--configuration-cache`, it failed with "Invocation of 'Task.project' by task
   ':aeron-samples:tutorialPublish' at execution time is unsupported with the configuration cache".
 - **After:** it fails with its own "unable to find origin URI", the same as without the configuration cache.
+
+### Step 4c: configuration cache invalidation
+
+With the configuration cache, Gradle reuses its stored configuration unless an input it tracked has changed. Every
+value below must either invalidate the entry (if read during configuration) or be re-evaluated on each run (if read
+during execution). Checked in a scratch clone with a clean working tree, on `5f3089f85d`, with
+`--configuration-cache`:
+
+| Value | Result |
+|---|---|
+| Git SHA (`GitShaService`, evaluated during execution) | Entry reused. After an uncommitted edit, `compileJava` reran and `AeronVersion.GIT_SHA` became `5f3089f85d+guilty`. Reverting the edit restored `5f3089f85d`, with the compile served from the build cache. |
+| `version.txt` | "configuration cache cannot be reused because file 'version.txt' has changed"; the new version was compiled into `AeronVersion`. |
+| `-Dcodec.target.dir` | "...because system property 'codec.target.dir' has changed"; the codecs were written to the new directory. |
+| `-Daeron.test.system.aeron.dir` (and the other `aeron.test.system.*` properties read the same way) | "...because system property 'aeron.test.system.aeron.dir' has changed". |
+| `BUILD_JAVA_VERSION` (read by `BuildJavaVersion` in `buildSrc`) | "...because environment variable 'BUILD_JAVA_VERSION' has changed". Gradle tracks environment reads in `buildSrc` code too. |
+| `AERON_*` environment variables (a `Test` input) | Entry reused, and `:aeron-test-support:test` reran when `AERON_CC_PROBE=1` was set. |
+
+No changes were needed. The Sonatype and signing credentials are read during configuration through
+`findProperty`/`System.getenv`, the same way as `BUILD_JAVA_VERSION`, so changing them invalidates the entry too.
+Gradle encrypts configuration cache entries, so credentials stored in them are not kept in plain text.
 
 ## Decisions
 
