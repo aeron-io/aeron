@@ -146,10 +146,16 @@ generated class has the `+guilty` SHA.
   task. It is configuration-cache compatible.
 - `org.gradle.caching=true` in `gradle.properties`.
 
-**Trade-off:** because the git SHA is now a real input, the first uncommitted edit in a clean tree (SHA becomes
-`+guilty`) and every new commit recompile all modules that use the `aeron-annotations` processor. That was always the
-correct behaviour; the old build skipped it and produced classes with a stale SHA. If this is too costly locally, one
-option is to embed the real SHA only for CI or release builds.
+**Trade-off (corrected after measuring in step 2):** because the git SHA is now a real input, the first uncommitted
+edit in a clean tree (SHA becomes `+guilty`) and every new commit recompile all modules that use the
+`aeron-annotations` processor. Most of that cost already existed on `master`:
+
+- `AeronVersion.GIT_SHA` is a `public static final` constant, and a changed constant counts as an API change.
+- So recompiling the edited module with the new SHA already forced every module downstream of it to recompile.
+
+The extra cost is recompiling modules upstream of the edit. For an edit in `aeron-client`, that is `aeron-annotations`:
+about 1s, measured at 6.3s on `master` and 7.4s on the branch. If even that matters, one option is to embed the real
+SHA only for CI or release builds.
 
 **Not changed:** `org.gradle.parallel`. It makes `assemble` faster, but it would also run test tasks from different
 modules at the same time, and these tests start media drivers and share Aeron directories and ports. Needs a decision
@@ -166,8 +172,9 @@ each.
 | No-op `assemble` | 1.5 | 1.3 |
 | Comment appended to `Aeron.java`, then `assemble` | 6.6 | 1.7 |
 
-The last row isn't a like-for-like comparison: the reason for the drop isn't established, so don't count it as a
-gain yet. Verified with `compileTestJava`, `checkstyleMain`, `checkstyleTest` and `:aeron-client:test`, all passing.
+The last row isn't a like-for-like comparison. The "before" figure was a first edit after a commit, which recompiles
+downstream modules because of the SHA constant (explained in the trade-off above). The "after" figure was taken with
+the tree already dirty. See the step 2 performance check for a like-for-like comparison. Verified with `compileTestJava`, `checkstyleMain`, `checkstyleTest` and `:aeron-client:test`, all passing.
 The full CI matrix (JDK 17, 21, 25) has not been run.
 
 ### Step 2a: artifact comparison safety net
@@ -248,7 +255,9 @@ The root `subprojects {}` block now only sets `group` and `version` and applies 
 
 - **Java version parsing** moved into `BuildJavaVersion` in `buildSrc`. The root script still uses it for the
   `JavaExec` launcher in `allprojects {}`.
-- **Git SHA:** the plugin creates its own `GitShaValueSource` provider, pointed at `layout.settingsDirectory`.
+- **Git SHA:** the plugin creates its own `GitShaValueSource` provider, pointed at `layout.settingsDirectory`. This
+  turned out to compute the SHA once per project rather than once per build; fixed after 2d, see the performance
+  check.
 - **Version catalog:** the plugin reads it through `VersionCatalogsExtension`. While the plugin is applied from the
   root `subprojects {}` block, the subprojects don't have the catalog extension yet, so it falls back to the root
   project's catalog. This fallback goes away in 2f.
@@ -314,3 +323,42 @@ Left for step 3:
 - **Overlapping outputs:** archive and cluster each have three test-codec tasks writing into one `generated-test`
   directory, which Gradle can't track per task.
 - **Shared target directory:** setting `-Dcodec.target.dir` sends the C and the C++ codecs to the same directory.
+
+### Performance check after 2d
+
+**Regression found and fixed.** No-op builds had become about 0.3s slower than `master`.
+
+- Cause: since 2c, each project created its own `GitShaValueSource` provider, and Gradle caches a `ValueSource`
+  value per provider instance. So the SHA was computed 8 times per build, about 30ms each with JGit.
+- Fix: `GitShaValueSource` is replaced by `GitShaService`, a shared build service that computes the SHA once per
+  build, registered with `registerIfAbsent`. Verified:
+  - one computation per build, and no warnings;
+  - the SHA is still a compile input: a clean tree gives `<sha>`, and the first edit recompiles with `<sha>+guilty`.
+
+**Method:**
+
+- Both sides were measured back to back in fresh clones in the scratchpad, with a clean working tree: `master`
+  (`5bc29c38af`), and this branch at `cd18c975b8` plus the build service fix.
+- Each side had a warm-up build first. Figures are 3 runs and the median, in seconds, from `./gradlew <tasks>
+  -x javadoc` on JDK 26 and an 18-core Mac.
+- Edit scenarios change a method body, build, then revert. The first run is a first edit after a commit.
+
+| Scenario | `master` runs | branch runs | `master` median | branch median |
+|---|---|---|---|---|
+| Configuration only (`help`) | 1.12 / 0.92 / 0.81 | 0.76 / 0.74 / 0.75 | 0.92 | 0.75 |
+| `clean assemble`, no build cache | 8.59 / 8.65 / 8.81 | 8.13 / 8.09 / 8.40 | 8.65 | 8.13 |
+| `clean assemble`, build cache | 8.67 / 8.85 / 8.63 (cache off on `master`) | 4.92 / 4.83 / 5.25 | 8.67 | 4.92 |
+| No-op `assemble` | 1.35 / 1.25 / 1.26 | 1.37 / 1.29 / 1.29 | 1.26 | 1.29 |
+| Edit method body in `aeron-client`, `assemble` | 6.34 / 1.32 / 1.23 | 7.44 / 1.39 / 1.31 | 1.32 | 1.39 |
+| Edit in `aeron-cluster`, `assemble` | 3.11 / 1.27 / 1.24 | 3.21 / 1.33 / 1.33 | 1.27 | 1.33 |
+| `clean assemble`, no build cache, `--parallel` | 5.99 / 5.53 / 5.57 | 5.18 / 5.25 / 5.83 | 5.57 | 5.25 |
+
+Reading the table:
+
+- **Build cache:** the clear win so far. A clean build is about 43% faster when the cache has the outputs.
+- **Everything else is level.** Configuration, clean builds, no-op builds and incremental builds are within noise of
+  `master`, so the restructuring in step 2 hasn't cost anything.
+- **First edit after a commit:** recompiles downstream modules on both sides. On `master` a client edit recompiled 6
+  modules; on the branch it recompiles 7, adding `aeron-annotations`. That is the +1.1s in the first client-edit run.
+- **Not measured yet:** the configuration cache (step 4) and parallel execution (deferred). Those are where the next
+  real gains are.

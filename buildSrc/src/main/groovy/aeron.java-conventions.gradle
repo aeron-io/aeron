@@ -16,7 +16,7 @@
 
 import io.aeron.build.AeronVersionArgumentProvider
 import io.aeron.build.BuildJavaVersion
-import io.aeron.build.GitShaValueSource
+import io.aeron.build.GitShaService
 
 // Shared Java, test, Javadoc and Checkstyle configuration for every Aeron module.
 plugins {
@@ -35,7 +35,7 @@ def toolchainLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(buildJavaVersion)
 }
 def aeronVersion = providers.provider { project.version.toString() }
-def gitSha = providers.of(GitShaValueSource) { parameters.projectDir = layout.settingsDirectory }
+def gitSha = GitShaService.gitSha(project)
 
 checkstyle.toolVersion = libs.findVersion('checkstyle').get().requiredVersion
 
