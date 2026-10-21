@@ -131,7 +131,8 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 4a | Javadoc offline links: replace the `doFirst` that resolves `javadocLinks` and copies files at execution time with a typed `ExtractJavadocLinksTask`. | ☑ |
 | 4b | `TutorialPublishTask`: stop calling `getProject()` in its task action. | ☑ |
 | 4c | Check that values which must invalidate the cache really do (git SHA, `version.txt`, system properties, environment variables), and fix any that don't. | ☑ |
-| 4d | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
+| 4d | Signing rule: stop the release-only `onlyIf` reaching `gradle.taskGraph` and `tasks` when the task runs. Found by testing a release version; snapshot builds never reach that code. | ☑ |
+| 4e | Enable the configuration cache in `gradle.properties`, and measure. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
 ## Log
@@ -805,6 +806,35 @@ during execution). Checked in a scratch clone with a clean working tree, on `5f3
 No changes were needed. The Sonatype and signing credentials are read during configuration through
 `findProperty`/`System.getenv`, the same way as `BUILD_JAVA_VERSION`, so changing them invalidates the entry too.
 Gradle encrypts configuration cache entries, so credentials stored in them are not kept in plain text.
+
+### Step 4d: release signing rule
+
+The step 4 scan only ran snapshot builds. `aeron.publishing` skips signing unless the version is a release and
+`publish` is in the task graph:
+
+```groovy
+onlyIf { isReleaseVersion && gradle.taskGraph.hasTask(tasks.publish) }
+```
+
+For snapshots the `&&` short-circuits, so `gradle` and `tasks` are never touched. With a release version (`1.54.0`),
+`publishToMavenLocal --configuration-cache` reported "Task `:aeron-annotations:signAeronAnnotationsPublication`:
+invocation of 'gradle' references a Gradle script object from a Groovy closure at execution time", and the build
+failed. So enabling the cache would have broken the first release.
+
+Fix: whether `publish` is in the task graph is captured in `gradle.taskGraph.whenReady`, which runs during
+configuration, and the `onlyIf` reads only that boolean.
+
+Verified in a scratch clone. "With `publish`" means `publishToMavenLocal publish` with every
+`publish…PublicationToMavenRepository` task excluded, so signing runs (through `publishToMavenLocal`) but nothing is
+uploaded. With no signing key, a signing task that runs fails with "no configured signatory", which shows the rule
+let it through.
+
+| Scenario | Original, no cache | Fixed, no cache | Fixed, with cache |
+|---|---|---|---|
+| Release, `publishToMavenLocal` | signing skipped | skipped | skipped (entry stored) |
+| Release, `publishToMavenLocal` again | — | skipped | skipped (entry reused) |
+| Release, with `publish` | signing runs | runs | runs (entry stored, no problems) |
+| Snapshot, with `publish` | signing skipped | skipped | skipped |
 
 ## Decisions
 

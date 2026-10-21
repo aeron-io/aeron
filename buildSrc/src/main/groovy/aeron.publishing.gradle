@@ -123,8 +123,16 @@ signing {
     sign publishing.publications
 }
 
+// Sign only release versions, and only when publishing to the remote repository. Whether `publish` is in the task graph
+// is decided once the graph is ready, during configuration, because the configuration cache doesn't allow `onlyIf` to
+// reach `gradle` or `tasks` when the task runs.
+def publishRequested = false
+gradle.taskGraph.whenReady { graph ->
+    publishRequested = graph.hasTask(tasks.publish)
+}
+
 tasks.withType(Sign).configureEach {
     onlyIf {
-        isReleaseVersion && gradle.taskGraph.hasTask(tasks.publish)
+        isReleaseVersion && publishRequested
     }
 }
