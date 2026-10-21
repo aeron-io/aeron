@@ -119,7 +119,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 2b | Publishing and signing → `aeron.publishing` convention plugin. | ☑ |
 | 2c | Shared Java, test and Checkstyle setup (the `subprojects {}` block) → `aeron.java-conventions`. | ☑ |
 | 2d | SBE `JavaExec` tasks → typed `SbeGenerateTask`. | ☑ |
-| 2e | `generateConfigDoc` and `validate*Expectations` → shared registration. | ☐ |
+| 2e | `generateConfigDoc` and `validate*Expectations` → `aeron.config-info` convention plugin. | ☑ |
 | 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☐ |
 | 3 | Wire generated sources through `srcDir(taskProvider)`; replace the `tests` configuration with `java-test-fixtures`. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
@@ -362,3 +362,43 @@ Reading the table:
   modules; on the branch it recompiles 7, adding `aeron-annotations`. That is the +1.1s in the first client-edit run.
 - **Not measured yet:** the configuration cache (step 4) and parallel execution (deferred). Those are where the next
   real gains are.
+
+### Step 2e: `aeron.config-info` convention plugin
+
+`buildSrc/src/main/groovy/aeron.config-info.gradle` is applied by client, driver, archive and cluster. It provides:
+
+- **`generateConfigDoc`**, registered in every module that applies the plugin.
+- **The `aeronConfigInfo` extension** (`AeronConfigInfoExtension`), for opting into C source validation:
+  - client calls `validateConfigExpectations()` and `validateCounterExpectations()`;
+  - driver calls `validateConfigExpectations()`.
+- **`FilePathArgumentProvider`**, which passes file locations to the tools as absolute paths, resolved only when the
+  task runs.
+
+The root `build.gradle` lost 81 lines (7 registrations).
+
+Behaviour changes, both deliberate:
+
+- **Bug fix:** the tasks read the `.dat` files written by the annotation processors during `compileJava`, but didn't
+  depend on it. On a clean build, `./gradlew :aeron-client:generateConfigDoc` failed with `NoSuchFileException`. The
+  file locations are now derived from `compileJava`'s header output directory, so Gradle runs compilation first.
+- **Classpath:** the tool classpath is now a `configInfoTool` configuration depending on `project(':aeron-annotations')`.
+  Previously it reached into that project's `sourceSets.main.runtimeClasspath`, a cross-project access that blocks
+  Isolated Projects.
+
+Paths in the validation output are now absolute (e.g. `<root>/aeron-client/src/main/c`) rather than relative to the
+module. The validations also declare the C sources as inputs. That doesn't affect up-to-date checks, because they have
+no outputs and still run every time.
+
+Verified:
+
+- run from clean, without compiling first, all 7 tasks succeed;
+- all 4 generated config docs are byte-identical to the parent commit;
+- the validation output is identical apart from the absolute paths (244 lines);
+- on a second run, `generateConfigDoc` is `UP-TO-DATE`;
+- configuration dump: the only differences are the new plugin and the new `configInfoTool` configuration; task names
+  are unchanged;
+- artifacts: 0 differences.
+
+**Observation, not changed:** the validation tasks report missing C `#define`s (e.g. for
+`AERON_THREAD_AFFINITY_USE_CPUSET_OFFSETS` in the client) but exit 0, so they never fail the build. They aren't run by
+CI either. Worth asking the team whether these should become real checks.

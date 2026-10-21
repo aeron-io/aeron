@@ -118,6 +118,10 @@ project(':aeron-annotations') {
 
 project(':aeron-client') {
     apply plugin: 'aeron.publishing'
+    apply plugin: 'aeron.config-info'
+
+    aeronConfigInfo.validateConfigExpectations()
+    aeronConfigInfo.validateCounterExpectations()
 
     dependencies {
         api libs.agrona
@@ -152,44 +156,13 @@ project(':aeron-client') {
             }
         }
     }
-
-    def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-
-    tasks.register('validateConfigExpectations', JavaExec) {
-        def sourceDir = 'src/main/c'
-
-        inputs.files(configInfoFile)
-
-        mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, sourceDir]
-    }
-
-    tasks.register('generateConfigDoc', JavaExec) {
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
-
-        inputs.files(configInfoFile)
-        outputs.files(generatedDocFile)
-
-        mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, generatedDocFile]
-    }
-
-    tasks.register('validateCounterExpectations', JavaExec) {
-        def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
-        def sourceDir = 'src/main/c'
-
-        inputs.files(counterInfoFile)
-
-        mainClass.set('io.aeron.counter.validation.ValidateCounterExpectationsTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [counterInfoFile, sourceDir]
-    }
 }
 
 project(':aeron-driver') {
     apply plugin: 'aeron.publishing'
+    apply plugin: 'aeron.config-info'
+
+    aeronConfigInfo.validateConfigExpectations()
     apply plugin: 'application'
 
     application {
@@ -243,29 +216,6 @@ project(':aeron-driver') {
         }
     }
 
-    tasks.register('validateConfigExpectations', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def sourceDir = 'src/main/c'
-
-        inputs.files(configInfoFile)
-
-        mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, sourceDir]
-    }
-
-    tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
-
-        inputs.files(configInfoFile)
-        outputs.files(generatedDocFile)
-
-        mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, generatedDocFile]
-    }
-
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.log', 'all'
     }
@@ -273,6 +223,7 @@ project(':aeron-driver') {
 
 project(':aeron-archive') {
     apply plugin: 'aeron.publishing'
+    apply plugin: 'aeron.config-info'
 
     configurations{
         codecGeneration
@@ -416,22 +367,11 @@ project(':aeron-archive') {
             }
         }
     }
-
-    tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
-
-        inputs.files(configInfoFile)
-        outputs.files(generatedDocFile)
-
-        mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, generatedDocFile]
-    }
 }
 
 project(':aeron-cluster') {
     apply plugin: 'aeron.publishing'
+    apply plugin: 'aeron.config-info'
 
     configurations{
         codecGeneration
@@ -559,18 +499,6 @@ project(':aeron-cluster') {
                 from components.java
             }
         }
-    }
-
-    tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
-
-        inputs.files(configInfoFile)
-        outputs.files(generatedDocFile)
-
-        mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
-        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, generatedDocFile]
     }
 }
 
