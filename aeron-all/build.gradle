@@ -18,10 +18,6 @@ plugins {
     id 'com.gradleup.shadow'
 }
 
-// Reads the generated codec source sets of these projects, which their own build files create.
-evaluationDependsOn(':aeron-archive')
-evaluationDependsOn(':aeron-cluster')
-
 def aeronClientProject = project(':aeron-client')
 def aeronDriverProject = project(':aeron-driver')
 def aeronArchiveProject = project(':aeron-archive')
@@ -57,16 +53,13 @@ jar.finalizedBy shadowJar
 
 tasks.register('sourcesJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
-    dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
     archiveClassifier.set('sources')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
     from files(
         aeronClientProject.sourceSets.main.allSource,
         aeronDriverProject.sourceSets.main.allSource,
         aeronArchiveProject.sourceSets.main.allSource,
-        aeronArchiveProject.sourceSets.generated.allSource,
         aeronClusterProject.sourceSets.main.allSource,
-        aeronClusterProject.sourceSets.generated.allSource,
         aeronSamplesProject.sourceSets.main.allSource)
 }
 
@@ -75,13 +68,9 @@ javadoc {
     source += aeronClientProject.sourceSets.main.allJava
     source += aeronDriverProject.sourceSets.main.allJava
     source += aeronArchiveProject.sourceSets.main.allJava
-    source += aeronArchiveProject.sourceSets.generated.allJava
     source += aeronClusterProject.sourceSets.main.allJava
-    source += aeronClusterProject.sourceSets.generated.allJava
     source += aeronSamplesProject.sourceSets.main.allJava
 }
-
-javadoc.dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
 
 tasks.register('javadocJar', Jar) {
     dependsOn 'javadoc'

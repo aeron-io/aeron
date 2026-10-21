@@ -17,9 +17,6 @@ plugins {
     id 'aeron.publishing'
 }
 
-// Reads the generated codec source sets of these projects, which their own build files create.
-evaluationDependsOn(':aeron-archive')
-
 dependencies {
     api project(':aeron-cluster')
     implementation libs.hdrHistogram
@@ -44,7 +41,6 @@ javadoc {
     source += project(':aeron-client').sourceSets.main.allJava
     source += project(':aeron-driver').sourceSets.main.allJava
     source += project(':aeron-archive').sourceSets.main.allJava
-    source += project(':aeron-archive').sourceSets.generated.allJava
 }
 
 tasks.named('test').configure {

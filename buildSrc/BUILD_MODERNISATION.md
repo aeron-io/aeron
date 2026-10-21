@@ -121,7 +121,11 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 2d | SBE `JavaExec` tasks → typed `SbeGenerateTask`. | ☑ |
 | 2e | `generateConfigDoc` and `validate*Expectations` → `aeron.config-info` convention plugin. | ☑ |
 | 2f | Move each `project(':x') {}` block into `x/build.gradle`, one module at a time. | ☑ |
-| 3 | Wire generated sources through `srcDir(taskProvider)`; replace the `tests` configuration with `java-test-fixtures`. | ☐ |
+| 3 | Wire generated sources and test sharing properly, and remove the remaining cross-project reach-ins. Done in the slices below, one commit each. | ◐ |
+| 3a | Main generated codecs (archive, cluster): register `generateCodecs` output as a `main` source dir. Then remove the `generated` source set, `api files('build/classes/...')`, the manual `dependsOn` chains and the custom `sourcesJar`. Exclude generated code from Checkstyle. Update the consumers (cluster, samples, `aeron-all`). | ☑ |
+| 3b | Test codecs: give each generator its own output dir (fixes the overlapping outputs) and wire them into the `test` source set. Then remove `generatedTest` and its `files(...)` dependency. | ☐ |
+| 3c | Test sharing, **build-only** (see the decision below): drop the unused client `tests` dependency, and replace the `testJar`/`tests` setup in every module with a properly declared one in `aeron-archive` only. | ☐ |
+| 3d | Remaining cross-project reach-ins: Javadoc and sources aggregation, `aeron-all`, and `evaluationDependsOn`, moved to proper configurations. Apply `aeron.java-conventions` from each module's `plugins {}` block, which removes the version catalog fallback. | ☐ |
 | 4 | Make the build configuration-cache safe (injected services in `buildSrc` tasks, lazy providers), then enable the configuration cache. | ☐ |
 | 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
 
@@ -323,6 +327,9 @@ Left for step 3:
 - **Overlapping outputs:** archive and cluster each have three test-codec tasks writing into one `generated-test`
   directory, which Gradle can't track per task.
 - **Shared target directory:** setting `-Dcodec.target.dir` sends the C and the C++ codecs to the same directory.
+  *Correction:* not a real problem. CMake (`aeron-archive/src/main/c/CMakeLists.txt`) invokes `generateCCodecs` on its
+  own, with its own target directory. The two only collide if someone passes the property to both tasks in one
+  command.
 
 ### Performance check after 2d
 
@@ -490,3 +497,136 @@ in 2c and 2f, so any difference would be noise from the tests rather than the bu
 A comment-only change in `buildSrc` was tried first, but it doesn't change the compiled classes, so Gradle doesn't
 recompile the build scripts and the scenario measured nothing. The scenario above adds a new method with a unique name
 on each run, so a cached script compilation can't be reused.
+
+## Decisions
+
+### Test fixtures deferred: keep the source layout (October 2026)
+
+`aeron-system-tests` depends on the whole test output of `aeron-client` and `aeron-archive`, through each module's
+hand-built `tests` configuration. An analysis of the system tests' sources, including same-package references that
+need no import, found:
+
+- **`aeron-client`:** none of its 56 test classes are used, so the dependency is unnecessary.
+- **`aeron-archive`:** 3 of its 39 test classes are used: `ArchiveTests`, `FailControlResponseListener` and
+  `FailRecordingEventsListener`.
+
+The standard Gradle approach is the `java-test-fixtures` plugin, with those 3 helpers moved to
+`aeron-archive/src/testFixtures/java`. **Decision: keep the source layout for now.** Moving source files is a visible
+change that the maintainers should weigh in on. Step 3c therefore stays build-only.
+
+Revisit later: moving the 3 helpers to test fixtures would let the test jar go entirely. System tests would then
+depend on a small, explicit set of helpers rather than on all of archive's tests.
+
+### Step 3a: generated codecs are part of `main`
+
+In `aeron-archive` and `aeron-cluster`, the generated codecs are now added to `main` with
+`sourceSets.main.java.srcDir(tasks.named('generateCodecs'))`. Gradle infers from that that compiling, packaging the
+sources and building Javadoc all depend on `generateCodecs`. Removed:
+
+- the `generated` source set, and its `compileGeneratedJava`, `checkstyleGenerated` and related tasks;
+- `api files('build/classes/java/generated')`;
+- the manual `compileJava.dependsOn 'compileGeneratedJava'` and `compileGeneratedJava.dependsOn 'generateCodecs'`;
+- `jar { from sourceSets.generated.output }`;
+- the hand-written `sourcesJar` tasks (the standard `withSourcesJar()` now includes the generated sources);
+- `javadoc.dependsOn generateCodecs`;
+- all `source += …sourceSets.generated…` lines in cluster, samples and `aeron-all`;
+- the `evaluationDependsOn` calls added in 2f. `sourceSets.main` exists in every project from the start, and its
+  source directories are live, so the reading project no longer depends on evaluation order.
+
+Checkstyle needs no special handling. `checkstyleGenerated` already ran in `check` and passed, so the generated code
+meets the rules; it is now checked as part of `checkstyleMain`.
+
+Verified:
+
+- **Artifacts:** 0 differences from a clean build, including the jars, the sources jars (which must contain the
+  generated codecs) and the Javadoc jars.
+- **Configuration:** every difference is expected:
+  - the `generated` source set's configurations and tasks are gone;
+  - `compileJava` has no manual `dependsOn`;
+  - the `files(...)` dependency is gone;
+  - `mainSourceElements` now includes `build/generated-src`;
+  - in all 45 affected test classpaths, the only change is that the two `build/classes/java/generated` directories
+    have gone. Those classes are now in each module's `main` output.
+- **Behaviour:** editing a schema reruns `generateCodecs`. `compileJava` stays up to date when the generated Java is
+  unchanged, which is correct.
+- **Builds and tests:** `compileTestJava` in all modules, `checkstyleMain`, `checkstyleTest` and
+  `:aeron-archive:loggingTest` pass. Nothing in CI, `cppbuild` or the scripts refers to the removed tasks.
+
+#### 3a follow-up: what changes for developers
+
+How the generated codecs get into the jar, before and after:
+
+| | Before 3a | After 3a |
+|---|---|---|
+| Generated `.java` files | `build/generated-src` | `build/generated-src` (unchanged) |
+| Compiled by | a separate task, `compileGeneratedJava` | `compileJava`, together with the hand-written code |
+| `.class` files | `build/classes/java/generated` | `build/classes/java/main` |
+| How `main` sees them | a compiled-classes folder on its classpath (`api files(...)`) | as sources in its own source set |
+| Into the jar | an extra `from sourceSets.generated.output` | the normal jar contents |
+
+**IDE model**, as Gradle reports it for archive (cluster is the same):
+
+- **Before:** two source sets. `generated` has `build/generated-src`. `main` has only `src/main/java`, with
+  `build/classes/java/generated` on its compile classpath.
+- **After:** one source set. `main` has `src/main/java` and `build/generated-src`.
+
+The expected effect in IntelliJ is that the codecs become a generated source root of the main module, so navigating
+to them from hand-written code opens the generated source rather than compiled classes. This is **not verified in an
+IDE**; someone who works on Aeron in IntelliJ should check it after a Gradle sync. As before, `generateCodecs` (or any
+build) must run once, because an IDE sync doesn't run it.
+
+**Incremental compile cost.** Measured in fresh clones, with a unique edit per run and `--no-build-cache`: median of 5
+runs for edits, 3 for clean builds, in seconds.
+
+| Scenario | Before 3a | After 3a |
+|---|---|---|
+| Edit hand-written code in `aeron-archive`, then `compileJava` | 1.23 | 1.55 |
+| Edit hand-written code in `aeron-cluster`, then `compileJava` | 1.27 | 1.60 |
+| `aeron-archive` `compileJava` after a clean | 1.36 | 1.40 |
+| `aeron-cluster` `compileJava` after a clean | 1.46 | 1.50 |
+
+So each edit in archive or cluster costs about 0.3s more, while the total work after a clean is unchanged. The cause
+predates this work: `compileJava` always does a full recompile, because none of the `aeron-annotations` processors
+(`VersionProcessor`, `ConfigProcessor`, `CounterProcessor`, `CborEventLoggerProcessor`) are registered as incremental.
+Gradle's log says: "Full recompilation is required because io.aeron.eventlog.CborEventLoggerProcessor is not
+incremental". Before 3a the codecs were in a separate compile task and escaped those full recompiles; now they're
+included.
+
+Other visible changes:
+
+- the `compileGeneratedJava` and `checkstyleGenerated` tasks no longer exist;
+- `build/classes/java/generated` is no longer produced.
+
+Nothing in CI, `cppbuild` or the scripts uses them, but individual developers' scripts or run configurations might.
+
+### Generated codecs compiled with `main` (October 2026)
+
+**Decision: keep step 3a as it is (option A).** Generated codecs are part of the `main` source set, which costs about
+0.3s per edit in archive and cluster, for a simpler build and an expected better IDE model. The longer-term fix
+(option C) is to make the `aeron-annotations` processors incremental, which would cancel that cost and speed up edits
+in every module that uses them. That is a code change, so it is proposed to the engineers below (question 2) rather
+than done here. Option B, compiling the codecs separately again but wired through source set outputs, was rejected.
+
+## Questions for the Aeron engineers
+
+1. **Generated codecs in `main` (step 3a).** Is about +0.3s per edit in archive and cluster acceptable in exchange for
+   a simpler build and (expected) better IDE navigation? The alternative is to keep the codecs in a separate compile
+   step, wired through source set outputs rather than raw build paths. That avoids the cost but keeps a separate
+   module in the IDE. Could someone who uses IntelliJ check navigation to the codecs after a Gradle sync?
+2. **Incremental annotation processors.** Would the team accept making the `aeron-annotations` processors
+   incremental? That means registering them in `META-INF/gradle/incremental.annotation.processors` as isolating or
+   aggregating, which may need changes to how they report originating elements.
+   - Today every edit to client, driver, archive or cluster recompiles the whole module, on `master` too.
+   - Making them incremental would speed up edits in all those modules and cancel out the cost in question 1.
+   - `ConfigProcessor` and `CounterProcessor` write one aggregated `.dat` file each, so they would be "aggregating".
+     `VersionProcessor` generates a class per annotated type, so it may be "isolating".
+     `CborEventLoggerProcessor` needs looking at.
+3. **Test fixtures (decision above).** Is moving the 3 archive test helpers used by the system tests into
+   `src/testFixtures/java` acceptable?
+4. **Config/counter validation (step 2e).** `validateConfigExpectations` and `validateCounterExpectations` report
+   missing C `#define`s but exit 0, and CI doesn't run them. Should they fail the build and run in CI?
+5. **`--add-opens`.** The flag is a runtime requirement because Agrona's `UnsafeApi` uses
+   `jdk.internal.misc.Unsafe`. Is removing that dependency on the Agrona roadmap?
+6. **Parallel execution (step 1).** Can test tasks from different modules safely run at the same time? They start
+   media drivers and share Aeron directories and ports. If so, `org.gradle.parallel=true` cut a clean build from about
+   8.1s to about 5.2s.

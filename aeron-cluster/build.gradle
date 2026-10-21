@@ -21,16 +21,12 @@ plugins {
     id 'aeron.config-info'
 }
 
-// Reads the generated codec source sets of these projects, which their own build files create.
-evaluationDependsOn(':aeron-archive')
-
 configurations{
     codecGeneration
 }
 
 dependencies {
     api project(':aeron-archive')
-    api files('build/classes/java/generated')
     codecGeneration libs.sbe
     implementation project(':aeron-annotations')
     annotationProcessor project(':aeron-annotations')
@@ -43,10 +39,6 @@ def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
 def generatedTestDir = file("${layout.buildDirectory.get()}/generated-test")
 
 sourceSets {
-    generated {
-        java.srcDir generatedSrcDir
-        compileClasspath += configurations.codecGeneration
-    }
     generatedTest {
         java.srcDir generatedTestDir
         compileClasspath += configurations.codecGeneration
@@ -105,14 +97,13 @@ tasks.register('generateTestCodecsV12', SbeGenerateTask) {
     schemaTransformVersion = '*:12'
 }
 
-compileJava.dependsOn 'compileGeneratedJava'
-compileGeneratedJava.dependsOn 'generateCodecs'
+// The generated codecs are compiled and packaged with the module's own sources.
+sourceSets.main.java.srcDir(tasks.named('generateCodecs'))
+
 compileTestJava.dependsOn 'compileGeneratedTestJava'
 compileGeneratedTestJava.dependsOn 'generateTestCodecsMarkFileV0', 'generateTestCodecsV5', 'generateTestCodecsV12'
 
 jar {
-    from sourceSets.generated.output
-
     manifest.attributes(
         'Automatic-Module-Name': 'io.aeron.cluster',
         'Implementation-Title': 'Aeron',
@@ -121,23 +112,12 @@ jar {
     )
 }
 
-tasks.register('sourcesJar', Jar) {
-    dependsOn 'generateCodecs'
-    archiveClassifier.set('sources')
-    from sourceSets.main.allSource
-    from sourceSets.generated.allSource
-}
-
 javadoc {
-    source += sourceSets.generated.allJava
     source += project(':aeron-annotations').sourceSets.main.allJava
     source += project(':aeron-client').sourceSets.main.allJava
     source += project(':aeron-driver').sourceSets.main.allJava
     source += project(':aeron-archive').sourceSets.main.allJava
-    source += project(':aeron-archive').sourceSets.generated.allJava
 }
-
-javadoc.dependsOn generateCodecs
 
 java {
     withSourcesJar()
