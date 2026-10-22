@@ -200,9 +200,18 @@ subprojects {
         sourceCompatibility = JavaVersion.VERSION_17
     }
 
+    // Sign only release versions, and only when this project's `publish` task will run. That is decided once the task
+    // graph is ready, during configuration, because the configuration cache doesn't allow `onlyIf` to reach `gradle`
+    // or `tasks` when the task runs.
+    def publishTaskPath = "${it.path}:publish"
+    def publishRequested = false
+    gradle.taskGraph.whenReady { graph ->
+        publishRequested = graph.hasTask(publishTaskPath)
+    }
+
     tasks.withType(Sign).configureEach {
         onlyIf {
-            isReleaseVersion && gradle.taskGraph.hasTask(tasks.publish)
+            isReleaseVersion && publishRequested
         }
     }
 
