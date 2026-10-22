@@ -32,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -1176,6 +1177,83 @@ class ElectionTest
         election.doWork(++t1);
 
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_CATCHUP_INIT.code());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    void followerShouldAppendTermOnlyIfUnknownWhenJoiningCatchupLog(final boolean isTermUnknown)
+    {
+        final long leadershipTermId = 1;
+        final long termBaseLogPosition = 0;
+        final long snapshotLogPosition = 60;
+        final long leaderLogPosition = 120;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        final int leaderId = liveLeader.id();
+
+        when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
+        when(consensusModuleAgent.prepareForNewLeadership(anyLong(), anyLong())).thenReturn(snapshotLogPosition);
+        when(consensusModuleAgent.tryJoinLogAsFollower(any(), anyBoolean(), anyLong())).thenReturn(true);
+        when(consensusPublisher.catchupPosition(any(), anyLong(), anyLong(), anyInt(), anyString())).thenReturn(true);
+        when(logImage.joinPosition()).thenReturn(snapshotLogPosition);
+        when(recordingLog.isUnknown(leadershipTermId)).thenReturn(isTermUnknown);
+
+        final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap = new Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(clusterMembers, clusterMemberByIdMap);
+
+        final Election election = new Election(
+            true,
+            NULL_VALUE,
+            leadershipTermId,
+            termBaseLogPosition,
+            snapshotLogPosition,
+            snapshotLogPosition,
+            clusterMembers,
+            clusterMemberByIdMap,
+            thisMember,
+            consensusPublisher,
+            ctx,
+            consensusModuleAgent);
+
+        long t1 = 0;
+        election.doWork(++t1);
+        verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
+
+        election.onNewLeadershipTerm(
+            leadershipTermId,
+            NULL_VALUE,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            termBaseLogPosition,
+            leaderLogPosition,
+            leaderLogPosition,
+            RECORDING_ID,
+            t1,
+            leaderId,
+            LOG_SESSION_ID,
+            true);
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
+
+        election.doWork(++t1);
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_CATCHUP_INIT.code());
+
+        election.doWork(++t1);
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_CATCHUP_AWAIT.code());
+
+        election.doWork(++t1);
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_CATCHUP.code());
+        verify(recordingLog, times(isTermUnknown ? 1 : 0)).ensureCoherent(
+            RECORDING_ID,
+            leadershipTermId,
+            termBaseLogPosition,
+            leadershipTermId,
+            termBaseLogPosition,
+            NULL_VALUE,
+            t1,
+            t1,
+            ctx.fileSyncLevel());
     }
 
     @Test

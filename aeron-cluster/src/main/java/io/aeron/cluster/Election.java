@@ -1065,6 +1065,10 @@ class Election
             verifyLogJoinPosition("followerCatchupAwait", image.joinPosition());
             if (consensusModuleAgent.tryJoinLogAsFollower(image, isLeaderStartup, nowNs))
             {
+                if (NULL_VALUE != logLeadershipTermId && ctx.recordingLog().isUnknown(logLeadershipTermId))
+                {
+                    ensureRecordingLogCoherent(logLeadershipTermId, NULL_VALUE, NULL_VALUE, nowNs);
+                }
                 state(FOLLOWER_CATCHUP, nowNs, "");
                 workCount++;
             }
