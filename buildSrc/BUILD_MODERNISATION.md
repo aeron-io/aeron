@@ -1009,6 +1009,32 @@ jobs:
   change. Develocity's open-source programme could provide it, together with build scans, which would also help with
   6a and 6e.
 
+### Native-binary test runs and the build cache (found in review of PR #2215)
+
+Copilot's review of the performance PR (#2215) pointed out a problem introduced by enabling the build cache:
+
+- CMake runs the Java system tests against the C media driver with
+  `-Daeron.test.system.aeronmd.path=<aeronmd> :aeron-system-tests:cleanTest :aeron-system-tests:test`, relying on
+  `cleanTest` to force them to run.
+- With the build cache enabled, `cleanTest` no longer guarantees that. Only the binary's *path* is a test input, so a
+  rebuilt `aeronmd` (or ATS binary, `aeron.test.system.ats.path`) at the same path can get a cached result without
+  being tested.
+- After the first edit following a commit, the git SHA stays at `<sha>+guilty` for later edits, so successive C
+  changes would hit the cache.
+
+The fix: test results are not cached when either path is set (`outputs.doNotCacheIf` in `aeron.java-conventions`).
+Other test runs still use the cache.
+
+Declaring the binary as an input was rejected: shared libraries it loads at runtime wouldn't be tracked either.
+
+Verified:
+
+- with the path set, `cleanTest test` runs the tests every time;
+- without it, the second run is `FROM-CACHE`.
+
+The fix was first made on `build-performance` (commit `7c026d38a0`) after this branch was finished, and has been added
+here so the reference branch doesn't keep the bug.
+
 ## Decisions
 
 ### Test fixtures deferred: keep the source layout (October 2026)
