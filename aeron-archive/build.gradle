@@ -38,19 +38,13 @@ dependencies {
     implementation project(':aeron-annotations')
     annotationProcessor project(':aeron-annotations')
     testImplementation project(':aeron-test-support')
-    testImplementation files("${layout.buildDirectory.get()}/classes/java/generatedTest")
 }
 
 def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
-def generatedTestDir = file("${layout.buildDirectory.get()}/generated-test")
 
 sourceSets {
     generated {
         java.srcDir generatedSrcDir
-        compileClasspath += configurations.codecGeneration
-    }
-    generatedTest {
-        java.srcDir generatedTestDir
         compileClasspath += configurations.codecGeneration
     }
 }
@@ -99,7 +93,7 @@ tasks.register('generateTestCodecsV6', SbeGenerateTask) {
     classpath = configurations.codecGeneration
     schemas.from(codecsFile)
     validationXsd = file(sbeFile)
-    outputDir = generatedTestDir
+    outputDir = layout.buildDirectory.dir('generated-test/generateTestCodecsV6')
     targetLanguage = 'Java'
     targetNamespace = 'io.aeron.archive.codecs.v6'
     schemaTransformVersion = '*:6'
@@ -109,7 +103,7 @@ tasks.register('generateTestCodecsMarkFileV0', SbeGenerateTask) {
     classpath = configurations.codecGeneration
     schemas.from(markCodecsFile)
     validationXsd = file(sbeFile)
-    outputDir = generatedTestDir
+    outputDir = layout.buildDirectory.dir('generated-test/generateTestCodecsMarkFileV0')
     targetLanguage = 'Java'
     targetNamespace = 'io.aeron.archive.codecs.mark.v0'
     schemaTransformVersion = '*:0'
@@ -119,7 +113,7 @@ tasks.register('generateTestCodecsMarkFileV1', SbeGenerateTask) {
     classpath = configurations.codecGeneration
     schemas.from(markCodecsFile)
     validationXsd = file(sbeFile)
-    outputDir = generatedTestDir
+    outputDir = layout.buildDirectory.dir('generated-test/generateTestCodecsMarkFileV1')
     targetLanguage = 'Java'
     targetNamespace = 'io.aeron.archive.codecs.mark.v1'
     schemaTransformVersion = '*:1'
@@ -127,8 +121,10 @@ tasks.register('generateTestCodecsMarkFileV1', SbeGenerateTask) {
 
 compileJava.dependsOn 'compileGeneratedJava'
 compileGeneratedJava.dependsOn 'generateCodecs'
-compileTestJava.dependsOn 'compileGeneratedTestJava'
-compileGeneratedTestJava.dependsOn 'generateTestCodecsV6', 'generateTestCodecsMarkFileV0', 'generateTestCodecsMarkFileV1'
+// The versioned test codecs are compiled with the module's tests.
+sourceSets.test.java.srcDir(tasks.named('generateTestCodecsV6'))
+sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV0'))
+sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV1'))
 
 jar {
     from sourceSets.generated.output
