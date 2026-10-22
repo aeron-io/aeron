@@ -77,72 +77,9 @@ def getConfigProperty(final String projectPropertyName, final String envVarName)
 }
 
 def isReleaseVersion = !aeronVersion.endsWith('-SNAPSHOT')
-def sonatypeCentralPortalReleasesRepoUrl = 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/'
-def sonatypeCentralPortalSnapshotsRepoUrl = 'https://central.sonatype.com/repository/maven-snapshots/'
 def sonatypeCentralPortalUsername = getConfigProperty('sonatypeCentralPortalUsername', 'SONATYPE_CENTRAL_PORTAL_USERNAME')
 def sonatypeCentralPortalPassword = getConfigProperty('sonatypeCentralPortalPassword', 'SONATYPE_CENTRAL_PORTAL_PASSWORD')
-def signingKey = getConfigProperty('signingKey', 'SIGNING_GPG_SECRET_KEY')         // NOTE: ASCII armored secret key
-def signingPassword = getConfigProperty('signingPassword', 'SIGNING_GPG_PASSWORD') // NOTE: Plain text
 def libs = rootProject.libs
-
-def projectPom = {
-    name = 'aeron'
-    // optionally artifactId can be defined here
-    description = 'Efficient reliable UDP unicast, UDP multicast, and IPC transport protocol.'
-    url = 'https://github.com/aeron-io/aeron'
-
-    scm {
-        connection = 'scm:git:https://github.com/aeron-io/aeron.git'
-        developerConnection = 'scm:git:https://github.com/aeron-io/aeron.git'
-        url = 'https://github.com/aeron-io/aeron.git'
-    }
-
-    licenses {
-        license {
-            name = 'The Apache License, Version 2.0'
-            url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-        }
-    }
-
-    developers {
-        developer {
-            id = 'tmontgomery'
-            name = 'Todd L. Montgomery'
-            email = 'tmont@nard.net'
-            url = 'https://github.com/tmontgomery'
-        }
-        developer {
-            id = 'mjpt777'
-            name = 'Martin Thompson'
-            email = 'mjpt777@gmail.com'
-            url = 'https://github.com/mjpt777'
-        }
-        developer {
-            id = 'RichardWarburton'
-            name = 'Richard Warburton'
-            email = 'richard.warburton@gmail.com'
-            url = 'https://github.com/RichardWarburton'
-        }
-        developer {
-            id = 'nitsanw'
-            name = 'Nitsan Wakart'
-            email = 'nitsanw@yahoo.com'
-            url = 'https://github.com/nitsanw'
-        }
-        developer {
-            id = 'mikeb01'
-            name = 'Mike Barker'
-            email = 'mikeb01@gmail.com'
-            url = 'https://github.com/mikeb01'
-        }
-        developer {
-            id = 'vyazelenko'
-            name = 'Dmytro Vyazelenko'
-            email = 'vyazelenko@protonmail.com'
-            url = 'https://github.com/vyazelenko'
-        }
-    }
-}
 
 jar.enabled = false
 
@@ -205,21 +142,6 @@ subprojects {
             languageVersion = JavaLanguageVersion.of(buildJavaVersion)
         }
         sourceCompatibility = JavaVersion.VERSION_17
-    }
-
-    // Sign only release versions, and only when this project's `publish` task will run. That is decided once the task
-    // graph is ready, during configuration, because the configuration cache doesn't allow `onlyIf` to reach `gradle`
-    // or `tasks` when the task runs.
-    def publishTaskPath = "${it.path}:publish"
-    def publishRequested = false
-    gradle.taskGraph.whenReady { graph ->
-        publishRequested = graph.hasTask(publishTaskPath)
-    }
-
-    tasks.withType(Sign).configureEach {
-        onlyIf {
-            isReleaseVersion && publishRequested
-        }
     }
 
     tasks.withType(Jar).configureEach {
@@ -435,8 +357,7 @@ subprojects {
 }
 
 project(':aeron-annotations') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
 
     jar {
         manifest.attributes(
@@ -456,32 +377,13 @@ project(':aeron-annotations') {
         publications {
             aeronAnnotations(MavenPublication) {
                 from components.java
-                pom(projectPom)
             }
         }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronAnnotations
     }
 }
 
 project(':aeron-client') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
 
     dependencies {
         api libs.agrona
@@ -513,26 +415,8 @@ project(':aeron-client') {
         publications {
             aeronClient(MavenPublication) {
                 from components.java
-                pom(projectPom)
             }
         }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronClient
     }
 
     def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
@@ -571,8 +455,7 @@ project(':aeron-client') {
 }
 
 project(':aeron-driver') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
     apply plugin: 'application'
 
     application {
@@ -622,26 +505,8 @@ project(':aeron-driver') {
                 from components.java
                 artifact distZip
                 artifact distTar
-                pom(projectPom)
             }
         }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronDriver
     }
 
     tasks.register('validateConfigExpectations', JavaExec) {
@@ -673,8 +538,7 @@ project(':aeron-driver') {
 }
 
 project(':aeron-archive') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
 
     configurations{
         codecGeneration
@@ -857,26 +721,8 @@ project(':aeron-archive') {
         publications {
             aeronArchive(MavenPublication) {
                 from components.java
-                pom(projectPom)
             }
         }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronArchive
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
@@ -893,8 +739,7 @@ project(':aeron-archive') {
 }
 
 project(':aeron-cluster') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
 
     configurations{
         codecGeneration
@@ -1045,26 +890,8 @@ project(':aeron-cluster') {
         publications {
             aeronCluster(MavenPublication) {
                 from components.java
-                pom(projectPom)
             }
         }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronCluster
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
@@ -1081,8 +908,7 @@ project(':aeron-cluster') {
 }
 
 project(':aeron-samples') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
 
     dependencies {
         api project(':aeron-cluster')
@@ -1099,17 +925,6 @@ project(':aeron-samples') {
         publications {
             aeronSamples(MavenPublication) {
                 from components.java
-                pom(projectPom)
-            }
-        }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
             }
         }
     }
@@ -1120,13 +935,6 @@ project(':aeron-samples') {
         source += project(':aeron-driver').sourceSets.main.allJava
         source += project(':aeron-archive').sourceSets.main.allJava
         source += project(':aeron-archive').sourceSets.generated.allJava
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronSamples
     }
 
     tasks.named('test').configure {
@@ -1214,8 +1022,7 @@ project(':aeron-system-tests') {
 }
 
 project(':aeron-test-support') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
 
     dependencies {
         implementation project(':aeron-client')
@@ -1246,32 +1053,13 @@ project(':aeron-test-support') {
         publications {
             aeronTestSupport(MavenPublication) {
                 from components.java
-                pom(projectPom)
             }
         }
-
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronTestSupport
     }
 }
 
 project(':aeron-all') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
+    apply plugin: 'aeron.publishing'
     apply plugin: 'com.gradleup.shadow'
 
     def aeronClientProject = project(':aeron-client')
@@ -1347,25 +1135,8 @@ project(':aeron-all') {
                 artifact shadowJar
                 artifact sourcesJar
                 artifact javadocJar
-                pom(projectPom)
             }
         }
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronAll
     }
 }
 

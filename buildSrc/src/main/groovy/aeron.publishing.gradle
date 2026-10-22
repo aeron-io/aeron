@@ -1,0 +1,138 @@
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Publishes every MavenPublication in the project to Sonatype Central Portal with the shared Aeron POM, and signs it.
+// Projects applying this plugin declare their own publication(s).
+plugins {
+    id 'maven-publish'
+    id 'signing'
+}
+
+def getConfigProperty(final String projectPropertyName, final String envVarName) {
+    String value = project.findProperty(projectPropertyName)
+    if (!value) {
+        value = System.getenv(envVarName)
+        if (!value) {
+            return null
+        }
+    }
+
+    value = value.trim()
+
+    return value ? value : null
+}
+
+def isReleaseVersion = !version.toString().endsWith('-SNAPSHOT')
+def sonatypeCentralPortalReleasesRepoUrl = 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/'
+def sonatypeCentralPortalSnapshotsRepoUrl = 'https://central.sonatype.com/repository/maven-snapshots/'
+def sonatypeCentralPortalUsername = getConfigProperty('sonatypeCentralPortalUsername', 'SONATYPE_CENTRAL_PORTAL_USERNAME')
+def sonatypeCentralPortalPassword = getConfigProperty('sonatypeCentralPortalPassword', 'SONATYPE_CENTRAL_PORTAL_PASSWORD')
+def signingKey = getConfigProperty('signingKey', 'SIGNING_GPG_SECRET_KEY')         // NOTE: ASCII armored secret key
+def signingPassword = getConfigProperty('signingPassword', 'SIGNING_GPG_PASSWORD') // NOTE: Plain text
+
+publishing {
+    publications.withType(MavenPublication).configureEach {
+        pom {
+            name = 'aeron'
+            // optionally artifactId can be defined here
+            description = 'Efficient reliable UDP unicast, UDP multicast, and IPC transport protocol.'
+            url = 'https://github.com/aeron-io/aeron'
+
+            scm {
+                connection = 'scm:git:https://github.com/aeron-io/aeron.git'
+                developerConnection = 'scm:git:https://github.com/aeron-io/aeron.git'
+                url = 'https://github.com/aeron-io/aeron.git'
+            }
+
+            licenses {
+                license {
+                    name = 'The Apache License, Version 2.0'
+                    url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                }
+            }
+
+            developers {
+                developer {
+                    id = 'tmontgomery'
+                    name = 'Todd L. Montgomery'
+                    email = 'tmont@nard.net'
+                    url = 'https://github.com/tmontgomery'
+                }
+                developer {
+                    id = 'mjpt777'
+                    name = 'Martin Thompson'
+                    email = 'mjpt777@gmail.com'
+                    url = 'https://github.com/mjpt777'
+                }
+                developer {
+                    id = 'RichardWarburton'
+                    name = 'Richard Warburton'
+                    email = 'richard.warburton@gmail.com'
+                    url = 'https://github.com/RichardWarburton'
+                }
+                developer {
+                    id = 'nitsanw'
+                    name = 'Nitsan Wakart'
+                    email = 'nitsanw@yahoo.com'
+                    url = 'https://github.com/nitsanw'
+                }
+                developer {
+                    id = 'mikeb01'
+                    name = 'Mike Barker'
+                    email = 'mikeb01@gmail.com'
+                    url = 'https://github.com/mikeb01'
+                }
+                developer {
+                    id = 'vyazelenko'
+                    name = 'Dmytro Vyazelenko'
+                    email = 'vyazelenko@protonmail.com'
+                    url = 'https://github.com/vyazelenko'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
+            credentials {
+                username = sonatypeCentralPortalUsername
+                password = sonatypeCentralPortalPassword
+            }
+        }
+    }
+}
+
+signing {
+    if (signingKey != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+    }
+    sign publishing.publications
+}
+
+// Sign only release versions, and only when publishing to the remote repository. Whether `publish` is in the task graph
+// is decided once the graph is ready, during configuration, because the configuration cache doesn't allow `onlyIf` to
+// reach `gradle` or `tasks` when the task runs.
+def publishRequested = false
+gradle.taskGraph.whenReady { graph ->
+    publishRequested = graph.hasTask(tasks.publish)
+}
+
+tasks.withType(Sign).configureEach {
+    onlyIf {
+        isReleaseVersion && publishRequested
+    }
+}
