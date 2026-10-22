@@ -48,6 +48,11 @@ public class TutorialPublishTask extends DefaultTask
 
     private String remoteName;
 
+    private final File cloneDirectory =
+        new File(getProject().getLayout().getBuildDirectory().getAsFile().get(), "tmp/tutorialPublish");
+
+    private final File baseGitDir = new File(getProject().getRootDir(), ".git");
+
     /**
      * Returns the GitHub API key to use for publishing.
      *
@@ -120,8 +125,7 @@ public class TutorialPublishTask extends DefaultTask
     public void publish() throws Exception
     {
         final String wikiUri = getWikiUri();
-        final File directory =
-            new File(getProject().getLayout().getBuildDirectory().getAsFile().get(), "tmp/tutorialPublish");
+        final File directory = cloneDirectory;
         // Use Personal Access Token or GITHUB_TOKEN for workflows
         final CredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider(apiKey, "");
 
@@ -156,14 +160,13 @@ public class TutorialPublishTask extends DefaultTask
 
     private String getWikiUri() throws IOException, URISyntaxException
     {
-        final File baseGitDir = new File(getProject().getRootDir(), ".git");
         if (!baseGitDir.exists() || !baseGitDir.isDirectory())
         {
             throw new IllegalStateException("unable to find valid git repository at: " + baseGitDir);
         }
 
         final Repository baseGitRepo = new FileRepositoryBuilder()
-            .setGitDir(new File(getProject().getRootDir(), ".git"))
+            .setGitDir(baseGitDir)
             .build();
 
         final String origin = baseGitRepo.getConfig().getString(
