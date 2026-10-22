@@ -22,11 +22,6 @@ plugins {
     id 'aeron.config-info'
 }
 
-// Reads these projects' source sets, which only exist once their own build files have applied the java plugin.
-evaluationDependsOn(':aeron-annotations')
-evaluationDependsOn(':aeron-client')
-evaluationDependsOn(':aeron-driver')
-
 configurations{
     codecGeneration
 }
@@ -37,6 +32,9 @@ dependencies {
     implementation project(':aeron-annotations')
     annotationProcessor project(':aeron-annotations')
     testImplementation project(':aeron-test-support')
+    javadocSource project(':aeron-annotations')
+    javadocSource project(':aeron-client')
+    javadocSource project(':aeron-driver')
 }
 
 def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
@@ -123,6 +121,13 @@ sourceSets {
 dependencies {
     api files(sourceSets.generated.output)
 }
+
+// Projects aggregating this module's sources (Javadoc, the aeron-all sources jar) need the codecs too.
+configurations.named('mainSourceElements') {
+    outgoing.artifact(tasks.named('generateCodecs').flatMap { it.outputDir }) {
+        type = 'directory'
+    }
+}
 // The versioned test codecs are compiled with the module's tests.
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsV6'))
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV0'))
@@ -141,9 +146,6 @@ jar {
 
 javadoc {
     source += sourceSets.generated.allJava
-    source += project(':aeron-annotations').sourceSets.main.allJava
-    source += project(':aeron-client').sourceSets.main.allJava
-    source += project(':aeron-driver').sourceSets.main.allJava
 }
 
 java {

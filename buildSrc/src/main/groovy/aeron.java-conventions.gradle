@@ -17,6 +17,7 @@ import io.aeron.build.AeronVersionArgumentProvider
 import io.aeron.build.BuildJavaVersion
 import io.aeron.build.ExtractJavadocLinksTask
 import io.aeron.build.GitShaService
+import io.aeron.build.MainSourcesVariant
 import io.aeron.build.TestExecutionLimitService
 
 // Shared Java, test, Javadoc and Checkstyle configuration for every Aeron module.
@@ -220,6 +221,19 @@ tasks.register('topologyTest', Test) {
     systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
 }
 
+// Gradle's mainSourceElements variant lists main's source directories but not the tasks that generate them (e.g.
+// generateCodecs), so other projects aggregating these sources would read generated directories before they exist.
+configurations.named('mainSourceElements') {
+    outgoing.artifacts.configureEach { it.builtBy(sourceSets.main.allSource.sourceDirectories) }
+}
+
+// Projects whose main sources are also documented in this module's Javadoc, declared with `javadocSource project(...)`.
+def javadocSource = configurations.dependencyScope('javadocSource')
+def javadocSourcePath = configurations.resolvable('javadocSourcePath') {
+    extendsFrom(javadocSource.get())
+    MainSourcesVariant.request(it, objects)
+}
+
 // Package lists of the libraries in `javadocLinks`, so the Javadoc can link to their documentation without
 // fetching it.
 def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLinksTask) {
@@ -229,6 +243,8 @@ def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLi
 }
 
 javadoc {
+    source(javadocSourcePath.get().incoming.files.asFileTree.matching { include '**/*.java' })
+
     inputs.files(extractJavadocLinks).withPathSensitivity(PathSensitivity.RELATIVE)
     configurations.javadocLinks.dependencies.each { library ->
         options.linksOffline(

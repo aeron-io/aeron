@@ -1,3 +1,5 @@
+import io.aeron.build.MainSourcesVariant
+
 /*
  * Copyright 2014-2025 Real Logic Limited.
  *
@@ -19,23 +21,27 @@ plugins {
     id 'com.gradleup.shadow'
 }
 
-// Reads these projects' source sets, which only exist once their own build files have applied the java plugin.
-evaluationDependsOn(':aeron-annotations')
-evaluationDependsOn(':aeron-archive')
-evaluationDependsOn(':aeron-client')
-evaluationDependsOn(':aeron-cluster')
-evaluationDependsOn(':aeron-driver')
-evaluationDependsOn(':aeron-samples')
-
-def aeronClientProject = project(':aeron-client')
-def aeronDriverProject = project(':aeron-driver')
-def aeronArchiveProject = project(':aeron-archive')
-def aeronClusterProject = project(':aeron-cluster')
-def aeronSamplesProject = project(':aeron-samples')
+// Projects whose main sources are bundled into the aeron-all sources jar.
+configurations.dependencyScope('bundledSource')
+configurations.resolvable('bundledSourcePath') {
+    extendsFrom(configurations.bundledSource)
+    MainSourcesVariant.request(it, objects)
+}
 
 dependencies {
     implementation project(':aeron-cluster')
     implementation project(':aeron-samples')
+    javadocSource project(':aeron-annotations')
+    javadocSource project(':aeron-client')
+    javadocSource project(':aeron-driver')
+    javadocSource project(':aeron-archive')
+    javadocSource project(':aeron-cluster')
+    javadocSource project(':aeron-samples')
+    bundledSource project(':aeron-client')
+    bundledSource project(':aeron-driver')
+    bundledSource project(':aeron-archive')
+    bundledSource project(':aeron-cluster')
+    bundledSource project(':aeron-samples')
 }
 
 shadowJar {
@@ -64,25 +70,7 @@ tasks.register('sourcesJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
     archiveClassifier.set('sources')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
-    from files(
-        aeronClientProject.sourceSets.main.allSource,
-        aeronDriverProject.sourceSets.main.allSource,
-        aeronArchiveProject.sourceSets.main.allSource,
-        aeronArchiveProject.sourceSets.generated.allSource,
-        aeronClusterProject.sourceSets.main.allSource,
-        aeronClusterProject.sourceSets.generated.allSource,
-        aeronSamplesProject.sourceSets.main.allSource)
-}
-
-javadoc {
-    source += project(':aeron-annotations').sourceSets.main.allJava
-    source += aeronClientProject.sourceSets.main.allJava
-    source += aeronDriverProject.sourceSets.main.allJava
-    source += aeronArchiveProject.sourceSets.main.allJava
-    source += aeronArchiveProject.sourceSets.generated.allJava
-    source += aeronClusterProject.sourceSets.main.allJava
-    source += aeronClusterProject.sourceSets.generated.allJava
-    source += aeronSamplesProject.sourceSets.main.allJava
+    from configurations.bundledSourcePath.incoming.files
 }
 
 tasks.register('javadocJar', Jar) {
