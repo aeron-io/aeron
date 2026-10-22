@@ -47,6 +47,7 @@ import static io.aeron.logbuffer.FrameDescriptor.*;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.ByteOrder.nativeOrder;
 import static java.nio.channels.FileChannel.MapMode.READ_ONLY;
 import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
@@ -1343,6 +1344,7 @@ final class Catalog implements AutoCloseable
         {
             final int offsetLimit = (int)min(segmentFileLength, segmentFileChannel.size());
             final ByteBuffer byteBuffer = buffer.byteBuffer();
+            final ByteBuffer frameLengthBuffer = ByteBuffer.allocate(SIZE_OF_INT).order(LITTLE_ENDIAN);
 
             int nextFragmentOffset = offset;
             int lastFragmentLength = 0;
@@ -1365,6 +1367,21 @@ final class Catalog implements AutoCloseable
                     lastFragmentLength = align(frameLength, FRAME_ALIGNMENT);
                     nextFragmentOffset += lastFragmentLength;
                     bufferOffset += lastFragmentLength;
+                }
+
+                final int lastFragmentOffset = nextFragmentOffset - lastFragmentLength;
+                // Peek at the next frame length, preserving a page-straddling candidate in the buffer for validation.
+                if (nextFragmentOffset < offsetLimit &&
+                    lastFragmentLength > 0 &&
+                    fragmentStraddlesPageBoundary(lastFragmentOffset, lastFragmentLength) &&
+                    SIZE_OF_INT == readNextChunk(
+                        segmentFileChannel,
+                        frameLengthBuffer,
+                        nextFragmentOffset,
+                        nextFragmentOffset + SIZE_OF_INT) &&
+                    frameLengthBuffer.getInt(0) <= 0)
+                {
+                    break;
                 }
             }
 
@@ -1417,6 +1434,12 @@ final class Catalog implements AutoCloseable
     private static boolean isValidFragment(
         final UnsafeBuffer buffer, final int fragmentOffset, final int alignedFragmentLength, final Checksum checksum)
     {
+        if (fragmentOffset < 0 || alignedFragmentLength < HEADER_LENGTH ||
+            alignedFragmentLength > buffer.capacity() - fragmentOffset)
+        {
+            return false;
+        }
+
         return null != checksum && hasValidChecksum(buffer, fragmentOffset, alignedFragmentLength, checksum) ||
             hasDataInAllPagesAfterStraddle(buffer, fragmentOffset, alignedFragmentLength);
     }

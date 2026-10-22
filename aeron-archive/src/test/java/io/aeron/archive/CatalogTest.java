@@ -546,6 +546,79 @@ class CatalogTest
         }
     }
 
+    @Test
+    void shouldVerifyLastFragmentWhenZeroLengthFrameIsReadIntoNextBuffer() throws Exception
+    {
+        final long newRecordingId = newRecording();
+        final File segmentFile = new File(archiveDir, segmentFileName(newRecordingId, 0));
+        try (FileChannel log = FileChannel.open(segmentFile.toPath(), READ, WRITE, CREATE))
+        {
+            final ByteBuffer bb = allocate(HEADER_LENGTH);
+            final DataHeaderFlyweight flyweight = new DataHeaderFlyweight(bb);
+            flyweight.frameLength(PAGE_SIZE - 128);
+            log.write(bb);
+
+            bb.clear();
+            flyweight.frameLength(256);
+            flyweight.sessionId(1025596259);
+            log.write(bb, PAGE_SIZE - 128);
+
+            bb.clear();
+            bb.put(0, (byte)0).limit(1).position(0);
+            log.write(bb, SEGMENT_LENGTH - 1);
+        }
+
+        currentTimeMs = 42L;
+        // Final fragment ends at the buffer limit, forcing the zero-length frame into the next read.
+        final UnsafeBuffer recoveryBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(PAGE_SIZE + 128));
+
+        try (Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, crc32(), recoveryBuffer))
+        {
+            assertTrue(catalog.forEntry(
+                newRecordingId,
+                (recordingDescriptorOffset, headerEncoder, headerDecoder, descriptorEncoder, descriptorDecoder) ->
+                {
+                    assertEquals(42L, descriptorDecoder.stopTimestamp());
+                    assertEquals(PAGE_SIZE + 128, descriptorDecoder.stopPosition());
+                }));
+        }
+    }
+
+    @Test
+    void shouldNotComputeChecksumWhenFragmentExceedsRecoveryBuffer() throws Exception
+    {
+        final long newRecordingId = newRecording();
+        final File segmentFile = new File(archiveDir, segmentFileName(newRecordingId, 0));
+        try (FileChannel log = FileChannel.open(segmentFile.toPath(), READ, WRITE, CREATE))
+        {
+            final ByteBuffer bb = allocate(HEADER_LENGTH);
+            final DataHeaderFlyweight flyweight = new DataHeaderFlyweight(bb);
+            flyweight.frameLength(PAGE_SIZE * 2);
+            log.write(bb);
+
+            bb.clear();
+            bb.put(0, (byte)0).limit(1).position(0);
+            log.write(bb, SEGMENT_LENGTH - 1);
+        }
+
+        final Checksum checksum = (address, offset, length) ->
+        {
+            throw new AssertionError("checksum must not read outside recovery buffer");
+        };
+        final UnsafeBuffer recoveryBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(PAGE_SIZE));
+
+        final ArchiveException exception = assertThrows(
+            ArchiveException.class,
+            () ->
+            {
+                final Catalog catalog =
+                    new Catalog(archiveDir, null, 0, CAPACITY, clock, checksum, recoveryBuffer);
+                catalog.close();
+            });
+
+        assertThat(exception.getMessage(), containsString(segmentFile.getAbsolutePath()));
+    }
+
     private long newRecording()
     {
         try (Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, null, segmentFileBuffer))
