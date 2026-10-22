@@ -244,6 +244,15 @@ subprojects {
 
     tasks.withType(Test).configureEach { test ->
         usesService(testExecutionLimit)
+
+        // With a native media driver or ATS binary set, tests run against that binary, but only its path is an input.
+        // A rebuilt binary at the same path would get a cached result, so don't cache those runs.
+        def externalBinaryPaths = [
+            System.getProperty('aeron.test.system.aeronmd.path'),
+            System.getProperty('aeron.test.system.ats.path')]
+        outputs.doNotCacheIf('tests run against an external native binary that is not tracked as an input') {
+            externalBinaryPaths.any { it != null }
+        }
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
         if (buildJavaVersion >= 21) {
