@@ -157,6 +157,129 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 6f | A remote build cache for CI (e.g. Develocity, which has an open-source programme and also brings build scans), so CI can reuse task outputs, including test results, for modules a pull request didn't affect. | ☐ |
 | 6g | Configure an encryption key for `gradle/actions/setup-gradle`, so CI restores configuration cache entries between runs. | ☐ |
 
+## Delivery: four pull requests
+
+This branch is the full record of the work: every detour, measurement and decision, in 26+ commits that each also
+update this file. That is too much for a maintainer to review. So the work is being delivered as four smaller pull
+requests, each built fresh from `master` (or on the previous one), going straight to the final design without the
+detours, and without this notes file.
+
+### Why the split, and the evidence for it
+
+Most of the speed-up comes from a handful of changes, not the restructuring:
+
+- the compiler-argument fix and the build cache (step 1);
+- the Javadoc links task, `TutorialPublishTask`, the release signing rule, the test limit and enabling the
+  configuration cache (step 4).
+
+None of those need convention plugins or per-module build files. The configuration cache works with one big
+`build.gradle`. To test that, PR 2 was built on its own on top of `master` and benchmarked against this branch.
+
+Fresh clones, clean working trees, back to back; seconds, median of 3; JDK 26, 18-core Mac:
+
+| Scenario | `master` | PR 2 alone (7 commits) | This branch (26 commits) |
+|---|---|---|---|
+| Clean build, build cache hit | 8.51 | 2.07 | 2.09 |
+| Clean build, no build cache | 8.98 | 5.07 | 5.43 |
+| Javadoc, all modules | 22.10 | 15.81 | 15.94 |
+| Publish to local Maven repo | 25.09 | 17.10 | 17.21 |
+| Clean build, `--parallel` | 6.06 | 5.00 | 5.45 |
+| No-op build | 1.25 | 1.16 | 1.22 |
+| Change to compiled code in `buildSrc`, then `help` | 2.66 | 2.65 | **1.44** |
+
+PR 2 gets all of the speed-up except faster recompiles after build-logic changes, which come from splitting the
+1,400-line script into small ones (PR 3). The restructure's main case is maintainability.
+
+Both PR 2 and this branch publish artifacts identical to `master`. That was checked by building each from a
+`git archive` export with no `.git`, so the git SHA is `unknown` on both sides. This answers the end-to-end publishing
+question that per-step comparisons left open.
+
+### The pull requests
+
+| PR | Branch | Contents | Status (October 2026) |
+|---|---|---|---|
+| 1. Bug fixes | `build-bug-fixes` (deleted after merge) | 3 commits, 9 lines of `build.gradle`: the cluster node-state schema as a `generateCodecs` input; `generateConfigDoc`/`validate*Expectations` depending on `compileJava` (via `files(...).builtBy(...)`); the test jar classifier using the property's value (`test-<module>`) | **Merged** as #2216, squash-merged into `b77aff82b4` |
+| 2. Faster builds | `build-performance` | 8 commits: compiler arguments as inputs and a shared git SHA service; build cache on; Javadoc links task; `TutorialPublishTask`; signing decided during configuration; one test task at a time; configuration cache on; no caching of native-binary test runs | **Open** as #2215, all CI green. To be rebased onto `master`. |
+| 3. Restructure | `build-restructure` | 5 commits on PR 2: `aeron.publishing`; typed `SbeGenerateTask`; `aeron.config-info`; a build file per module; `aeron.java-conventions` applied per module | Pushed; PR to be opened after PR 2 merges |
+| 4. Wiring tidy-up | `build-wiring` | 5 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants | Pushed; on top of PR 3 |
+
+PR 1 started as part of PR 2's branch, then was rebased onto `master` so it could be reviewed and merged on its own.
+The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be enabled correctly without it.
+
+### Found and decided while building the PRs
+
+- **Copilot review of PR 2 (#2215)** found that enabling the build cache could restore stale results for tests run
+  against a native `aeronmd` or ATS binary. Fixed with `doNotCacheIf` when `aeron.test.system.aeronmd.path` or
+  `aeron.test.system.ats.path` is set; see "Native-binary test runs and the build cache". The fix was added as its own
+  commit at the end of PR 2, not moved earlier in the history, to keep the record honest. It was also added to this
+  branch.
+- **Copilot can't review `build.gradle`:** GitHub's list of files excluded from Copilot code review names
+  `build.gradle` and `build.gradle.kts`, and there's no documented override. That's why PR 1, which only changes
+  `build.gradle`, got no Copilot review. Convention plugins with other names (`aeron.*.gradle`) can be reviewed.
+- **PR 3's commit order matters.** Moving module blocks out of the root first would need temporary workarounds, so
+  the order is: publishing plugin, `SbeGenerateTask`, config-info plugin, module build files, then the conventions
+  plugin.
+- **Javadoc lost most of its sources in PR 3 (caught and fixed).** Once each module applied `aeron.java-conventions`
+  itself, `aeron-all`'s Javadoc had 184 source files instead of 530.
+  - `aeron-all` is evaluated first, and when it read `project(':aeron-client').sourceSets`, client's build file hadn't
+    run yet.
+  - Instead of failing, Groovy's property lookup fell back to the parent project and returned the root project's
+    empty `sourceSets`.
+  - Fixed in PR 3 with `evaluationDependsOn` for every project whose source sets a module reads. PR 4 then removes the
+    reach-ins and all the `evaluationDependsOn` calls.
+  - This branch never had the problem: its reach-ins were removed (3d) before modules applied the conventions plugin
+    themselves (3e).
+- **PR 3 compared with this branch:** all shared `buildSrc` files are byte-identical except
+  `aeron.java-conventions.gradle`, whose differences are PR 4's wiring, two cosmetic changes, and the native-binary
+  fix (which this branch lacked until it was added).
+- **PR 4 keeps the `test-<module>` test jar name** from PR 1 rather than this branch's `tests`, so a name already
+  fixed once doesn't change again. Otherwise PR 4's build matches this branch's, apart from block order, one comment's
+  wrapping, and a duplicated `duplicatesStrategy` line in `aeron-all`'s `sourcesJar` (left for step 5).
+- **No speculative CI runs.** The full matrix is 44 jobs per push. CI is run by hand only when a branch is final,
+  because each rebase makes a run obsolete.
+
+### Keeping the stacked branches up to date
+
+The branches stack: `master` → `build-performance` (PR 2) → `build-restructure` (PR 3) → `build-wiring` (PR 4).
+Whenever a lower one is rebased or merged, the ones above it need rebasing in turn.
+
+- **Squash merges:** if a PR is squash-merged, its commits arrive on `master` as one new commit, and
+  `git rebase origin/master` won't recognise the stacked branch's copies as already applied.
+  - Drop them explicitly: either an interactive rebase, or recreate the branch from `origin/master` and cherry-pick
+    only the remaining commits. PR 3 was rebuilt the second way after PR 1 merged.
+  - Before dropping commits, check the squash commit contains exactly their changes, e.g. compare
+    `git diff <squash>^ <squash>` with the combined diff of the dropped commits.
+- **After each rebase:**
+  - the build files should be identical to before the rebase, unless `master` changed them;
+  - check the configuration dump and the artifact comparison against the new base;
+  - check that any new CI workflow changes don't add Gradle commands the branch must support.
+- **Switching between branches** with and without PR 4's per-task test-codec folders needs a `clean`. Otherwise
+  `compileGeneratedTestJava` on the old layout reports "duplicate class".
+
+### Verification tools
+
+These are kept outside version control, so they never end up in a commit:
+
+- **`.git/aeron-verify/` in the repository:**
+  - `compare_publications.py`: compares two local Maven repositories, covering jar and zip entries by CRC, tar
+    entries, POMs, and `.module` files without checksums.
+  - `publish_export.sh <ref> <name>`: builds a ref from a `git archive` export and publishes it.
+  - `dump-java-config.gradle` and `dump.sh <name>`: the per-project configuration dump.
+  - `gen.zsh`: generated-codec capture.
+  - `overlap.py`: test task overlap from JUnit timestamps.
+  - `cpdiff.py`: element-level classpath differences.
+  - `bench.sh`: benchmarks.
+- **`~/Library/Caches/aeron-build-verify/`:** the exports and benchmark clones.
+
+Two lessons about the tools, both from false alarms:
+
+- **Exports must be built outside any git repository.** `GithubUtil` searches upwards for `.git`, so an export inside
+  `.git/aeron-verify/` picked up the repository's current SHA instead of `unknown`. Every `*Version` class, and the
+  classes that copy its constants, then differed.
+- **Only filter facts that really depend on build state.** Excluding every `*.source` fact, to hide the state-dependent
+  compile source lists, also hid the `javadoc.source` counts that showed the Javadoc problem. Filter
+  `compile*Java.source` only.
+
 ## Log
 
 Record measurements and decisions here as the work progresses.
