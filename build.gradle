@@ -396,7 +396,7 @@ subprojects {
 
     tasks.register('testJar', Jar) {
         dependsOn 'testClasses'
-        archiveClassifier.set("test-${base.archivesName}")
+        archiveClassifier.set(base.archivesName.map { "test-${it}" })
         from sourceSets.test.output
     }
 
