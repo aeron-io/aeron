@@ -1,4 +1,5 @@
 import io.aeron.build.AeronVersionArgumentProvider
+import io.aeron.build.ExtractJavadocLinksTask
 import io.aeron.build.GitShaService
 import io.aeron.build.LoggingTest
 
@@ -351,22 +352,21 @@ subprojects {
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
     }
 
-    javadoc {
+    // Package lists of the libraries in `javadocLinks`, so the Javadoc can link to their documentation without
+    // fetching it.
+    def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLinksTask) {
+        javadocJars.from(configurations.javadocLinks)
+        artifacts.set(configurations.javadocLinks.incoming.artifacts.resolvedArtifacts)
+        outputDir = layout.buildDirectory.dir('javadoc-links')
+    }
 
-        doFirst {
-            configurations.javadocLinks.resolvedConfiguration.resolvedArtifacts.each { artifact ->
-                def id = artifact.moduleVersion.id
-                def destDir = layout.buildDirectory.dir("javadoc-links/${id.name}").get().asFile
-                copy {
-                    from zipTree(artifact.file)
-                    into destDir
-                    include 'element-list', 'package-list'
-                }
-                options.linksOffline(
-                    "https://www.javadoc.io/static/${id.group}/${id.name}/${id.version}/",
-                    destDir.absolutePath
-                )
-            }
+    javadoc {
+        inputs.files(extractJavadocLinks).withPathSensitivity(PathSensitivity.RELATIVE)
+        configurations.javadocLinks.dependencies.each { library ->
+            options.linksOffline(
+                "https://www.javadoc.io/static/${library.group}/${library.name}/${library.version}/",
+                layout.buildDirectory.dir("javadoc-links/${library.name}").get().asFile.absolutePath
+            )
         }
 
         failOnError = true
