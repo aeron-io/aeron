@@ -2,6 +2,7 @@ import io.aeron.build.AeronVersionArgumentProvider
 import io.aeron.build.ExtractJavadocLinksTask
 import io.aeron.build.GitShaService
 import io.aeron.build.LoggingTest
+import io.aeron.build.TestExecutionLimitService
 
 /*
  * Copyright 2014-2025 Real Logic Limited.
@@ -54,6 +55,12 @@ def toolchainLauncher = javaToolchains.launcherFor {
 def aeronGroup = 'io.aeron'
 def aeronVersion = file('version.txt').text.trim()
 def gitSha = GitShaService.gitSha(project)
+
+// Run one test task at a time across the whole build, as Gradle did before tasks ran in parallel: the tests start media
+// drivers and share Aeron directories and ports. Raise maxParallelUsages only once tests are known to be safe together.
+def testExecutionLimit = gradle.sharedServices.registerIfAbsent('aeronTestExecutionLimit', TestExecutionLimitService) {
+    maxParallelUsages = 1
+}
 
 def getConfigProperty(final String projectPropertyName, final String envVarName) {
     String value = project.findProperty(projectPropertyName)
@@ -236,6 +243,7 @@ subprojects {
     def testSuiteClasspath = testing.suites.test.sources.runtimeClasspath
 
     tasks.withType(Test).configureEach { test ->
+        usesService(testExecutionLimit)
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
         if (buildJavaVersion >= 21) {
