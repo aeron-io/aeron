@@ -148,6 +148,14 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 5k | Wrapper: `-all` to `-bin` distribution (smaller download; loses Gradle sources in the IDE). | ☐ |
 | 5l | Move `uploadArtifactsToCentralPortal` into `aeron.publishing`, removing the duplicated `getConfigProperty` and the credentials from the root script. | ☐ |
 | 5m | `aeron-all` `javadocJar`: `from tasks.named('javadoc')` instead of `javadoc.destinationDir` plus `dependsOn`. | ☐ |
+| 6 | CI and test speed: ideas, not started. Each is independent; see "Step 6: CI and test speed" below. | ☐ |
+| 6a | Measure first: per-job durations and failure history from the GitHub API, and the slowest test classes from the JUnit XML results, to decide what to change. | ☐ |
+| 6b | Run `ci-low-cadence.yml` only on its schedule and on `master`, not on every pull request (17 jobs per push). Needs the team to accept catching slow-test failures after merge. | ☐ |
+| 6c | Slim the C++ matrix on pull requests (18 jobs per push), e.g. the oldest and newest GCC and Clang plus MSVC and Xcode, with the full matrix on `master` or a schedule. | ☐ |
+| 6d | Parallel test execution, across modules (raise `maxParallelUsages` in `TestExecutionLimitService`) and/or within modules (`maxParallelForks`). Depends on question 6. | ☐ |
+| 6e | Look at the slowest tests found in 6a. | ☐ |
+| 6f | A remote build cache for CI (e.g. Develocity, which has an open-source programme and also brings build scans), so CI can reuse task outputs, including test results, for modules a pull request didn't affect. | ☐ |
+| 6g | Configure an encryption key for `gradle/actions/setup-gradle`, so CI restores configuration cache entries between runs. | ☐ |
 
 ## Log
 
@@ -964,6 +972,42 @@ What this does and doesn't show:
     as on `master`, so none are expected.
   - The release workflows (`release.yml`, `release-snapshot.yml`) weren't run, because they publish to Sonatype.
     Their Gradle commands were checked locally in steps 4d and 4f.
+
+### Step 6: CI and test speed (ideas, not started)
+
+Recorded after the PRs for this work were opened (October 2026). At that point every push to a pull request ran 44
+jobs:
+
+- `ci.yml`: 25 jobs. Java on JDK 17, 21 and 25 on Ubuntu, macOS and Windows, plus topology tests, and 18 C++
+  compiler and platform jobs.
+- `ci-low-cadence.yml`: 17 jobs. Despite the name, it triggers on pull requests to `master` and `release/**` as well
+  as its twice-daily schedule.
+- `codeql.yml`: 2 jobs.
+
+**CI setup**
+
+- **6a, measure before cutting:** the GitHub API gives per-job durations and conclusions for recent runs. That shows
+  which jobs cost the most time and which ever fail independently of the others, so decisions are based on data
+  rather than guesswork.
+- **6b, Low Cadence:** running it only on schedule and on `master` would remove 17 jobs per push. The trade-off is
+  that slow-test failures would be caught after merge rather than before.
+- **6c, C++ matrix:** a smaller set on pull requests (e.g. GCC 11 and 14, Clang 17 and 23, MSVC, Xcode), with the
+  full matrix on `master` or a schedule. 6a should show whether the in-between compilers ever catch anything the
+  others don't.
+- **6g, configuration cache in CI:** `gradle/actions/setup-gradle` only saves and restores configuration cache entries
+  when an encryption key is configured, so CI probably doesn't reuse them yet. A small, separate win.
+
+**Test speed**
+
+- **6d, parallel tests:** test tasks currently run one at a time across the build (step 4e), because the tests start
+  media drivers and share Aeron directories and ports (question 6). If the engineers confirm they can run together,
+  raising `maxParallelUsages` is the biggest local win. Within a module, `maxParallelForks` is a further option.
+- **6e, slowest tests:** the JUnit XML results contain per-class and per-test timings, so a "slowest 20" list is easy
+  to produce and gives a target list.
+- **6f, remote build cache:** test results are cacheable now, except runs against an external native binary (see
+  `7c026d38a0` on the performance PR). A shared remote cache would let CI skip tests in modules a pull request didn't
+  change. Develocity's open-source programme could provide it, together with build scans, which would also help with
+  6a and 6e.
 
 ## Decisions
 
