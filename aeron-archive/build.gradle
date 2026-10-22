@@ -155,6 +155,16 @@ tasks.named('sourcesJar') {
     from sourceSets.generated.allSource
 }
 
+// aeron-system-tests uses a few of archive's test helpers, so the test classes are shared through this configuration.
+def testJar = tasks.register('testJar', Jar) {
+    archiveClassifier.set(base.archivesName.map { "test-${it}" })
+    from sourceSets.test.output
+}
+
+configurations.consumable('tests') {
+    outgoing.artifact(testJar)
+}
+
 publishing {
     publications {
         aeronArchive(MavenPublication) {
