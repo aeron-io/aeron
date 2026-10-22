@@ -2,6 +2,7 @@ import io.aeron.build.AeronVersionArgumentProvider
 import io.aeron.build.ExtractJavadocLinksTask
 import io.aeron.build.GitShaService
 import io.aeron.build.LoggingTest
+import io.aeron.build.SbeGenerateTask
 import io.aeron.build.TestExecutionLimitService
 
 /*
@@ -580,104 +581,62 @@ project(':aeron-archive') {
     def markCodecsFile = 'src/main/resources/archive/aeron-archive-mark-codecs.xml'
     def sbeFile = 'src/main/resources/archive/fpl/sbe.xsd'
 
-    tasks.register('generateCodecs', JavaExec) {
-        inputs.files(codecsFile, markCodecsFile, sbeFile)
-        outputs.dir generatedSrcDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateCodecs', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedSrcDir,
-            'sbe.target.language': 'Java',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true')
-        args = [codecsFile, markCodecsFile]
+        schemas.from(codecsFile, markCodecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedSrcDir
+        targetLanguage = 'Java'
     }
 
     def generatedCppDir = file(System.getProperty('codec.target.dir') ?: "${rootDir}/cppbuild/Release/generated")
-    tasks.register('generateCppCodecs', JavaExec) {
-        inputs.files(codecsFile, sbeFile)
-        outputs.dir generatedCppDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateCppCodecs', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedCppDir,
-            'sbe.target.language': 'Cpp',
-            'sbe.target.namespace': 'aeron.archive.client',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true')
-        args = [codecsFile]
+        schemas.from(codecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedCppDir
+        targetLanguage = 'Cpp'
+        targetNamespace = 'aeron.archive.client'
     }
 
     def generatedCDir = file(System.getProperty('codec.target.dir') ?: "${rootDir}/cppbuild/Release/generated/c")
-    tasks.register('generateCCodecs', JavaExec) {
-        inputs.files(codecsFile, sbeFile)
-        outputs.dir generatedCDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateCCodecs', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedCDir,
-            'sbe.target.language': 'C',
-            'sbe.target.namespace': 'aeron.archive.client',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true')
-        args = [codecsFile]
+        schemas.from(codecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedCDir
+        targetLanguage = 'C'
+        targetNamespace = 'aeron.archive.client'
     }
 
-    tasks.register('generateTestCodecsV6', JavaExec) {
-        inputs.files(codecsFile, sbeFile)
-        outputs.dir generatedTestDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateTestCodecsV6', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedTestDir,
-            'sbe.target.language': 'Java',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true',
-            'sbe.target.namespace': 'io.aeron.archive.codecs.v6',
-            'sbe.schema.transform.version': '*:6')
-        args = [codecsFile]
+        schemas.from(codecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedTestDir
+        targetLanguage = 'Java'
+        targetNamespace = 'io.aeron.archive.codecs.v6'
+        schemaTransformVersion = '*:6'
     }
 
-    tasks.register('generateTestCodecsMarkFileV0', JavaExec) {
-        inputs.files(markCodecsFile, sbeFile)
-        outputs.dir generatedTestDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateTestCodecsMarkFileV0', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedTestDir,
-            'sbe.target.language': 'Java',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true',
-            'sbe.target.namespace': 'io.aeron.archive.codecs.mark.v0',
-            'sbe.schema.transform.version': '*:0')
-        args = [markCodecsFile]
+        schemas.from(markCodecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedTestDir
+        targetLanguage = 'Java'
+        targetNamespace = 'io.aeron.archive.codecs.mark.v0'
+        schemaTransformVersion = '*:0'
     }
 
-    tasks.register('generateTestCodecsMarkFileV1', JavaExec) {
-        inputs.files(markCodecsFile, sbeFile)
-        outputs.dir generatedTestDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateTestCodecsMarkFileV1', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedTestDir,
-            'sbe.target.language': 'Java',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true',
-            'sbe.target.namespace': 'io.aeron.archive.codecs.mark.v1',
-            'sbe.schema.transform.version': '*:1')
-        args = [markCodecsFile]
+        schemas.from(markCodecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedTestDir
+        targetLanguage = 'Java'
+        targetNamespace = 'io.aeron.archive.codecs.mark.v1'
+        schemaTransformVersion = '*:1'
     }
 
     compileJava.dependsOn 'compileGeneratedJava'
@@ -783,68 +742,43 @@ project(':aeron-cluster') {
     def nodeStateCodecsFile = 'src/main/resources/cluster/aeron-cluster-node-state-codecs.xml'
     def sbeFile = 'src/main/resources/cluster/fpl/sbe.xsd'
 
-    tasks.register('generateCodecs', JavaExec) {
-        inputs.files(codecsFile, markCodecsFile, nodeStateCodecsFile, sbeFile)
-        outputs.dir generatedSrcDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+    tasks.register('generateCodecs', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedSrcDir,
-            'sbe.target.language': 'Java',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true')
-        args = [codecsFile, markCodecsFile, nodeStateCodecsFile]
+        schemas.from(codecsFile, markCodecsFile, nodeStateCodecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedSrcDir
+        targetLanguage = 'Java'
     }
 
     def markCodecsFileV0 = 'src/test/resources/aeron-cluster-mark-codecs-v0.xml'
-    tasks.register('generateTestCodecsMarkFileV0', JavaExec) {
-        inputs.files(markCodecsFileV0, sbeFile)
-        outputs.dir generatedTestDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
-        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+    tasks.register('generateTestCodecsMarkFileV0', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-            'sbe.output.dir': generatedTestDir,
-            'sbe.target.language': 'Java',
-            'sbe.validation.xsd': sbeFile,
-            'sbe.validation.stop.on.error': 'true',
-            'sbe.target.namespace': 'io.aeron.cluster.codecs.mark.v0',
-            'sbe.schema.transform.version': '*:0')
-        args = [markCodecsFileV0]
+        schemas.from(markCodecsFileV0)
+        validationXsd = file(sbeFile)
+        outputDir = generatedTestDir
+        targetLanguage = 'Java'
+        targetNamespace = 'io.aeron.cluster.codecs.mark.v0'
+        schemaTransformVersion = '*:0'
     }
 
-    tasks.register('generateTestCodecsV5', JavaExec) {
-        inputs.files(codecsFile, sbeFile)
-        outputs.dir generatedTestDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+    tasks.register('generateTestCodecsV5', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-                'sbe.output.dir': generatedTestDir,
-                'sbe.target.language': 'Java',
-                'sbe.validation.xsd': sbeFile,
-                'sbe.validation.stop.on.error': 'true',
-                'sbe.target.namespace': 'io.aeron.cluster.codecs.v5',
-                'sbe.schema.transform.version': '*:5')
-        args = [codecsFile]
+        schemas.from(codecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedTestDir
+        targetLanguage = 'Java'
+        targetNamespace = 'io.aeron.cluster.codecs.v5'
+        schemaTransformVersion = '*:5'
     }
 
-    tasks.register('generateTestCodecsV12', JavaExec) {
-        inputs.files(codecsFile, sbeFile)
-        outputs.dir generatedTestDir
-
-        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+    tasks.register('generateTestCodecsV12', SbeGenerateTask) {
         classpath = configurations.codecGeneration
-        systemProperties(
-                'sbe.output.dir': generatedTestDir,
-                'sbe.target.language': 'Java',
-                'sbe.validation.xsd': sbeFile,
-                'sbe.validation.stop.on.error': 'true',
-                'sbe.target.namespace': 'io.aeron.cluster.codecs.v12',
-                'sbe.schema.transform.version': '*:12')
-        args = [codecsFile]
+        schemas.from(codecsFile)
+        validationXsd = file(sbeFile)
+        outputDir = generatedTestDir
+        targetLanguage = 'Java'
+        targetNamespace = 'io.aeron.cluster.codecs.v12'
+        schemaTransformVersion = '*:12'
     }
 
     compileJava.dependsOn 'compileGeneratedJava'
