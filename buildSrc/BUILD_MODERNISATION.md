@@ -94,7 +94,8 @@ Modern approach: register the generator task's output as a source dir, e.g.
 
 ### 7. Minor
 
-- Groovy DSL rather than Kotlin DSL, which has been Gradle's default since 8.2. Mostly a matter of taste.
+- Groovy DSL rather than Kotlin DSL, which has been Gradle's default since 8.2. Staying with Groovy; see the
+  decisions.
 - `jar.finalizedBy assembleDist` in `aeron-driver` means every `jar` also builds the zip and tar distributions.
 - **Probable bug:** in `copyTestLogs`, `include '/var/coredump/core*'` is matched relative to `from '.'`, so it most
   likely never collects any core dumps.
@@ -138,9 +139,9 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 5a | Stop resolving from `mavenLocal()`. Changes behaviour for anyone testing against locally published Agrona or SBE, so it needs a team decision. | ☐ |
 | 5b | Declare repositories in `settings.gradle` (`dependencyResolutionManagement`, `FAIL_ON_PROJECT_REPOS`) instead of `allprojects`. | ☐ |
 | 5c | Replace `failOnVersionConflict()` plus seven `force` entries with dependency constraints or `strictly` versions; compare resolved dependency trees. | ☐ |
-| 5d | Test task tidy-up: `slowTest`, `bindingsTest` and `topologyTest` as JVM Test Suites; deduplicate the event-log system properties repeated in 5 places; drop the `testClassesDirs`/`classpath` overrides. Task names and CI commands must stay the same. | ☐ |
+| 5d | Test task tidy-up: `slowTest`, `bindingsTest` and `topologyTest` as JVM Test Suites; deduplicate the event-log system properties repeated in 5 places; drop the `testClassesDirs`/`classpath` overrides; stop choosing `excludeTags 'any()'` by matching test task names in `aeron.java-conventions`. Task names and CI commands must stay the same. | ☐ |
 | 5e | Publishing credentials through `credentials(PasswordCredentials)`, so Sonatype uploads also use the configuration cache. Needs the release workflows to pass secrets as `ORG_GRADLE_PROJECT_…` (question 8). | ☐ |
-| 5f | Kotlin DSL for the build scripts and convention plugins. Largest item, mostly taste; can go file by file. | ☐ |
+| 5f | ~~Kotlin DSL for the build scripts and convention plugins.~~ Not doing: staying with Groovy (see the decisions). | ✗ |
 | 5g | `copyTestLogs`: `include '/var/coredump/core*'` probably never matches; fix or remove after checking what CI produces. | ☐ |
 | 5h | `aeron-driver`: drop `jar.finalizedBy assembleDist`, which builds the zip and tar distributions on every `jar`, after checking nobody relies on it. | ☐ |
 | 5i | Javadoc footer: stop hard-coding the copyright year (2014-2025). | ☐ |
@@ -148,6 +149,18 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 5k | Wrapper: `-all` to `-bin` distribution (smaller download; loses Gradle sources in the IDE). | ☐ |
 | 5l | Move `uploadArtifactsToCentralPortal` into `aeron.publishing`, removing the duplicated `getConfigProperty` and the credentials from the root script. | ☐ |
 | 5m | `aeron-all` `javadocJar`: `from tasks.named('javadoc')` instead of `javadoc.destinationDir` plus `dependsOn`. | ☐ |
+| 5n | Module boilerplate into the conventions: the `Implementation-*` jar manifest, `withSourcesJar()`/`withJavadocJar()` and the `from components.java` publication are repeated in 6 modules. An `aeron { moduleName = 'io.aeron.client' }` extension could set them all; `aeron-all` and `aeron-system-tests` stay special cases. | ☐ |
+| 5o | `aeron.sbe-codecs` convention plugin for archive and cluster: the `codecGeneration` configuration, `generated` source set, `api files(...)`, `mainSourceElements` artifact and `jar`/`javadoc`/`sourcesJar` additions (about 40 lines each), plus a container of test-codec versions. At minimum, set `classpath` once with `tasks.withType(SbeGenerateTask).configureEach`. | ☐ |
+| 5p | Derive `javadocSource` (and `aeron-all`'s `bundledSource`) from the dependency graph: an `artifactView` on `runtimeClasspath` with `withVariantReselection()`, the `MainSourcesVariant` attributes and a project-only component filter. The hand-written lists have drifted: `aeron-samples` has `api project(':aeron-cluster')` but no `javadocSource` for it (question 9). | ☐ |
+| 5q | Drop the explicit toolchain launchers: the root `toolchainLauncher`, the `allprojects { tasks.withType(JavaExec) … }` block and `javaLauncher.set(...)` in `aeron.java-conventions`. `Test` and `JavaExec` already default to the `java { toolchain }` launcher. Confirm with the configuration dump. | ☐ |
+| 5r | Empty the root script: `group` and `version` into the conventions and, with 5b, no `allprojects`/`subprojects` left. Then check whether the root still needs `java-library` and `jar.enabled = false`. Moves towards Isolated Projects. | ☐ |
+| 5s | Set `rootProject.name = 'aeron'` in `settings.gradle`; today the root project is named after its directory (e.g. `aeron-ci-cache` in a worktree). | ☐ |
+| 5t | Replace `TestResultsVariant` and the root `testReport` wiring with Gradle's `test-report-aggregation` plugin. It aggregates the `test` suite only, as the root report does today, but the task name and output path change, so check CI first. | ☐ |
+| 5u | Replace the remaining `layout.buildDirectory.get()` interpolations with `layout.buildDirectory.dir(...)`: `generatedSrcDir` in archive and cluster, the root `testReport`, samples' `removeWikiDirectory`, and the GC/heap-dump log paths in `aeron.java-conventions`. | ☐ |
+| 5v | Small duplicates: `aeron-driver` sets `systemProperty 'aeron.event.log', 'all'` twice; `aeron-all`'s `sourcesJar` sets `duplicatesStrategy` twice; JUnit coordinates are strings rather than version catalog entries. | ☐ |
+| 5w | `defaultTasks 'clean', 'build'`: a bare `./gradlew` always cleans, throwing away up-to-date checks (cached outputs still restore). Needs a team decision (question 10). | ☐ |
+| 5x | Low priority: `buildSrc` → an included `build-logic` build. Since Gradle 8 the gain is small and the churn large. | ☐ |
+| 5y | Low priority: typesafe project accessors (`projects.aeronClient`). Check whether they are still a feature preview first. | ☐ |
 | 6 | CI and test speed: ideas, not started. Each is independent; see "Step 6: CI and test speed" below. | ☐ |
 | 6a | Measure first: per-job durations and failure history from the GitHub API, and the slowest test classes from the JUnit XML results, to decide what to change. | ☐ |
 | 6b | Run `ci-low-cadence.yml` only on its schedule and on `master`, not on every pull request (17 jobs per push). Needs the team to accept catching slow-test failures after merge. | ☐ |
@@ -1160,6 +1173,12 @@ here so the reference branch doesn't keep the bug.
 
 ## Decisions
 
+### Staying with the Groovy DSL (October 2026)
+
+**Decision: keep the build scripts and convention plugins in Groovy.** Agreed with Dmytro Vyazelenko (maintainer).
+Moving to Kotlin would only be worth it as part of moving *all* of the open source projects to Kotlin, and there is
+no compelling reason for that today. Step 5f is dropped.
+
 ### Test fixtures deferred: keep the source layout (October 2026)
 
 `aeron-system-tests` depends on the whole test output of `aeron-client` and `aeron-archive`, through each module's
@@ -1318,3 +1337,8 @@ speed up edits in every module that uses them.
    only supports credentials it looks up itself (`credentials(PasswordCredentials)`), from Gradle properties such as
    `ORG_GRADLE_PROJECT_sonatypeCentralPortalUsername`/`…Password`. Should the release workflows switch to passing the
    secrets that way? It is only a speed-up for release builds, which work either way.
+9. **Javadoc coverage of `aeron-samples` (step 5p).** Samples depends on `aeron-cluster` (`api`) but its Javadoc
+   sources include annotations, client, driver and archive, not cluster. Is that deliberate? Deriving the list from
+   the dependency graph would add cluster.
+10. **`defaultTasks 'clean', 'build'` (step 5w).** Does anyone rely on a bare `./gradlew` cleaning first? Without
+    `clean`, it would reuse up-to-date outputs.
