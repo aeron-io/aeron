@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 plugins {
+    id 'aeron.java-conventions'
     id 'aeron.publishing'
     id 'aeron.config-info'
 }
+
+// Reads these projects' source sets, which only exist once their own build files have applied the java plugin.
+evaluationDependsOn(':aeron-annotations')
 
 aeronConfigInfo.validateConfigExpectations()
 aeronConfigInfo.validateCounterExpectations()

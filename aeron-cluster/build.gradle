@@ -17,12 +17,16 @@ import io.aeron.build.SbeGenerateTask
  * limitations under the License.
  */
 plugins {
+    id 'aeron.java-conventions'
     id 'aeron.publishing'
     id 'aeron.config-info'
 }
 
-// Reads the generated codec source sets of these projects, which their own build files create.
+// Reads these projects' source sets, which only exist once their own build files have applied the java plugin.
+evaluationDependsOn(':aeron-annotations')
 evaluationDependsOn(':aeron-archive')
+evaluationDependsOn(':aeron-client')
+evaluationDependsOn(':aeron-driver')
 
 configurations{
     codecGeneration
