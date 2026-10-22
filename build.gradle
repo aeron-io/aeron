@@ -1,4 +1,5 @@
 import io.aeron.build.BuildJavaVersion
+import io.aeron.build.TestResultsVariant
 
 /*
  * Copyright 2014-2025 Real Logic Limited.
@@ -86,10 +87,21 @@ subprojects {
     version = aeronVersion
 }
 
+// The results of the `test` task in all subprojects, resolved from each subproject's test results variant.
+configurations.dependencyScope('subprojectTestResults')
+configurations.resolvable('subprojectTestResultsPath') {
+    extendsFrom(configurations.subprojectTestResults)
+    TestResultsVariant.request(it, objects)
+}
+
+dependencies {
+    subprojects.each { subprojectTestResults project(it.path) }
+}
+
 tasks.register('testReport', TestReport) {
     destinationDirectory = file("${layout.buildDirectory.get()}/reports/allTests")
     // Include the results from the `test` task in all sub-projects
-    testResults.setFrom(subprojects*.test)
+    testResults.setFrom(configurations.subprojectTestResultsPath.incoming.files)
 }
 
 tasks.register('copyTestLogs', Copy) {
