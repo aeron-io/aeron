@@ -158,6 +158,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Build with Gradle
         run: ./gradlew -x javadoc --console=plain
       - name: Remove small temp file system (Linux)
@@ -211,6 +212,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
@@ -273,6 +275,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -320,6 +323,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Build
         run: GCC_VERSION=${{ matrix.version }} cppbuild/rocky-docker-build
       - name: Copy test logs
@@ -365,6 +369,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -427,6 +432,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -489,6 +495,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -538,6 +545,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Setup small temp file system and localhost name
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
@@ -611,6 +619,7 @@ jobs:
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
+          cache-read-only: true
       - name: Build
         run: cppbuild/cppbuild.ps1 --c-warnings-as-errors --cxx-warnings-as-errors
       - name: Remove small temp file system (Windows)
