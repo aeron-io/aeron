@@ -34,7 +34,6 @@ configurations{
 
 dependencies {
     api project(':aeron-archive')
-    api files('build/classes/java/generated')
     codecGeneration libs.sbe
     implementation project(':aeron-annotations')
     annotationProcessor project(':aeron-annotations')
@@ -43,13 +42,6 @@ dependencies {
 }
 
 def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
-
-sourceSets {
-    generated {
-        java.srcDir generatedSrcDir
-        compileClasspath += configurations.codecGeneration
-    }
-}
 
 tasks.withType(Test).configureEach {
     systemProperty 'aeron.event.cluster.log', 'all'
@@ -103,8 +95,18 @@ tasks.register('generateTestCodecsV12', SbeGenerateTask) {
     schemaTransformVersion = '*:12'
 }
 
-compileJava.dependsOn 'compileGeneratedJava'
-compileGeneratedJava.dependsOn 'generateCodecs'
+// The generated codecs are compiled separately from the module's own sources: with --parallel they compile while
+// upstream modules are still compiling, and edits to hand-written code don't recompile them.
+sourceSets {
+    generated {
+        java.srcDir(tasks.named('generateCodecs'))
+        compileClasspath += configurations.codecGeneration
+    }
+}
+
+dependencies {
+    api files(sourceSets.generated.output)
+}
 // The versioned test codecs are compiled with the module's tests.
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV0'))
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsV5'))
@@ -121,13 +123,6 @@ jar {
     )
 }
 
-tasks.register('sourcesJar', Jar) {
-    dependsOn 'generateCodecs'
-    archiveClassifier.set('sources')
-    from sourceSets.main.allSource
-    from sourceSets.generated.allSource
-}
-
 javadoc {
     source += sourceSets.generated.allJava
     source += project(':aeron-annotations').sourceSets.main.allJava
@@ -137,11 +132,13 @@ javadoc {
     source += project(':aeron-archive').sourceSets.generated.allJava
 }
 
-javadoc.dependsOn generateCodecs
-
 java {
     withSourcesJar()
     withJavadocJar()
+}
+
+tasks.named('sourcesJar') {
+    from sourceSets.generated.allSource
 }
 
 publishing {

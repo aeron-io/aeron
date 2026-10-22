@@ -62,7 +62,6 @@ jar.finalizedBy shadowJar
 
 tasks.register('sourcesJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
-    dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
     archiveClassifier.set('sources')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
     from files(
@@ -85,8 +84,6 @@ javadoc {
     source += aeronClusterProject.sourceSets.generated.allJava
     source += aeronSamplesProject.sourceSets.main.allJava
 }
-
-javadoc.dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
 
 tasks.register('javadocJar', Jar) {
     dependsOn 'javadoc'
