@@ -107,7 +107,7 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
 
         FILE *error_file = NULL;
         // codeql[cpp/path-injection]
-        if (NULL != (error_file = fopen(buffer, "w")))
+        if (NULL != (error_file = aeron_open_file_create_new(buffer)))
         {
             uint64_t observations = aeron_error_log_read(
                 aeron_cnc_error_log_buffer(metadata),
@@ -126,7 +126,7 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
         }
         else
         {
-            AERON_SET_ERR(errno, "Failed to open: %s", buffer);
+            AERON_APPEND_ERR("Failed to open: %s", buffer);
 
             FILE *fallback_logger = stderr;
             AERON_FPRINTF(fallback_logger, "ERROR: Failed to save existing errors to: %s\n", buffer);

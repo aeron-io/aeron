@@ -782,6 +782,26 @@ void *aeron_open_file_append(const char *path)
     return f;
 }
 
+void *aeron_open_file_create_new(const char *path)
+{
+    const int fd = open(path, _O_WRONLY | _O_CREAT | _O_EXCL, _S_IREAD | _S_IWRITE);
+    if (-1 == fd)
+    {
+        AERON_SET_ERR(errno, "Failed to create file: %s", path);
+        return NULL;
+    }
+
+    FILE *f = fdopen(fd, "w");
+    if (NULL == f)
+    {
+        AERON_SET_ERR(errno, "Failed to fdopen file: %s", path);
+        _close(fd);
+        return NULL;
+    }
+
+    return f;
+}
+
 const char *aeron_temp_dir(const char *dir_template)
 {
     char temp_path[AERON_MAX_PATH];
@@ -914,6 +934,26 @@ void *aeron_open_file_append(const char *path)
     if (NULL == f)
     {
         AERON_SET_ERR(errno, "%s", "Failed to fdopen logfile");
+        return NULL;
+    }
+
+    return f;
+}
+
+void *aeron_open_file_create_new(const char *path)
+{
+    const int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+    if (-1 == fd)
+    {
+        AERON_SET_ERR(errno, "Failed to create file: %s", path);
+        return NULL;
+    }
+
+    FILE *f = fdopen(fd, "w");
+    if (NULL == f)
+    {
+        AERON_SET_ERR(errno, "Failed to fdopen file: %s", path);
+        close(fd);
         return NULL;
     }
 

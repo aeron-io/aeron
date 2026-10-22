@@ -59,6 +59,14 @@ int64_t aeron_ftell(void *stream);
  * @return A FILE* pointer as a void* to reduce type dependencies.  Returns null on failure.
  */
 void *aeron_open_file_append(const char *path);
+/**
+ * Creates a new file for writing, failing if a file or symbolic link already exists at the path.  Will use 0644
+ * permissions on Linux/Mac and default on Windows.
+ *
+ * @param path to the location on the file system.
+ * @return A FILE* pointer as a void* to reduce type dependencies.  Returns null on failure.
+ */
+void *aeron_open_file_create_new(const char *path);
 
 #if defined(AERON_COMPILER_GCC)
 #include <unistd.h>
