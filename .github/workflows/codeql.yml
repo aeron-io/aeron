@@ -63,6 +63,7 @@ jobs:
           languages: ${{ matrix.language }}
           config-file: ./.github/codeql/codeql-config.yml
           packs: "codeql/${{ matrix.language }}-queries:AlertSuppression.ql"
+          trap-caching: false
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
