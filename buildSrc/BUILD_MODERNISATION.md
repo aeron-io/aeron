@@ -134,7 +134,20 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 4d | Signing rule: stop the release-only `onlyIf` reaching `gradle.taskGraph` and `tasks` when the task runs. Found by testing a release version; snapshot builds never reach that code. | ☑ |
 | 4e | Run one test task at a time across the build, with a shared build service, because enabling the configuration cache also makes Gradle run tasks in parallel. | ☑ |
 | 4f | Enable the configuration cache in `gradle.properties`, and measure. | ☑ |
-| 5 | Optional: Kotlin DSL, JVM Test Suites, `settings.gradle` repositories, constraints instead of `force`, and the minor items. | ☐ |
+| 5 | Optional modernisations, each independent, in any order. | ☐ |
+| 5a | Stop resolving from `mavenLocal()`. Changes behaviour for anyone testing against locally published Agrona or SBE, so it needs a team decision. | ☐ |
+| 5b | Declare repositories in `settings.gradle` (`dependencyResolutionManagement`, `FAIL_ON_PROJECT_REPOS`) instead of `allprojects`. | ☐ |
+| 5c | Replace `failOnVersionConflict()` plus seven `force` entries with dependency constraints or `strictly` versions; compare resolved dependency trees. | ☐ |
+| 5d | Test task tidy-up: `slowTest`, `bindingsTest` and `topologyTest` as JVM Test Suites; deduplicate the event-log system properties repeated in 5 places; drop the `testClassesDirs`/`classpath` overrides. Task names and CI commands must stay the same. | ☐ |
+| 5e | Publishing credentials through `credentials(PasswordCredentials)`, so Sonatype uploads also use the configuration cache. Needs the release workflows to pass secrets as `ORG_GRADLE_PROJECT_…` (question 8). | ☐ |
+| 5f | Kotlin DSL for the build scripts and convention plugins. Largest item, mostly taste; can go file by file. | ☐ |
+| 5g | `copyTestLogs`: `include '/var/coredump/core*'` probably never matches; fix or remove after checking what CI produces. | ☐ |
+| 5h | `aeron-driver`: drop `jar.finalizedBy assembleDist`, which builds the zip and tar distributions on every `jar`, after checking nobody relies on it. | ☐ |
+| 5i | Javadoc footer: stop hard-coding the copyright year (2014-2025). | ☐ |
+| 5j | Remove the unused `mockitoAgent` configuration. | ☐ |
+| 5k | Wrapper: `-all` to `-bin` distribution (smaller download; loses Gradle sources in the IDE). | ☐ |
+| 5l | Move `uploadArtifactsToCentralPortal` into `aeron.publishing`, removing the duplicated `getConfigProperty` and the credentials from the root script. | ☐ |
+| 5m | `aeron-all` `javadocJar`: `from tasks.named('javadoc')` instead of `javadoc.destinationDir` plus `dependsOn`. | ☐ |
 
 ## Log
 
