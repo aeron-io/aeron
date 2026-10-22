@@ -1,0 +1,165 @@
+import io.aeron.build.LoggingTest
+import io.aeron.build.SbeGenerateTask
+
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+plugins {
+    id 'aeron.publishing'
+    id 'aeron.config-info'
+}
+
+configurations{
+    codecGeneration
+}
+
+dependencies {
+    api project(':aeron-driver')
+    api files('build/classes/java/generated')
+    codecGeneration libs.sbe
+    implementation project(':aeron-annotations')
+    annotationProcessor project(':aeron-annotations')
+    testImplementation project(':aeron-test-support')
+    testImplementation files("${layout.buildDirectory.get()}/classes/java/generatedTest")
+}
+
+def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
+def generatedTestDir = file("${layout.buildDirectory.get()}/generated-test")
+
+sourceSets {
+    generated {
+        java.srcDir generatedSrcDir
+        compileClasspath += configurations.codecGeneration
+    }
+    generatedTest {
+        java.srcDir generatedTestDir
+        compileClasspath += configurations.codecGeneration
+    }
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'aeron.event.archive.log', 'all'
+    systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+}
+
+LoggingTest.configureLoggingTests(project, 'ArchiveEventEnablementTest', 'aeron.event.archive.log',
+    'aeron.event.archive.log.disable', 'CATALOG_RESIZE,CMD_IN_AUTH_CONNECT')
+
+def codecsFile = 'src/main/resources/archive/aeron-archive-codecs.xml'
+def markCodecsFile = 'src/main/resources/archive/aeron-archive-mark-codecs.xml'
+def sbeFile = 'src/main/resources/archive/fpl/sbe.xsd'
+
+tasks.register('generateCodecs', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile, markCodecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedSrcDir
+    targetLanguage = 'Java'
+}
+
+def generatedCppDir = file(System.getProperty('codec.target.dir') ?: "${rootDir}/cppbuild/Release/generated")
+tasks.register('generateCppCodecs', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedCppDir
+    targetLanguage = 'Cpp'
+    targetNamespace = 'aeron.archive.client'
+}
+
+def generatedCDir = file(System.getProperty('codec.target.dir') ?: "${rootDir}/cppbuild/Release/generated/c")
+tasks.register('generateCCodecs', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedCDir
+    targetLanguage = 'C'
+    targetNamespace = 'aeron.archive.client'
+}
+
+tasks.register('generateTestCodecsV6', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(codecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedTestDir
+    targetLanguage = 'Java'
+    targetNamespace = 'io.aeron.archive.codecs.v6'
+    schemaTransformVersion = '*:6'
+}
+
+tasks.register('generateTestCodecsMarkFileV0', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(markCodecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedTestDir
+    targetLanguage = 'Java'
+    targetNamespace = 'io.aeron.archive.codecs.mark.v0'
+    schemaTransformVersion = '*:0'
+}
+
+tasks.register('generateTestCodecsMarkFileV1', SbeGenerateTask) {
+    classpath = configurations.codecGeneration
+    schemas.from(markCodecsFile)
+    validationXsd = file(sbeFile)
+    outputDir = generatedTestDir
+    targetLanguage = 'Java'
+    targetNamespace = 'io.aeron.archive.codecs.mark.v1'
+    schemaTransformVersion = '*:1'
+}
+
+compileJava.dependsOn 'compileGeneratedJava'
+compileGeneratedJava.dependsOn 'generateCodecs'
+compileTestJava.dependsOn 'compileGeneratedTestJava'
+compileGeneratedTestJava.dependsOn 'generateTestCodecsV6', 'generateTestCodecsMarkFileV0', 'generateTestCodecsMarkFileV1'
+
+jar {
+    from sourceSets.generated.output
+
+    manifest.attributes(
+        'Automatic-Module-Name': 'io.aeron.archive',
+        'Implementation-Title': 'Aeron',
+        'Implementation-Vendor': 'Adaptive Financial Consulting Limited',
+        'Implementation-Version': project.version
+    )
+}
+
+tasks.register('sourcesJar', Jar) {
+    dependsOn 'generateCodecs'
+    archiveClassifier.set('sources')
+    from sourceSets.main.allSource
+    from sourceSets.generated.allSource
+}
+
+javadoc {
+    source += sourceSets.generated.allJava
+    source += project(':aeron-annotations').sourceSets.main.allJava
+    source += project(':aeron-client').sourceSets.main.allJava
+    source += project(':aeron-driver').sourceSets.main.allJava
+}
+
+javadoc.dependsOn generateCodecs
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        aeronArchive(MavenPublication) {
+            from components.java
+        }
+    }
+}
