@@ -914,7 +914,7 @@ project(':aeron-cluster') {
     def sbeFile = 'src/main/resources/cluster/fpl/sbe.xsd'
 
     tasks.register('generateCodecs', JavaExec) {
-        inputs.files(codecsFile, markCodecsFile, sbeFile)
+        inputs.files(codecsFile, markCodecsFile, nodeStateCodecsFile, sbeFile)
         outputs.dir generatedSrcDir
 
         mainClass.set('uk.co.real_logic.sbe.SbeTool')
