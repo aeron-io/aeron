@@ -927,6 +927,31 @@ Reading the table:
 - **One discarded run:** the third "configuration only" run on the branch in the first benchmark took 298.6s,
   because the machine went to sleep. That scenario was rerun for both sides (5 runs each).
 
+### CI results after step 4 (October 2026)
+
+`ci.yml` and `ci-low-cadence.yml` only run on pushes and pull requests for `master` and `release/**`. So both were
+started by hand (`workflow_dispatch`) on `build-modernisation` at `d146b63d5b`, with the configuration cache enabled.
+
+| Workflow | Run | Result |
+|---|---|---|
+| Continuous Integration | [39650021773](https://github.com/aeron-io/aeron/actions/runs/39650021773) | All 28 jobs passed. 10 Java: JDK 17, 21 and 25 on Ubuntu 24.04, macOS 15 and Windows, plus Java Topology Tests (JDK 17). 18 C++: GCC 11–14, Clang 17–23, a Clang 23 debug build, Rocky 9, Xcode and MSVC. |
+| Continuous Integration (Low Cadence) | [39650027041](https://github.com/aeron-io/aeron/actions/runs/39650027041) | All 16 jobs passed. Java slow tests on JDK 17, 21 and 25 on Ubuntu, macOS and Windows; Javadoc on JDK 17, 21 and 25; C++ slow system tests (Clang 23, GCC 14, MSVC); C++ sanitiser builds (Clang 23, GCC 14). |
+
+In the first attempt, "C++ GCC 14 (Ubuntu 24.04)" and "C++ Sanitise Build GCC 14" failed in their "Install compiler"
+step, before any Gradle or build step. The Ubuntu toolchain package server (`ppa.launchpadcontent.net`) returned
+`503 Service Unavailable` and timed out while downloading the GCC packages. Rerunning only those jobs, with no
+changes, passed both.
+
+What this does and doesn't show:
+
+- **Covered:** every Gradle command CI runs works with the build changes and the configuration cache, on all
+  platforms and JDKs. That includes the C++ builds, which call Gradle to generate the C codecs.
+- **Not covered:**
+  - A single run can't reveal flaky tests or rare timing differences. Test tasks still run one at a time (step 4e),
+    as on `master`, so none are expected.
+  - The release workflows (`release.yml`, `release-snapshot.yml`) weren't run, because they publish to Sonatype.
+    Their Gradle commands were checked locally in steps 4d and 4f.
+
 ## Decisions
 
 ### Test fixtures deferred: keep the source layout (October 2026)
