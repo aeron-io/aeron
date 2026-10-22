@@ -163,6 +163,15 @@ allprojects {
     tasks.withType(JavaExec).configureEach {
         javaLauncher.set(toolchainLauncher)
     }
+
+    // Used by CI to populate the Gradle dependency cache with everything any job might need.
+    tasks.register('resolveAllDependencies') {
+        def resolvable = configurations.matching { it.canBeResolved }
+        notCompatibleWithConfigurationCache('Resolves configurations at execution time')
+        doLast {
+            resolvable.each { it.incoming.artifactView { lenient = true }.files.files }
+        }
+    }
 }
 
 subprojects {
