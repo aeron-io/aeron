@@ -1,0 +1,58 @@
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import io.aeron.build.AeronConfigInfoExtension
+import io.aeron.build.FilePathArgumentProvider
+
+// Tasks that work from the configuration options and counters recorded by the aeron-annotations processors when the
+// module is compiled: `generateConfigDoc`, plus opt-in validation of the module's C sources via `aeronConfigInfo`.
+plugins {
+    id 'java'
+}
+
+configurations {
+    configInfoTool {
+        canBeConsumed = false
+    }
+}
+
+dependencies {
+    configInfoTool project(':aeron-annotations')
+}
+
+// The processors write their .dat files to javac's native header directory, so deriving the path from compileJava
+// also makes these tasks depend on it.
+def infoDir = tasks.named('compileJava').flatMap { it.options.headerOutputDirectory }
+
+extensions.create(
+    'aeronConfigInfo',
+    AeronConfigInfoExtension,
+    tasks,
+    configurations.configInfoTool,
+    infoDir,
+    providers.provider { layout.projectDirectory.dir('src/main/c') })
+
+tasks.register('generateConfigDoc', JavaExec) {
+    def configInfoFile = infoDir.map { it.file('config-info.dat') }
+    def generatedDocFile = layout.buildDirectory.file('generated-doc/out.md')
+
+    inputs.file(configInfoFile).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(generatedDocFile)
+
+    mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
+    classpath = configurations.configInfoTool
+    argumentProviders.add(new FilePathArgumentProvider(configInfoFile, generatedDocFile))
+}
