@@ -515,7 +515,7 @@ project(':aeron-client') {
     tasks.register('validateConfigExpectations', JavaExec) {
         def sourceDir = 'src/main/c'
 
-        inputs.files(configInfoFile)
+        inputs.files(files(configInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
@@ -525,7 +525,7 @@ project(':aeron-client') {
     tasks.register('generateConfigDoc', JavaExec) {
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
-        inputs.files(configInfoFile)
+        inputs.files(files(configInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
         outputs.files(generatedDocFile)
 
         mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
@@ -537,7 +537,7 @@ project(':aeron-client') {
         def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
         def sourceDir = 'src/main/c'
 
-        inputs.files(counterInfoFile)
+        inputs.files(files(counterInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
 
         mainClass.set('io.aeron.counter.validation.ValidateCounterExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
@@ -623,7 +623,7 @@ project(':aeron-driver') {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def sourceDir = 'src/main/c'
 
-        inputs.files(configInfoFile)
+        inputs.files(files(configInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
@@ -634,7 +634,7 @@ project(':aeron-driver') {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
-        inputs.files(configInfoFile)
+        inputs.files(files(configInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
         outputs.files(generatedDocFile)
 
         mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
@@ -858,7 +858,7 @@ project(':aeron-archive') {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
-        inputs.files(configInfoFile)
+        inputs.files(files(configInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
         outputs.files(generatedDocFile)
 
         mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
@@ -1046,7 +1046,7 @@ project(':aeron-cluster') {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
-        inputs.files(configInfoFile)
+        inputs.files(files(configInfoFile).builtBy(tasks.named('compileJava'))) // written by the annotation processors
         outputs.files(generatedDocFile)
 
         mainClass.set('io.aeron.config.docgen.GenerateConfigDocTask')
