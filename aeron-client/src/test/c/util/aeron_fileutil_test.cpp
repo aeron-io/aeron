@@ -452,8 +452,8 @@ TEST_F(FileUtilTest, openFileCreateNewShouldFailIfFileExists)
     const char *path = "aeron_create_new_existing.log";
     aeron_delete_file(path);
 
-    FILE *existing = fopen(path, "w");
-    ASSERT_NE(nullptr, existing);
+    auto existing = static_cast<FILE *>(aeron_open_file_create_new(path));
+    ASSERT_NE(nullptr, existing) << aeron_errmsg();
     fputs("original", existing);
     fclose(existing);
 
@@ -490,8 +490,8 @@ TEST_F(FileUtilTest, openFileCreateNewShouldNotFollowSymlink)
     aeron_delete_file(link);
     aeron_delete_file(target);
 
-    FILE *existing = fopen(target, "w");
-    ASSERT_NE(nullptr, existing);
+    auto existing = static_cast<FILE *>(aeron_open_file_create_new(target));
+    ASSERT_NE(nullptr, existing) << aeron_errmsg();
     fputs("victim data", existing);
     fclose(existing);
     ASSERT_EQ(0, symlink(target, link));
