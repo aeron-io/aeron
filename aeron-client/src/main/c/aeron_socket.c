@@ -172,6 +172,25 @@ ssize_t aeron_recvmsg(aeron_socket_t fd, struct msghdr *msghdr, int flags)
     return result;
 }
 
+ssize_t aeron_recvfrom(
+    aeron_socket_t fd, void *buf, size_t len, int flags, struct sockaddr *address, socklen_t *address_length)
+{
+    ssize_t result = recvfrom(fd, buf, len, flags, address, address_length);
+
+    if (result < 0)
+    {
+        if (EAGAIN == errno || EWOULDBLOCK == errno || ECONNREFUSED == errno || EINTR == errno)
+        {
+            return 0;
+        }
+
+        AERON_SET_ERR(errno, "failed recvfrom(fd=%d,...)", fd);
+        return -1;
+    }
+
+    return result;
+}
+
 int aeron_poll(struct pollfd *fds, unsigned long nfds, int timeout)
 {
     int result = poll(fds, (nfds_t)nfds, timeout);
@@ -463,6 +482,28 @@ ssize_t aeron_recvmsg(aeron_socket_t fd, struct msghdr *msghdr, int flags)
     }
 
     return size;
+}
+
+ssize_t aeron_recvfrom(
+    aeron_socket_t fd, void *buf, size_t len, int flags, struct sockaddr *address, socklen_t *address_length)
+{
+    int name_length = (int)*address_length;
+    const int result = recvfrom(fd, (char *)buf, (int)len, flags, address, &name_length);
+
+    if (SOCKET_ERROR == result)
+    {
+        const int err = WSAGetLastError();
+        if (WSAEWOULDBLOCK == err || WSAEINTR == err || WSAECONNRESET == err)
+        {
+            return 0;
+        }
+
+        AERON_SET_ERR_WIN(err, "recvfrom(fd=%d,...)", fd);
+        return -1;
+    }
+
+    *address_length = (socklen_t)name_length;
+    return result;
 }
 
 ssize_t aeron_send(aeron_socket_t fd, const void *buf, size_t len, int flags)

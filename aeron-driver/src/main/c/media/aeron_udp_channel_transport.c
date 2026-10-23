@@ -567,6 +567,60 @@ static int aeron_udp_channel_transport_recvmsg_x(
 
 #endif
 
+/*
+ * Read one datagram with `recvfrom`.
+ *
+ * Used only where the call could only ever return one datagram -- `vlen` is 1,
+ * so there is no batch to lose. `recvfrom` builds its iovec on the kernel
+ * stack, where `recvmsg` carries an `msghdr` in and out of user memory, and an
+ * empty socket, which most polls of this driver find, pays that whether or not
+ * it filled anything.
+ *
+ * The address length goes to a local, not back into the descriptor: the
+ * descriptor is built once and reused, and the kernel is handed the same bytes
+ * on every poll.
+ */
+static int aeron_udp_channel_transport_recvfrom(
+    aeron_udp_channel_transport_t *transport,
+    struct mmsghdr *msgvec,
+    int64_t *bytes_rcved,
+    aeron_udp_transport_recv_func_t recv_func,
+    void *clientd)
+{
+    struct msghdr *msg_hdr = &msgvec[0].msg_hdr;
+    struct iovec *iov = &msg_hdr->msg_iov[0];
+    socklen_t namelen = msg_hdr->msg_namelen;
+
+    ssize_t result = aeron_recvfrom(
+        transport->recv_fd, iov->iov_base, iov->iov_len, 0, (struct sockaddr *)msg_hdr->msg_name, &namelen);
+
+    if (result < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (0 == result)
+    {
+        return 0;
+    }
+
+    msgvec[0].msg_len = (unsigned int)result;
+    recv_func(
+        transport->data_paths,
+        transport,
+        clientd,
+        transport->dispatch_clientd,
+        transport->destination_clientd,
+        iov->iov_base,
+        msgvec[0].msg_len,
+        msg_hdr->msg_name,
+        NULL);
+    *bytes_rcved += msgvec[0].msg_len;
+
+    return 1;
+}
+
 int aeron_udp_channel_transport_recvmmsg(
     aeron_udp_channel_transport_t *transport,
     struct mmsghdr *msgvec,
@@ -575,6 +629,18 @@ int aeron_udp_channel_transport_recvmmsg(
     aeron_udp_transport_recv_func_t recv_func,
     void *clientd)
 {
+    /*
+     * One datagram a call, where the call can only return one: the sender's
+     * control socket and a receiver configured with an io vector capacity of
+     * 1. A transport that asked the kernel for a receive timestamp keeps the
+     * `msghdr` path, because the timestamp arrives as a control message and
+     * `recvfrom` has nowhere to put one. The batch path below is unchanged.
+     */
+    if (0 == transport->timestamp_flags && vlen <= 1)
+    {
+        return aeron_udp_channel_transport_recvfrom(transport, msgvec, bytes_rcved, recv_func, clientd);
+    }
+
 #if defined(HAVE_RECVMMSG)
     if (vlen > 1)
     {
