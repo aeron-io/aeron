@@ -388,6 +388,13 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
         do
         {
             aeron_archive_context_invoke_aeron_client(ctx);
+            if (aeron_is_closed(ctx->aeron))
+            {
+                AERON_SET_ERR(
+                    -AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
+                    "%s", "Aeron client closed while fetching next session-id");
+                goto error_close_uri_builders;
+            }
 
             result = aeron_async_next_session_id_poll(&session_id, async);
             if (result < 0)

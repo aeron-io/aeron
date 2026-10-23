@@ -94,6 +94,64 @@ static void destroy_test_aeron_client(aeron_t *client, aeron_context_t *ctx)
     aeron_free(client);
 }
 
+typedef struct session_id_invoker_state_stct
+{
+    aeron_t *client;
+    int invocations;
+}
+session_id_invoker_state_t;
+
+static void close_client_during_session_id_lookup(void *clientd)
+{
+    auto *state = static_cast<session_id_invoker_state_t *>(clientd);
+    if (++state->invocations == 1)
+    {
+        AERON_SET_RELEASE(state->client->conductor.is_closed, true);
+    }
+    else
+    {
+        // Let the unfixed code finish instead of spinning forever.
+        auto *pending = state->client->conductor.registering_resources.array[0].resource;
+        AERON_SET_RELEASE(pending->registration_status, AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT);
+    }
+}
+
+TEST(ArchiveAsyncConnectLeakTest, shouldStopSessionIdLookupWhenClientCloses)
+{
+    const size_t cnc_len = aeron_cnc_computed_length(
+        TO_DRIVER_RING_BUFFER_LENGTH +
+        TO_CLIENTS_BUFFER_LENGTH +
+        COUNTER_VALUES_BUFFER_LENGTH +
+        COUNTER_METADATA_BUFFER_LENGTH +
+        ERROR_BUFFER_LENGTH,
+        FILE_PAGE_SIZE);
+    auto cnc_buf = std::unique_ptr<uint8_t[]>(new uint8_t[cnc_len]);
+    aeron_context_t *aeron_ctx = nullptr;
+    aeron_t *client = create_test_aeron_client(&aeron_ctx, cnc_buf.get(), cnc_len);
+    ASSERT_NE(nullptr, client) << aeron_errmsg();
+    // The fake CnC cannot service conductor work; the delegate models the close during the invoker step.
+    aeron_ctx->use_conductor_agent_invoker = false;
+    client->conductor.control_protocol_version = aeron_semantic_version_compose(1, 0, 0);
+
+    aeron_archive_context_t *archive_ctx = nullptr;
+    ASSERT_EQ(0, aeron_archive_context_init(&archive_ctx)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_archive_context_set_control_request_channel(
+        archive_ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ(0, aeron_archive_context_set_control_response_channel(
+        archive_ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ(0, aeron_archive_context_set_aeron(archive_ctx, client));
+    ASSERT_EQ(0, aeron_archive_context_set_owns_aeron_client(archive_ctx, false));
+    session_id_invoker_state_t state = { client, 0 };
+    ASSERT_EQ(0, aeron_archive_context_set_delegating_invoker(
+        archive_ctx, close_client_during_session_id_lookup, &state));
+
+    EXPECT_EQ(-1, aeron_archive_context_conclude(archive_ctx));
+    EXPECT_EQ(1, state.invocations);
+    EXPECT_EQ(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
+    aeron_archive_context_close(archive_ctx);
+    destroy_test_aeron_client(client, aeron_ctx);
+}
+
 /*
  * This test will always "pass"; it must be run with a leak detector
  * (e.g. "leaks" on macOS) to verify there are no leaks after running.
