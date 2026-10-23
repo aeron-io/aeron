@@ -102,6 +102,7 @@ int main(int argc, char **argv)
 
     for (int i = optind; i < argc; i++)
     {
+        // codeql[cpp/path-injection]
         if (aeron_properties_load(argv[i]) < 0)
         {
             AERON_FPRINTF(stderr, "ERROR: loading properties from %s (%d) %s\n", argv[i], aeron_errcode(), aeron_errmsg());
