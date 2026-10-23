@@ -801,6 +801,34 @@ protected:
         executeUntil(label, [] { return 0; }, predicate, timeout_seconds);
     }
 
+    // The cases that force the persistent subscription to fall behind publish a flood
+    // and drain it with a fast subscriber on a *second* driver, then wait for the
+    // subscription to drop from live back to replay. Waiting on the far-side subscriber
+    // and then reading the subscription is not enough: the two halves of what makes the
+    // subscription fall behind are ordered by the flood, not by that subscriber.
+    //
+    //   * The over-run gate is `last_overrun_threshold = sm_position + term_length / 2`
+    //     (aeron_publication_image.c:983), and the status-message position follows the
+    //     slowest subscriber's *read* position. A read that lands while the flood is
+    //     still arriving therefore raises the threshold, nothing is over-run, the image
+    //     stays `ACTIVE`, and the subscription never drops -- which is exactly what the
+    //     wait is waiting for.
+    //   * The image cannot be removed until it has drained: `DRAINING -> LINGER`
+    //     requires `aeron_publication_image_is_drained()`
+    //     (aeron_publication_image.h:291), which is true only once every active
+    //     subscriber's position has reached the image's `rcv_pos`. A subscription that
+    //     is never read again keeps the image in `DRAINING` for good, so not reading it
+    //     at all is not an option either.
+    //
+    // So the flood has to land before the subscription is read, and the subscription has
+    // to be read afterwards. Where the flood lands is not observable from the client, so
+    // this is a wait rather than a condition. It is deliberately generous: the flood is
+    // 64 x 1 KiB and lands on the receiving driver in well under a millisecond.
+    static void awaitFloodLanded()
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
     // Defined out-of-class below because it depends on
     // EmbeddedMediaDriverWithLossGenerator, which is declared later in this
     // file.
@@ -1670,6 +1698,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
             },
             [&] { return fast_count == 64; });
 
+        awaitFloodLanded();
+
         // Phase 6: persistent subscription drops back to replay
         executeUntil(
             "drops to replaying",
@@ -1856,6 +1886,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canFallbackToReplayAfterStartingF
                     1);
             },
             [&] { return fast_count == back_pressure_messages.size(); });
+
+        awaitFloodLanded();
 
         executeUntil(
             "drops to replaying",
