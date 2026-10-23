@@ -701,6 +701,39 @@ class ElectionTest
     }
 
     @Test
+    void shouldNotFollowOlderTermAfterBallotTimeout()
+    {
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember termZeroLeader = clusterMembers[0];
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember candidate = clusterMembers[2];
+        final Election election = newElection(NULL_VALUE, 0, clusterMembers, thisMember);
+        election.doWork(clock.nanoTime());
+
+        // Vote for the candidate in term 1.
+        election.onRequestVote(NULL_VALUE, 0, 1, candidate.id(), VERSION);
+        verify(consensusPublisher).placeVote(
+            candidate.publication(), 1, NULL_VALUE, 0, candidate.id(), thisMember.id(), true);
+        assertEquals(ElectionState.FOLLOWER_BALLOT, Tests.getField(election, "state"));
+
+        // Let the ballot time out.
+        election.doWork(clock.increment(ctx.electionTimeoutNs()));
+        assertEquals(ElectionState.CANVASS, Tests.getField(election, "state"));
+
+        // Reject the older leader even after the ballot has timed out.
+        election.onNewLeadershipTerm(
+            NULL_VALUE, 0, 0, NULL_POSITION, 0, 0, 0, 0, RECORDING_ID, clock.nanoTime(), termZeroLeader.id(),
+            LOG_SESSION_ID, true);
+        assertNull(election.leader());
+        assertEquals(ElectionState.CANVASS, Tests.getField(election, "state"));
+        assertEquals(NULL_VALUE, election.leadershipTermId());
+
+        // Canvass the voted term 1
+        election.doWork(clock.nanoTime());
+        verify(consensusPublisher).canvassPosition(termZeroLeader.publication(), NULL_VALUE, 0, 1, thisMember.id());
+    }
+
+    @Test
     void shouldBecomeFollowerIfEnteringNewElection()
     {
         final long leadershipTermId = 1;
@@ -787,7 +820,7 @@ class ElectionTest
             liveLeader.publication(),
             term0Id,
             term1BaseLogPosition,
-            term0Id,
+            term2Id,
             thisMember.id());
 
         followerElection.onNewLeadershipTerm(
@@ -1059,7 +1092,7 @@ class ElectionTest
         verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
 
         election.doWork(++t1);
-        verify(consensusPublisher).canvassPosition(liveLeader.publication(), 0L, 0L, 0L, thisMember.id());
+        verify(consensusPublisher).canvassPosition(liveLeader.publication(), 0L, 0L, term10Id, thisMember.id());
 
         for (int i = 0; i < term9Id - 1; i++)
         {
@@ -1800,7 +1833,7 @@ class ElectionTest
         assertEquals(555, election.notifiedCommitPosition());
         assertEquals(111, election.leadershipTermId());
 
-        // whereas CANVASS does not
+        // CANVASS must also reject terms older than candidateTermId
         Tests.setField(election, "state", ElectionState.CANVASS);
         election.onNewLeadershipTerm(
             logLeadershipTermId,
@@ -1817,7 +1850,7 @@ class ElectionTest
             42,
             false);
         assertEquals(555, election.notifiedCommitPosition());
-        assertEquals(2, election.leadershipTermId());
+        assertEquals(111, election.leadershipTermId());
 
         // INIT state is a no op
         Tests.setField(election, "state", ElectionState.INIT);
@@ -1836,7 +1869,7 @@ class ElectionTest
             42,
             false);
         assertEquals(555, election.notifiedCommitPosition());
-        assertEquals(2, election.leadershipTermId());
+        assertEquals(111, election.leadershipTermId());
 
         // Unknown leaderMemberId
         Tests.setField(election, "state", ElectionState.CANVASS);
@@ -1855,7 +1888,7 @@ class ElectionTest
             42,
             false);
         assertEquals(555, election.notifiedCommitPosition());
-        assertEquals(2, election.leadershipTermId());
+        assertEquals(111, election.leadershipTermId());
 
         // Current memberId is ignored if leadershipTermId matches
         Tests.setField(election, "state", ElectionState.CANVASS);
@@ -1874,7 +1907,7 @@ class ElectionTest
             42,
             false);
         assertEquals(555, election.notifiedCommitPosition());
-        assertEquals(2, election.leadershipTermId());
+        assertEquals(111, election.leadershipTermId());
 
         // Current memberId is accepted if leadershipTermId is new
         Tests.setField(election, "state", ElectionState.CANVASS);
@@ -1883,7 +1916,7 @@ class ElectionTest
             logLeadershipTermId + 1,
             NULL_POSITION,
             0,
-            5,
+            112,
             logPosition,
             1073741824,
             777,
@@ -1893,7 +1926,7 @@ class ElectionTest
             42,
             false);
         assertEquals(777, election.notifiedCommitPosition());
-        assertEquals(5, election.leadershipTermId());
+        assertEquals(112, election.leadershipTermId());
 
         // CANDIDATE_BALLOT also checks candidateTermId
         Tests.setField(election, "state", ElectionState.CANDIDATE_BALLOT);
@@ -1902,7 +1935,7 @@ class ElectionTest
             logLeadershipTermId + 1,
             NULL_POSITION,
             0,
-            111,
+            112,
             logPosition,
             1073741824,
             789,
@@ -1912,7 +1945,7 @@ class ElectionTest
             42,
             false);
         assertEquals(789, election.notifiedCommitPosition());
-        assertEquals(111, election.leadershipTermId());
+        assertEquals(112, election.leadershipTermId());
 
         // Value cannot go backwards
         Tests.setField(election, "state", ElectionState.CANVASS);
@@ -1940,7 +1973,7 @@ class ElectionTest
             logLeadershipTermId + 1,
             NULL_POSITION,
             0,
-            4,
+            334,
             logPosition,
             1073741824,
             NULL_POSITION,
@@ -1950,7 +1983,7 @@ class ElectionTest
             42,
             false);
         assertEquals(789, election.notifiedCommitPosition());
-        assertEquals(4, election.leadershipTermId());
+        assertEquals(334, election.leadershipTermId());
 
         // logLeadershipTermId does not match
         Tests.setField(election, "state", ElectionState.CANVASS);
@@ -1969,7 +2002,7 @@ class ElectionTest
             42,
             false);
         assertEquals(789, election.notifiedCommitPosition());
-        assertEquals(4, election.leadershipTermId());
+        assertEquals(334, election.leadershipTermId());
 
         // unsupported states
         for (final ElectionState state : ElectionState.STATES)
@@ -1998,7 +2031,7 @@ class ElectionTest
                 42,
                 false);
             assertEquals(789, election.notifiedCommitPosition());
-            assertEquals(4, election.leadershipTermId());
+            assertEquals(334, election.leadershipTermId());
         }
     }
 
