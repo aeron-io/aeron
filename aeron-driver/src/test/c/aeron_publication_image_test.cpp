@@ -270,6 +270,28 @@ TEST_F(PublicationImageTest, shouldSendControlMessagesToAllDestinations)
     ASSERT_EQ(2, bindings_state_dest1->rttm_count);
 }
 
+TEST_F(PublicationImageTest, shouldRemovePendingSetupOnRemoveMdsDestinationWithControlEndpoint)
+{
+    aeron_receive_channel_endpoint_t *endpoint = createMdsEndpoint();
+    aeron_udp_channel_t *channel = createChannel("aeron:udp?control=localhost:9092");
+
+    aeron_receive_destination_t *destination = nullptr;
+    ASSERT_EQ(0, aeron_receive_destination_create(
+        &destination, channel, channel, m_context, &m_counters_manager, 0, endpoint->channel_status.counter_id));
+
+    aeron_command_add_rcv_destination_t add_cmd = {};
+    add_cmd.endpoint = endpoint;
+    add_cmd.destination = destination;
+    aeron_driver_receiver_on_add_destination(&m_receiver, &add_cmd);
+    ASSERT_EQ(1U, m_receiver.pending_setups.length);
+
+    aeron_command_remove_rcv_destination_t remove_cmd = {};
+    remove_cmd.endpoint = endpoint;
+    remove_cmd.channel = channel;
+    aeron_driver_receiver_on_remove_destination(&m_receiver, &remove_cmd);
+    ASSERT_EQ(0U, m_receiver.pending_setups.length);
+}
+
 TEST_F(PublicationImageTest, shouldHandleEosAcrossDestinations)
 {
     struct sockaddr_storage addr = {}; // Don't really care what value this is.

@@ -538,6 +538,27 @@ void aeron_driver_receiver_on_remove_destination(void *clientd, void *item)
 
         endpoint->transport_bindings->poller_remove_func(&receiver->poller, &destination->transport);
 
+        for (int last_index = (int)receiver->pending_setups.length - 1, i = last_index; i >= 0; i--)
+        {
+            aeron_driver_receiver_pending_setup_entry_t *entry = &receiver->pending_setups.array[i];
+
+            if (entry->endpoint == endpoint && entry->destination == destination)
+            {
+                if (!entry->is_periodic)
+                {
+                    aeron_receive_channel_endpoint_on_remove_pending_setup(entry->endpoint, entry->session_id, entry->stream_id);
+                }
+
+                aeron_array_fast_unordered_remove(
+                    (uint8_t *)receiver->pending_setups.array,
+                    sizeof(aeron_driver_receiver_pending_setup_entry_t),
+                    (size_t)i,
+                    (size_t)last_index);
+                last_index--;
+                receiver->pending_setups.length--;
+            }
+        }
+
         for (size_t i = 0, len = receiver->images.length; i < len; i++)
         {
             aeron_publication_image_t *image = receiver->images.array[i].image;
