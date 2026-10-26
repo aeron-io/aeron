@@ -37,6 +37,7 @@ struct aeron_archive_stct
     int64_t control_session_id;
     int64_t archive_id;
     bool is_in_callback;
+    int fatal_error_code;
 };
 
 int aeron_archive_create(

@@ -22,8 +22,6 @@
 #include "gtest/gtest.h"
 #include <gmock/gmock-matchers.h>
 
-#include "aeron_archive_client_error.h"
-
 extern "C"
 {
 #include <inttypes.h>
@@ -32,6 +30,8 @@ extern "C"
 #include "aeron_client.h"
 #include "aeron_counter.h"
 #include "aeron_counters.h"
+#include "aeron_archive_client_error.h"
+#include "aeron_cnc_file_descriptor.h"
 #include "client/aeron_archive.h"
 #include "client/aeron_archive_client.h"
 #include "client/aeron_archive_control_response_poller.h"
@@ -610,7 +610,7 @@ public:
 
 INSTANTIATE_TEST_SUITE_P(AeronCArchive, AeronCArchiveParamTest, testing::Values(true, false));
 
-class AeronCArchiveIdTest : public AeronCArchiveTestBase, public testing::Test
+class AeronArchiveNoArchiveTest : public AeronCArchiveTestBase, public testing::Test
 {
 };
 
@@ -3031,7 +3031,7 @@ TEST_F(AeronCArchiveTest, shouldRecordReplicateTwice)
     }
 }
 
-TEST_F(AeronCArchiveIdTest, shouldInitializeContextWithDefaultValues)
+TEST_F(AeronArchiveNoArchiveTest, shouldInitializeContextWithDefaultValues)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3059,7 +3059,7 @@ TEST_F(AeronCArchiveIdTest, shouldInitializeContextWithDefaultValues)
     EXPECT_EQ(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronCArchiveIdTest, shouldInitializeContextWithValuesSpecifiedViaEnvironment)
+TEST_F(AeronArchiveNoArchiveTest, shouldInitializeContextWithValuesSpecifiedViaEnvironment)
 {
     const auto aeron_dir = "/dev/shm/aeron-test-dir";
     const auto control_channel = "aeron:udp?endpoint=localhost:5555";
@@ -3116,7 +3116,7 @@ TEST_F(AeronCArchiveIdTest, shouldInitializeContextWithValuesSpecifiedViaEnviron
     EXPECT_EQ(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfControlRequestChannelIsNotDefined)
+TEST_F(AeronArchiveNoArchiveTest, shouldFailWithErrorIfControlRequestChannelIsNotDefined)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
     ASSERT_EQ_ERR(-1, aeron_archive_context_conclude(m_ctx));
@@ -3127,7 +3127,7 @@ TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfControlRequestChannelIsNotDefin
     EXPECT_EQ(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfControlResponseChannelIsNotDefined)
+TEST_F(AeronArchiveNoArchiveTest, shouldFailWithErrorIfControlResponseChannelIsNotDefined)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3140,7 +3140,7 @@ TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfControlResponseChannelIsNotDefi
     EXPECT_EQ(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfRetryAttemptsIsZero)
+TEST_F(AeronArchiveNoArchiveTest, shouldFailWithErrorIfRetryAttemptsIsZero)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3156,7 +3156,7 @@ TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfRetryAttemptsIsZero)
     EXPECT_EQ(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfAeronClientFailsToConnect)
+TEST_F(AeronArchiveNoArchiveTest, shouldFailWithErrorIfAeronClientFailsToConnect)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3172,7 +3172,7 @@ TEST_F(AeronCArchiveIdTest, shouldFailWithErrorIfAeronClientFailsToConnect)
     EXPECT_EQ(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronCArchiveIdTest, shouldApplyDefaultParametersToRequestAndResponseChannels)
+TEST_F(AeronArchiveNoArchiveTest, shouldApplyDefaultParametersToRequestAndResponseChannels)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3232,7 +3232,7 @@ TEST_F(AeronCArchiveIdTest, shouldApplyDefaultParametersToRequestAndResponseChan
     aeron_free(buffer);
 }
 
-TEST_F(AeronCArchiveIdTest, shouldNotApplyDefaultParametersToRequestAndResponseChannelsIfTheyAreSetExplicitly)
+TEST_F(AeronArchiveNoArchiveTest, shouldNotApplyDefaultParametersToRequestAndResponseChannelsIfTheyAreSetExplicitly)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3299,7 +3299,7 @@ TEST_F(AeronCArchiveIdTest, shouldNotApplyDefaultParametersToRequestAndResponseC
     aeron_free(buffer);
 }
 
-TEST_F(AeronCArchiveIdTest, shouldNotSetSessionIdOnControlRequestAndReponseChannelsIfControlModeResponseIsUsed)
+TEST_F(AeronArchiveNoArchiveTest, shouldNotSetSessionIdOnControlRequestAndReponseChannelsIfControlModeResponseIsUsed)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3339,7 +3339,7 @@ TEST_F(AeronCArchiveIdTest, shouldNotSetSessionIdOnControlRequestAndReponseChann
     delete[] buffer;
 }
 
-TEST_F(AeronCArchiveIdTest, shouldDuplicateContext)
+TEST_F(AeronArchiveNoArchiveTest, shouldDuplicateContext)
 {
     ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
 
@@ -3395,7 +3395,7 @@ TEST_F(AeronCArchiveIdTest, shouldDuplicateContext)
     delete[] buffer;
 }
 
-TEST_F(AeronCArchiveIdTest, shouldResolveArchiveId)
+TEST_F(AeronArchiveNoArchiveTest, shouldResolveArchiveId)
 {
     std::int64_t archiveId = 0x4236483BEEF;
     DoSetUp(archiveId);
@@ -4354,10 +4354,12 @@ TEST_F(AeronCArchiveTest, shouldRejectReentractCallsDuringCallbacks)
     struct archive_wrapper
     {
         aeron_archive_t *archive;
+        int call_count;
     };
 
     archive_wrapper callback_client_d{};
     callback_client_d.archive = m_archive;
+    callback_client_d.call_count = 0;
 
     int32_t count;
     ASSERT_EQ_ERR(0, aeron_archive_list_recording(
@@ -4366,20 +4368,21 @@ TEST_F(AeronCArchiveTest, shouldRejectReentractCallsDuringCallbacks)
             m_recording_id_from_counter,
             [](auto recording_descriptor, auto clientd)
             {
-                auto *wrapper = (archive_wrapper *)clientd;
+                auto wrapper = (archive_wrapper *)clientd;
+                wrapper->call_count++;
 
                 int dummy;
                 EXPECT_EQ(-1, aeron_archive_list_recording(&dummy, wrapper->archive, 0, nullptr, nullptr));
-                EXPECT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+                EXPECT_EQ(-AERON_ARCHIVE_CLIENT_ERROR_REENTRANT_CALL, aeron_errcode());
                 EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("reentrant calls not permitted during callbacks"));
 
                 int64_t dummy_position;
                 EXPECT_EQ(-1, aeron_archive_get_max_recorded_position(&dummy_position, wrapper->archive, 0));
-                EXPECT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+                EXPECT_EQ(-AERON_ARCHIVE_CLIENT_ERROR_REENTRANT_CALL, aeron_errcode());
                 EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("reentrant calls not permitted during callbacks"));
 
                 EXPECT_EQ(-1, aeron_archive_detach_segments(wrapper->archive, 0, 0));
-                EXPECT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+                EXPECT_EQ(-AERON_ARCHIVE_CLIENT_ERROR_REENTRANT_CALL, aeron_errcode());
                 EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("reentrant calls not permitted during callbacks"));
             },
             &callback_client_d));
@@ -5039,7 +5042,7 @@ TEST_F(AeronArchiveClientNameTest, shouldFailIfClientNameIsTooLong)
     ASSERT_EQ_ERR(0, aeron_archive_context_close(m_ctx));
 }
 
-TEST_F(AeronArchiveClientNameTest, shouldMapErrorCodes)
+TEST_F(AeronArchiveNoArchiveTest, shouldMapErrorCodes)
 {
     EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_GENERIC, aeron_archive_client_map_archive_to_client_error_code(0));
     EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING, aeron_archive_client_map_archive_to_client_error_code(1));
@@ -5060,7 +5063,7 @@ TEST_F(AeronArchiveClientNameTest, shouldMapErrorCodes)
     EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION, aeron_archive_client_map_archive_to_client_error_code(16));
 }
 
-TEST_F(AeronArchiveClientNameTest, shouldNotMapActualErrorCodes)
+TEST_F(AeronArchiveNoArchiveTest, shouldNotMapActualErrorCodes)
 {
     EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_GENERIC, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_GENERIC));
     EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING));
@@ -5081,7 +5084,7 @@ TEST_F(AeronArchiveClientNameTest, shouldNotMapActualErrorCodes)
     EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
 }
 
-TEST_F(AeronArchiveClientNameTest, shouldHaveErrorMessagesForArchiveErrorCodes)
+TEST_F(AeronArchiveNoArchiveTest, shouldHaveErrorMessagesForArchiveErrorCodes)
 {
     EXPECT_STREQ("generic error, see message", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_GENERIC));
     EXPECT_STREQ("an active listing is already running", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING));
@@ -5100,6 +5103,10 @@ TEST_F(AeronArchiveClientNameTest, shouldHaveErrorMessagesForArchiveErrorCodes)
     EXPECT_STREQ("failed to connect for replication", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
     EXPECT_STREQ("recording is empty", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
     EXPECT_STREQ("invalid position", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
+
+    EXPECT_STREQ("aeron_archive_t reentrant call", aeron_error_code_str(AERON_ARCHIVE_CLIENT_ERROR_REENTRANT_CALL));
+    EXPECT_STREQ("aeron_archive_t not connected", aeron_error_code_str(AERON_ARCHIVE_CLIENT_ERROR_NOT_CONNECTED));
+    EXPECT_STREQ("aeron_archive_t illegal state", aeron_error_code_str(AERON_ARCHIVE_CLIENT_ERROR_ILLEGAL_STATE));
 }
 
 TEST_F(AeronCArchiveTest, shouldReleaseArchiveLockWhenPollingForRecordingSignalsFails)
@@ -5161,4 +5168,88 @@ TEST_F(AeronCArchiveTest, shouldReleaseArchiveLockWhenPollingForRecordingSignals
     EXPECT_TRUE(completed_in_time) << "another thread could not use the archive client after the failed poll";
 
     ASSERT_EQ_ERR(0, aeron_publication_close(foreign_publication, nullptr, nullptr));
+}
+
+TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsWithError)
+{
+    uint8_t cnc[8192];
+    memset(cnc, 0, sizeof(cnc));
+
+    aeron_cnc_metadata_t *cnc_metadata = reinterpret_cast<aeron_cnc_metadata_t *>(cnc);
+    cnc_metadata->to_driver_buffer_length = 1024;
+    cnc_metadata->to_clients_buffer_length = 1024 + AERON_BROADCAST_BUFFER_TRAILER_LENGTH;
+    cnc_metadata->counter_metadata_buffer_length = 1024;
+    cnc_metadata->counter_values_buffer_length = 1024;
+    cnc_metadata->error_log_buffer_length = 1024;
+    cnc_metadata->client_liveness_timeout = static_cast<int64_t>(5) * 1000 * 1000 * 1000;
+    cnc_metadata->file_page_size = AERON_PAGE_MIN_SIZE;
+    cnc_metadata->cnc_version = AERON_CNC_VERSION;
+
+    aeron_context_t *aeron_context = nullptr;
+    ASSERT_EQ(0, aeron_context_init(&aeron_context));
+    ASSERT_NE(nullptr, aeron_context);
+    aeron_context->cnc_map.addr = &cnc;
+    aeron_context->cnc_map.length = sizeof(cnc);
+    aeron_context->use_conductor_agent_invoker = true;
+    aeron_context->idle_strategy_func = aeron_idle_strategy_noop_idle;
+    aeron_context->idle_strategy_state = nullptr;
+    ASSERT_TRUE(aeron_cnc_is_file_length_sufficient(&aeron_context->cnc_map));
+
+    aeron_t *client = nullptr;
+    ASSERT_EQ(0, aeron_alloc((void **)&client, sizeof(aeron_t)));
+    client->context = aeron_context;
+    ASSERT_EQ(0, aeron_client_conductor_init(&client->conductor, aeron_context)) << aeron_errmsg();
+    client->conductor.control_protocol_version = aeron_semantic_version_compose(1, 0, 0);
+    ASSERT_NE(nullptr, client->conductor.command_rb);
+    ASSERT_EQ(0, aeron_agent_init(
+        &client->runner,
+        "aeron-client",
+        client,
+        nullptr,
+        nullptr,
+        [](void *clientd)
+        {
+            return aeron_client_conductor_do_work(&reinterpret_cast<aeron_t *>(clientd)->conductor);
+        },
+        [](void *clientd)
+        {
+            aeron_client_conductor_on_close(&reinterpret_cast<aeron_t *>(clientd)->conductor);
+        },
+        client->context->idle_strategy_func,
+        client->context->idle_strategy_state));
+    EXPECT_EQ(0, aeron_start(client));
+
+    aeron_archive_context_t context = {};
+    context.message_retry_attempts = 1;
+    context.aeron = client;
+    context.owns_aeron_client = false;
+    auto channel = "aeron:ipc?term-length=64k|mtu=1408|sparse=true";
+    aeron_archive_context_set_control_request_channel(&context, channel);
+    aeron_archive_context_set_control_response_channel(&context, channel);
+
+    struct invoker_data
+    {
+        bool called;
+        aeron_t *client;
+    };
+    invoker_data invoker_data = {};
+    invoker_data.client = client;
+    invoker_data.called = false;
+    auto test_invoker = [](void *clientd)
+    {
+        auto data = reinterpret_cast<struct invoker_data *>(clientd);
+        if (data->called)
+        {
+            data->client->conductor.is_closed = true;
+            data->client->conductor.fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
+        }
+        data->called = true;
+    };
+    aeron_archive_context_set_delegating_invoker(&context, test_invoker, &invoker_data);
+
+    EXPECT_EQ(-1, aeron_archive_context_conclude(&context));
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
+    EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("client must be closed and discarded"));
+
+    EXPECT_EQ(0, aeron_close(client));
 }

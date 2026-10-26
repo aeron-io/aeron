@@ -257,7 +257,7 @@ typedef struct aeron_client_conductor_stct
     aeron_clock_func_t epoch_clock;
     bool invoker_mode;
     bool pre_touch;
-    bool is_terminating;
+    int fatal_error_code;
     volatile bool is_closed;
 }
 aeron_client_conductor_t;

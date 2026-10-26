@@ -28,7 +28,6 @@
 #include "protocol/aeron_udp_protocol.h"
 #include "concurrent/aeron_logbuffer_descriptor.h"
 #include "uri/aeron_uri_string_builder.h"
-#include "command/aeron_control_protocol.h"
 
 int aeron_archive_context_init(aeron_archive_context_t **ctx)
 {
@@ -387,7 +386,11 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
         int32_t session_id;
         do
         {
-            aeron_archive_context_invoke_aeron_client(ctx);
+            if (aeron_archive_context_invoke_aeron_client(ctx) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                goto error_close_uri_builders;
+            }
 
             result = aeron_async_next_session_id_poll(&session_id, async);
             if (result < 0)
@@ -457,39 +460,41 @@ void aeron_archive_context_idle(aeron_archive_context_t *ctx)
     ctx->idle_strategy_func(ctx->idle_strategy_state, 0);
 }
 
-void aeron_archive_context_invoke_aeron_client(aeron_archive_context_t *ctx)
+int aeron_archive_context_invoke_aeron_client(aeron_archive_context_t *ctx)
 {
     if (aeron_context_get_use_conductor_agent_invoker(aeron_context(ctx->aeron)))
     {
-        aeron_main_do_work(ctx->aeron);
+        if (aeron_main_do_work(ctx->aeron) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
     }
 
     if (NULL != ctx->delegating_invoker_func)
     {
         ctx->delegating_invoker_func(ctx->delegating_invoker_func_clientd);
     }
+
+    return 0;
 }
 
 void aeron_archive_context_invoke_error_handler(
     aeron_archive_context_t *ctx, int64_t correlation_id, int32_t error_code, const char *error_message)
 {
-    size_t formatted_message_length = strlen(error_message) + 100;
-    char *formatted_error_message;
-    aeron_alloc((void **)&formatted_error_message, formatted_message_length);
+    char formatted_error_message[AERON_ERROR_MAX_TOTAL_LENGTH];
 
     int archive_error_code = aeron_archive_client_map_archive_to_client_error_code(error_code);
 
     snprintf(
         formatted_error_message,
-        formatted_message_length,
+        sizeof(formatted_error_message),
         "response for correlationId=%" PRIi64 ", errorCode=%" PRIi32 ", error: %s",
         correlation_id,
         archive_error_code,
         error_message);
 
     ctx->error_handler(ctx->error_handler_clientd, archive_error_code, formatted_error_message);
-
-    aeron_free(formatted_error_message);
 }
 
 int aeron_archive_context_set_aeron(aeron_archive_context_t *ctx, aeron_t *aeron)

@@ -258,15 +258,19 @@ int aeron_archive_replay_merge_close(aeron_archive_replay_merge_t *replay_merge)
 
         while (NULL != replay_merge->async_destination)
         {
-            aeron_archive_idle(replay_merge->aeron_archive);
-
-            aeron_archive_context_invoke_aeron_client(replay_merge->aeron_archive->ctx);
-
             if (aeron_archive_replay_merge_handle_async_destination(replay_merge) < 0)
             {
                 AERON_APPEND_ERR("%s", "");
                 return -1;
             }
+
+            if (aeron_archive_context_invoke_aeron_client(replay_merge->archive_proxy->ctx) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                return -1;
+            }
+
+            aeron_archive_idle(replay_merge->aeron_archive);
         }
 
         if (MERGED != replay_merge->state)

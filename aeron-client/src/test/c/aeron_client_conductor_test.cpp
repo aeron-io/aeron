@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "aeron_client_test_utils.h"
+#include "gmock/gmock-matchers.h"
 
 extern "C"
 {
@@ -241,19 +242,12 @@ public:
 
     int doWork(bool updateDriverHeartbeat = true)
     {
-        int work_count;
-
         if (updateDriverHeartbeat)
         {
             aeron_mpsc_rb_consumer_heartbeat_time(&m_to_driver, test_epoch_clock());
         }
 
-        if ((work_count = aeron_client_conductor_do_work(&m_conductor)) < 0)
-        {
-            throw std::runtime_error("error from do_work: " + std::string(aeron_errmsg()));
-        }
-
-        return work_count;
+        return aeron_client_conductor_do_work(&m_conductor);
     }
 
     int doWorkForNs(
@@ -266,7 +260,11 @@ public:
         {
             now_ns += advance_interval_ns;
             now_ms = now_ns / 1000000LL;
-            work_count += doWork(updateDriverHeartbeat);
+            if (doWork(updateDriverHeartbeat) < 0)
+            {
+                break;
+            }
+            work_count++;
         }
         while (now_ns < target_ns);
 
@@ -1482,7 +1480,7 @@ TEST_F(ClientConductorTest, shouldRejectCloseHandlerIfClosed)
     aeron_on_close_client_pair_t pair = {};
 
     EXPECT_EQ(-1, aeron_add_close_handler(&aeron, &pair));
-    EXPECT_EQ(EPERM, aeron_errcode());
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldRejectRemoveCloseHandlerIfClosed)
@@ -1493,7 +1491,7 @@ TEST_F(ClientConductorTest, shouldRejectRemoveCloseHandlerIfClosed)
     aeron_on_close_client_pair_t pair = {};
 
     EXPECT_EQ(-1, aeron_remove_close_handler(&aeron, &pair));
-    EXPECT_EQ(EPERM, aeron_errcode());
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldRejectAddAvailableCounterHandlerIfClosed)
@@ -1504,7 +1502,7 @@ TEST_F(ClientConductorTest, shouldRejectAddAvailableCounterHandlerIfClosed)
     aeron_on_available_counter_pair_t pair = {};
 
     EXPECT_EQ(-1, aeron_add_available_counter_handler(&aeron, &pair));
-    EXPECT_EQ(EPERM, aeron_errcode());
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldRejectRemoveAvailableCounterHandlerIfClosed)
@@ -1515,7 +1513,7 @@ TEST_F(ClientConductorTest, shouldRejectRemoveAvailableCounterHandlerIfClosed)
     aeron_on_available_counter_pair_t pair = {};
 
     EXPECT_EQ(-1, aeron_remove_available_counter_handler(&aeron, &pair));
-    EXPECT_EQ(EPERM, aeron_errcode());
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldRejectAddUnavailableCounterHandlerIfClosed)
@@ -1526,7 +1524,7 @@ TEST_F(ClientConductorTest, shouldRejectAddUnavailableCounterHandlerIfClosed)
     aeron_on_unavailable_counter_pair_t pair = {};
 
     EXPECT_EQ(-1, aeron_add_unavailable_counter_handler(&aeron, &pair));
-    EXPECT_EQ(EPERM, aeron_errcode());
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldRejectRemoveUnavailableCounterHandlerIfClosed)
@@ -1537,7 +1535,7 @@ TEST_F(ClientConductorTest, shouldRejectRemoveUnavailableCounterHandlerIfClosed)
     aeron_on_unavailable_counter_pair_t pair = {};
 
     EXPECT_EQ(-1, aeron_remove_unavailable_counter_handler(&aeron, &pair));
-    EXPECT_EQ(EPERM, aeron_errcode());
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
 }
 
 class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std::tuple<aeron_mapped_file_t*, bool>>
@@ -2569,4 +2567,30 @@ TEST_F(ClientConductorTest, shouldDrainQueuedRemoveCmdsFromProducerThreadOnClose
     EXPECT_EQ(offers_succeeded.load(), callbacks_fired.load())
         << "Every successfully-offered cmd must have had its on_complete fired "
            "(either by doWork during the burst or by the close-time drain).";
+}
+
+TEST_F(ClientConductorTest, shouldFailWithErrorTerminatingIfMarkedAsTerminating)
+{
+    m_conductor.invoker_mode = true;
+    m_conductor.fatal_error_code = AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT;
+    m_conductor.is_closed = true;
+
+    aeron_err_clear();
+
+    EXPECT_EQ(-1, aeron_client_conductor_do_work(&m_conductor));
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
+    EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("a non-recoverable error 'client service timeout' (1002) has occurred."));
+}
+
+TEST_F(ClientConductorTest, shouldFailWithErrorClosedIfMarkedAsClosed)
+{
+    m_conductor.invoker_mode = true;
+    m_conductor.fatal_error_code = 0;
+    m_conductor.is_closed = true;
+
+    aeron_err_clear();
+
+    EXPECT_EQ(-1, aeron_client_conductor_do_work(&m_conductor));
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
+    EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("aeron_client_conductor_t was closed and must be discarded"));
 }

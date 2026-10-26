@@ -19,6 +19,7 @@
 
 #include "aeron_archive.h"
 #include "aeron_archive_credentials_supplier.h"
+#include "util/aeron_error.h"
 
 #define AERON_ARCHIVE_MESSAGE_TIMEOUT_ENV_VAR "AERON_ARCHIVE_MESSAGE_TIMEOUT"
 #define AERON_ARCHIVE_MESSAGE_TIMEOUT_NS_DEFAULT  (UINT64_C(10) * 1000 * 1000 * 1000) // 10 seconds
@@ -88,7 +89,7 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx);
 
 void aeron_archive_context_idle(aeron_archive_context_t *ctx);
 
-void aeron_archive_context_invoke_aeron_client(aeron_archive_context_t *ctx);
+int aeron_archive_context_invoke_aeron_client(aeron_archive_context_t *ctx);
 
 void aeron_archive_context_invoke_error_handler(
     aeron_archive_context_t *ctx, int64_t correlation_id, int32_t error_code, const char *error_message);

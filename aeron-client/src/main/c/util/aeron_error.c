@@ -254,6 +254,21 @@ const char *aeron_error_code_str(int errcode)
         case AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL:
             return "driver command buffer full";
 
+        case AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE:
+            return "client illegal state";
+
+        case AERON_CLIENT_ERROR_BROADCAST_RECEIVER_ILLEGAL_STATE:
+            return "aeron_broadcast_receiver_t illegal state";
+
+        case AERON_ARCHIVE_CLIENT_ERROR_REENTRANT_CALL:
+            return "aeron_archive_t reentrant call";
+
+        case AERON_ARCHIVE_CLIENT_ERROR_NOT_CONNECTED:
+            return "aeron_archive_t not connected";
+
+        case AERON_ARCHIVE_CLIENT_ERROR_ILLEGAL_STATE:
+            return "aeron_archive_t illegal state";
+
         case AERON_ARCHIVE_ERROR_CODE_GENERIC:
             return "generic error, see message";
 
@@ -361,7 +376,7 @@ void aeron_err_set(int errcode, const char *function, const char *filename, int 
     aeron_set_errno(errcode);
     error_state->offset = 0;
 
-    char err_buf[1024] = { 0 };
+    char err_buf[1024];
     const char *system_err_message;
     const int error_code = aeron_errcode();
     if (error_code <= 0)
@@ -370,8 +385,7 @@ void aeron_err_set(int errcode, const char *function, const char *filename, int 
     }
     else
     {
-        int length = 1024;
-        system_err_message = aeron_strerror_r(error_code, &err_buf[0], length);
+        system_err_message = aeron_strerror_r(error_code, &err_buf[0], sizeof(err_buf));
     }
 
     const char *err_str = system_err_message;

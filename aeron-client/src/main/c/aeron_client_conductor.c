@@ -38,7 +38,7 @@ static void aeron_client_conductor_handle_system_error(aeron_client_conductor_t 
     aeron_err_clear();
 }
 
-#define AERON_ON_HANDLER_ADD(p, c, m, t)                            \
+#define AERON_CLIENT_CONDUCTOR_ON_HANDLER_ADD(p, c, m, t)           \
 do                                                                  \
 {                                                                   \
     int ensure_capacity_result = 0;                                 \
@@ -54,7 +54,41 @@ do                                                                  \
         (p) = &(c)->m.array[(c)->m.length++];                       \
     }                                                               \
 }                                                                   \
-while (false)
+while (0)
+
+static int aeron_client_conductor_ensure_active(aeron_client_conductor_t *conductor)
+{
+    if (aeron_client_conductor_is_closed(conductor))
+    {
+        if (0 != conductor->fatal_error_code)
+        {
+            AERON_SET_ERR(
+                -AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE,
+                "client must be closed and discarded, because a non-recoverable error '%s' (%d) has occurred.",
+                aeron_error_code_str(conductor->fatal_error_code),
+                conductor->fatal_error_code);
+            return -1;
+        }
+
+        AERON_SET_ERR(
+            -AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, "%s",
+            "aeron_client_conductor_t was closed and must be discarded");
+        return -1;
+    }
+
+    return 0;
+}
+
+#define AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor)      \
+do                                                           \
+{                                                            \
+    if (aeron_client_conductor_ensure_active(conductor) < 0) \
+    {                                                        \
+        AERON_APPEND_ERR("%s", "");                          \
+        return -1;                                           \
+    }                                                        \
+}                                                            \
+while (0)
 
 _Static_assert(
     sizeof(aeron_publication_error_t) == sizeof(aeron_publication_error_values_t),
@@ -1303,27 +1337,29 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
 
         if (AERON_NULL_VALUE == last_keepalive_ms)
         {
-            conductor->is_terminating = true;
+            conductor->fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
             aeron_client_conductor_force_close_resources(conductor);
 
-            char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
-            snprintf(buffer, sizeof(buffer) - 1, "MediaDriver has been shutdown");
-            conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_DRIVER_TIMEOUT, buffer);
+            char *buffer = "MediaDriver has been shutdown";
+            conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
             return -1;
         }
 
         if (now_ms > (last_keepalive_ms + (int64_t)conductor->driver_timeout_ms))
         {
-            conductor->is_terminating = true;
+            conductor->fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
             aeron_client_conductor_force_close_resources(conductor);
 
-            char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+            char buffer[128];
             snprintf(
-                buffer, sizeof(buffer) - 1,
+                buffer,
+                sizeof(buffer),
                 "MediaDriver keepalive: age=%" PRId64 "ms > timeout=%" PRId64 "ms",
                 (int64_t)(now_ms - last_keepalive_ms),
                 (int64_t)conductor->driver_timeout_ms);
-            conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_DRIVER_TIMEOUT, buffer);
+            conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
             return -1;
         }
 
@@ -1374,12 +1410,13 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
             if (!aeron_counter_heartbeat_timestamp_is_active(
                 &conductor->counters_reader, id, AERON_COUNTER_CLIENT_HEARTBEAT_TIMESTAMP_TYPE_ID, conductor->client_id))
             {
-                conductor->is_terminating = true;
+                conductor->fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
                 aeron_client_conductor_force_close_resources(conductor);
 
-                char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
-                snprintf(buffer, sizeof(buffer) - 1, "unexpected close of heartbeat timestamp counter: %" PRId32, id);
-                conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_DRIVER_TIMEOUT, buffer);
+                char buffer[64];
+                snprintf(buffer, sizeof(buffer), "unexpected close of heartbeat timestamp counter: %" PRId32, id);
+                conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
                 return -1;
             }
 
@@ -1729,16 +1766,17 @@ static int aeron_client_conductor_on_check_timeouts(aeron_client_conductor_t *co
     {
         if (now_ns > (conductor->time_of_last_service_ns + (int64_t)conductor->inter_service_timeout_ns))
         {
-            conductor->is_terminating = true;
+            conductor->fatal_error_code = AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT;
             aeron_client_conductor_force_close_resources(conductor);
 
             char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
-            snprintf(buffer, sizeof(buffer) - 1,
+            snprintf(buffer, sizeof(buffer),
                 "service interval exceeded in ns: timeout=%" PRId64 ", interval=%" PRId64,
                 (int64_t)conductor->inter_service_timeout_ns,
                 (int64_t)(now_ns - conductor->time_of_last_service_ns));
             conductor->error_handler(
-                conductor->error_handler_clientd, AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, buffer);
+                conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
             return -1;
         }
 
@@ -1746,24 +1784,28 @@ static int aeron_client_conductor_on_check_timeouts(aeron_client_conductor_t *co
 
         if ((result = aeron_client_conductor_check_liveness(conductor, now_ns)) < 0)
         {
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
         work_count += result;
 
         if ((result = aeron_client_conductor_check_lingering_resources(conductor, now_ns)) < 0)
         {
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
         work_count += result;
 
         if ((result = aeron_client_conductor_check_registering_resources(conductor, now_ns)) < 0)
         {
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
         work_count += result;
 
         if ((result = aeron_client_conductor_check_resources_pending_close_action(conductor)) < 0)
         {
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
         work_count += result;
@@ -2402,7 +2444,7 @@ static int aeron_client_conductor_on_cmd_handler(void *clientd, void *item)
         {
             aeron_on_available_counter_pair_t *pair;
 
-            AERON_ON_HANDLER_ADD(pair, conductor, available_counter_handlers, aeron_on_available_counter_pair_t);
+            AERON_CLIENT_CONDUCTOR_ON_HANDLER_ADD(pair, conductor, available_counter_handlers, aeron_on_available_counter_pair_t);
             if (NULL != pair)
             {
                 pair->handler = cmd->handler.on_available_counter;
@@ -2441,7 +2483,7 @@ static int aeron_client_conductor_on_cmd_handler(void *clientd, void *item)
         {
             aeron_on_unavailable_counter_pair_t *pair;
 
-            AERON_ON_HANDLER_ADD(pair, conductor, unavailable_counter_handlers, aeron_on_unavailable_counter_pair_t);
+            AERON_CLIENT_CONDUCTOR_ON_HANDLER_ADD(pair, conductor, unavailable_counter_handlers, aeron_on_unavailable_counter_pair_t);
             if (NULL != pair)
             {
                 pair->handler = cmd->handler.on_unavailable_counter;
@@ -2480,7 +2522,7 @@ static int aeron_client_conductor_on_cmd_handler(void *clientd, void *item)
         {
             aeron_on_close_client_pair_t *pair;
 
-            AERON_ON_HANDLER_ADD(pair, conductor, close_handlers, aeron_on_close_client_pair_t);
+            AERON_CLIENT_CONDUCTOR_ON_HANDLER_ADD(pair, conductor, close_handlers, aeron_on_close_client_pair_t);
             if (NULL != pair)
             {
                 pair->handler = cmd->handler.on_close_handler;
@@ -2692,7 +2734,7 @@ int aeron_client_conductor_init(aeron_client_conductor_t *conductor, aeron_conte
 
     conductor->invoker_mode = context->use_conductor_agent_invoker;
     conductor->pre_touch = context->pre_touch_mapped_memory;
-    conductor->is_terminating = false;
+    conductor->fatal_error_code = 0;
 
     return 0;
 
@@ -2709,33 +2751,35 @@ error:
 
 int aeron_client_conductor_do_work(aeron_client_conductor_t *conductor)
 {
-    int work_count = 0, result = 0;
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
 
-    if (conductor->is_terminating)
-    {
-        return 0;
-    }
+    int work_count = 0;
 
     work_count += (int)aeron_mpsc_rb_read(
         conductor->command_rb, aeron_client_conductor_rb_on_command, conductor, 1);
 
-    result = aeron_broadcast_receiver_receive(
+    int result = aeron_broadcast_receiver_receive(
         &conductor->to_client_buffer, aeron_client_conductor_on_driver_response, conductor);
     if (result < 0)
     {
+        conductor->fatal_error_code = AERON_CLIENT_ERROR_BROADCAST_RECEIVER_ILLEGAL_STATE;
+        aeron_client_conductor_force_close_resources(conductor);
+
         AERON_APPEND_ERR("%s", "aeron_broadcast_receiver_receive failed");
-        aeron_client_conductor_handle_system_error(conductor);
+        conductor->error_handler(
+            conductor->error_handler_clientd, AERON_CLIENT_ERROR_BROADCAST_RECEIVER_ILLEGAL_STATE, aeron_errmsg());
+
+        return -1;
     }
-    else
-    {
-        work_count += result;
-    }
+    work_count += result;
 
     result = aeron_client_conductor_on_check_timeouts(conductor);
-    if (result >= 0)
+    if (result < 0)
     {
-        work_count += result;
+        AERON_APPEND_ERR("%s", "");
+        return -1;
     }
+    work_count += result;
 
     return work_count;
 }
@@ -2781,11 +2825,15 @@ void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
     aeron_free(conductor->available_counter_handlers.array);
     aeron_free(conductor->unavailable_counter_handlers.array);
     aeron_free(conductor->close_handlers.array);
+
+    AERON_SET_RELEASE(conductor->is_closed, true);
 }
 
 int aeron_client_conductor_async_add_publication(
     aeron_async_add_publication_t **async, aeron_client_conductor_t *conductor, const char *uri, int32_t stream_id)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_async_add_publication_t *cmd = NULL;
     char *uri_copy = NULL;
     size_t uri_length = strlen(uri);
@@ -2850,6 +2898,8 @@ int aeron_client_conductor_async_close_publication(
     aeron_notification_t on_close_complete,
     void *on_close_complete_clientd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     publication->command_base.func = aeron_client_conductor_on_cmd_close_publication;
     publication->command_base.item = NULL;
     publication->on_close_complete = on_close_complete;
@@ -2874,6 +2924,8 @@ int aeron_client_conductor_async_add_exclusive_publication(
     const char *uri,
     int32_t stream_id)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_async_add_exclusive_publication_t *cmd = NULL;
     char *uri_copy = NULL;
     size_t uri_length = strlen(uri);
@@ -2938,6 +2990,8 @@ int aeron_client_conductor_async_close_exclusive_publication(
     aeron_notification_t on_close_complete,
     void *on_close_complete_clientd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     publication->command_base.func = aeron_client_conductor_on_cmd_close_exclusive_publication;
     publication->command_base.item = NULL;
     publication->on_close_complete = on_close_complete;
@@ -2966,6 +3020,8 @@ int aeron_client_conductor_async_add_subscription(
     aeron_on_unavailable_image_t on_unavailable_image_handler,
     void *on_unavailable_image_clientd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_async_add_subscription_t *cmd = NULL;
     char *uri_copy = NULL;
     size_t uri_length = strlen(uri);
@@ -3034,6 +3090,8 @@ int aeron_client_conductor_async_close_subscription(
     aeron_notification_t on_close_complete,
     void *on_close_complete_clientd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     subscription->command_base.func = aeron_client_conductor_on_cmd_close_subscription;
     subscription->command_base.item = NULL;
     subscription->on_close_complete = on_close_complete;
@@ -3150,6 +3208,8 @@ int aeron_client_conductor_async_remove_resource(
     aeron_notification_t on_complete,
     void *on_complete_clientd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_client_remove_resource_cmd_t cmd;
 
     cmd.command_base.func = aeron_client_conductor_on_cmd_remove_resource;
@@ -3183,6 +3243,8 @@ int aeron_client_conductor_async_add_counter(
     const char *label_buffer,
     size_t label_buffer_length)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_async_add_counter_t *cmd = NULL;
     uint8_t *key_buffer_copy = NULL;
     char *label_buffer_copy = NULL;
@@ -3265,6 +3327,8 @@ int aeron_client_conductor_async_close_counter(
     aeron_notification_t on_close_complete,
     void *on_close_complete_clientd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     counter->command_base.func = aeron_client_conductor_on_cmd_close_counter;
     counter->command_base.item = NULL;
     counter->on_close_complete = on_close_complete;
@@ -3293,6 +3357,8 @@ int aeron_client_conductor_async_add_static_counter(
     size_t label_buffer_length,
     int64_t registration_id)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_async_add_counter_t *cmd = NULL;
     uint8_t *key_buffer_copy = NULL;
     char *label_buffer_copy = NULL;
@@ -3379,6 +3445,8 @@ int aeron_client_conductor_async_add_publication_destination(
     aeron_publication_t *publication,
     const char *uri)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.publication = publication;
 
@@ -3392,6 +3460,8 @@ int aeron_client_conductor_async_remove_publication_destination(
     aeron_publication_t *publication,
     const char *uri)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.publication = publication;
 
@@ -3405,6 +3475,8 @@ int aeron_client_conductor_async_remove_publication_destination_by_id(
     aeron_publication_t *publication,
     int64_t destination_registration_id)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.publication = publication;
 
@@ -3422,6 +3494,8 @@ int aeron_client_conductor_async_add_exclusive_publication_destination(
     aeron_exclusive_publication_t *publication,
     const char *uri)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.exclusive_publication = publication;
 
@@ -3435,6 +3509,8 @@ int aeron_client_conductor_async_remove_exclusive_publication_destination(
     aeron_exclusive_publication_t *publication,
     const char *uri)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.exclusive_publication = publication;
 
@@ -3448,6 +3524,8 @@ int aeron_client_conductor_async_remove_exclusive_publication_destination_by_id(
     aeron_exclusive_publication_t *publication,
     int64_t destination_registration_id)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.exclusive_publication = publication;
 
@@ -3465,6 +3543,8 @@ int aeron_client_conductor_async_add_subscription_destination(
     aeron_subscription_t *subscription,
     const char *uri)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.subscription = subscription;
 
@@ -3478,6 +3558,8 @@ int aeron_client_conductor_async_remove_subscription_destination(
     aeron_subscription_t *subscription,
     const char *uri)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     union aeron_client_registering_resource_un resource;
     resource.subscription = subscription;
 
@@ -3490,6 +3572,8 @@ int aeron_client_conductor_async_get_next_available_session_id(
     aeron_client_conductor_t *conductor,
     int32_t stream_id)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     aeron_async_get_next_available_session_id_t *cmd = NULL;
 
     *async = NULL;
@@ -3535,6 +3619,8 @@ error:
 
 int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, aeron_client_handler_cmd_t *cmd)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     cmd->command_base.func = aeron_client_conductor_on_cmd_handler;
     cmd->command_base.item = NULL;
     cmd->processed = false;
@@ -3607,12 +3693,12 @@ int aeron_client_conductor_on_client_timeout(aeron_client_conductor_t *conductor
 {
     if (response->client_id == conductor->client_id)
     {
-        conductor->is_terminating = true;
+        conductor->fatal_error_code = AERON_CLIENT_ERROR_CLIENT_TIMEOUT;
         aeron_client_conductor_force_close_resources(conductor);
 
-        char err_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
-        snprintf(err_buffer, sizeof(err_buffer) - 1, "%s", "client timeout from driver");
-        conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_CLIENT_TIMEOUT, err_buffer);
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "%s", "client timeout from driver");
+        conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
     }
 
     return 0;
@@ -3621,6 +3707,8 @@ int aeron_client_conductor_on_client_timeout(aeron_client_conductor_t *conductor
 int aeron_client_conductor_reject_image(
     aeron_client_conductor_t *conductor, int64_t image_correlation_id, int64_t position, const char *reason)
 {
+    AERON_CLIENT_CONDUCTOR_ENSURE_ACTIVE(conductor);
+
     size_t reason_length = strlen(reason);
     const size_t command_length = sizeof(aeron_reject_image_command_t) + reason_length + 1;
 

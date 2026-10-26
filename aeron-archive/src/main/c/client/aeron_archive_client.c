@@ -54,14 +54,69 @@
 #define ARCHIVE_ERROR_CODE_EMPTY_RECORDING (15)
 #define ARCHIVE_ERROR_CODE_INVALID_POSITION (16)
 
-#define ENSURE_NOT_REENTRANT_CHECK_RETURN(_aa, _rc) \
-do { \
-    if ((_aa)->is_in_callback) \
-    { \
-        aeron_mutex_unlock(&aeron_archive->lock); \
-        AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "reentrant calls not permitted during callbacks"); \
-        return (_rc); \
-    } \
+static void aeron_archive_set_archive_not_connected_error(aeron_archive_t *aeron_archive)
+{
+    AERON_SET_ERR(
+        -AERON_ARCHIVE_CLIENT_ERROR_NOT_CONNECTED,
+        "%s",
+        "aeron_archive_t got disconnected from the archive");
+    aeron_archive->fatal_error_code = AERON_ARCHIVE_CLIENT_ERROR_NOT_CONNECTED;
+}
+
+static int aeron_archive_lock_and_check_execution_allowed(aeron_archive_t *aeron_archive)
+{
+    aeron_mutex_lock(&aeron_archive->lock);
+    if (aeron_archive->is_in_callback)
+    {
+        AERON_SET_ERR(
+            -AERON_ARCHIVE_CLIENT_ERROR_REENTRANT_CALL, "%s", "reentrant calls not permitted during callbacks");
+        goto error;
+    }
+
+    if (0 != aeron_archive->fatal_error_code)
+    {
+        AERON_SET_ERR(
+            -AERON_ARCHIVE_CLIENT_ERROR_ILLEGAL_STATE,
+            "aeron_archive_t encountered a fatal error '%s' (%d) and must closed and discarded",
+            aeron_error_code_str(aeron_archive->fatal_error_code),
+            aeron_archive->fatal_error_code);
+        goto error;
+    }
+
+    if (!aeron_subscription_is_connected(aeron_archive->subscription))
+    {
+        aeron_archive_set_archive_not_connected_error(aeron_archive);
+        AERON_APPEND_ERR("%s", "");
+        goto error;
+    }
+
+    return 0;
+
+error:
+    aeron_mutex_unlock(&aeron_archive->lock);
+    return -1;
+}
+
+void aeron_archive_context_check_for_fatal_error(aeron_archive_t *aeron_archive)
+{
+    int errcode = aeron_errcode();
+    if (errcode < 0)
+    {
+        int code = -errcode;
+        if (AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE == code)
+        {
+            aeron_archive->fatal_error_code = code;
+        }
+    }
+}
+
+#define AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive)        \
+do {                                                                         \
+    if (aeron_archive_lock_and_check_execution_allowed((aeron_archive)) < 0) \
+    {                                                                        \
+        AERON_APPEND_ERR("%s", "");                                          \
+        return -1;                                                           \
+    }                                                                        \
 } while (0)
 
 static void aeron_archive_handle_control_response_with_error_handler(
@@ -84,6 +139,17 @@ static void aeron_archive_dispatch_recording_signal(aeron_archive_t *aeron_archi
     signal.recording_signal_code = poller->recording_signal_code;
 
     aeron_archive_recording_signal_dispatch_signal(aeron_archive->ctx, &signal);
+}
+
+static int aeron_archive_invoke_aeron_client(aeron_archive_t *aeron_archive)
+{
+    if (aeron_archive_context_invoke_aeron_client(aeron_archive->ctx) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        aeron_archive_context_check_for_fatal_error(aeron_archive);
+        return -1;
+    }
+    return 0;
 }
 
 static int aeron_archive_poll_next_response(
@@ -125,7 +191,8 @@ static int aeron_archive_poll_next_response(
         {
             if (!aeron_subscription_is_connected(poller->subscription))
             {
-                AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "subscription to archive is not connected");
+                aeron_archive_set_archive_not_connected_error(aeron_archive);
+                AERON_APPEND_ERR("%s", "");
                 return -1;
             }
         }
@@ -136,9 +203,13 @@ static int aeron_archive_poll_next_response(
             return -1;
         }
 
-        aeron_archive_idle(aeron_archive);
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
 
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+        aeron_archive_idle(aeron_archive);
     }
 
     return 0;
@@ -170,7 +241,11 @@ static int aeron_archive_poll_for_response_allowing_error(
         // make sure the session id matches
         if (poller->control_session_id != aeron_archive->control_session_id)
         {
-            aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+            if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                return -1;
+            }
             continue;
         }
 
@@ -289,7 +364,11 @@ int aeron_archive_connect(aeron_archive_t **aeron_archive_p, aeron_archive_conte
             previous_step = aeron_archive_async_connect_step(async);
         }
 
-        aeron_archive_context_invoke_aeron_client(ctx);
+        if (aeron_archive_context_invoke_aeron_client(ctx) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
 
         if (aeron_archive_async_connect_poll(aeron_archive_p, async) < 0)
         {
@@ -339,6 +418,7 @@ int aeron_archive_create(
     _aeron_archive->control_session_id = control_session_id;
     _aeron_archive->archive_id = archive_id;
     _aeron_archive->is_in_callback = false;
+    _aeron_archive->fatal_error_code = 0;
 
     *aeron_archive = _aeron_archive;
     return 0;
@@ -412,18 +492,17 @@ int64_t aeron_archive_next_correlation_id(aeron_archive_t *aeron_archive)
 
 int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *aeron_archive)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int32_t count = 0;
-    int rc = 0;
+    int rc = -1;
 
     aeron_archive_control_response_poller_t *poller = aeron_archive->control_response_poller;
 
     if (aeron_archive_control_response_poller_poll(poller) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_mutex_unlock(&aeron_archive->lock);
-        return -1;
+        goto unlock;
     }
 
     if (poller->is_poll_complete &&
@@ -439,7 +518,7 @@ int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *
                     poller->correlation_id,
                     poller->relevant_id,
                     poller->error_message);
-                rc = -1;
+                goto unlock;
             }
             else
             {
@@ -453,37 +532,30 @@ int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *
             count++;
         }
     }
-
-    aeron_mutex_unlock(&aeron_archive->lock);
+    rc = 0;
 
     if (NULL != count_p)
     {
         *count_p = count;
     }
 
+unlock:
+    aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
 }
 
 int aeron_archive_poll_for_error_response(aeron_archive_t *aeron_archive, char *buffer, size_t buffer_length)
 {
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
+
     int rc = 0;
-
-    aeron_mutex_lock(&aeron_archive->lock);
-
-    if (!aeron_subscription_is_connected(aeron_archive->subscription))
-    {
-        AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "subscription to archive is not connected");
-        rc = -1;
-        goto cleanup;
-    }
-
     aeron_archive_control_response_poller_t *poller = aeron_archive->control_response_poller;
 
     if (aeron_archive_control_response_poller_poll(poller) < 0)
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
-        goto cleanup;
+        goto unlock;
     }
 
     if (poller->is_poll_complete &&
@@ -494,7 +566,7 @@ int aeron_archive_poll_for_error_response(aeron_archive_t *aeron_archive, char *
         {
             snprintf(buffer, buffer_length, "%s", poller->error_message);
 
-            goto cleanup;
+            goto unlock;
         }
         else if (poller->is_recording_signal)
         {
@@ -507,7 +579,7 @@ int aeron_archive_poll_for_error_response(aeron_archive_t *aeron_archive, char *
         buffer[0] = '\0';
     }
 
-cleanup:
+unlock:
     aeron_mutex_unlock(&aeron_archive->lock);
 
     return rc;
@@ -515,28 +587,9 @@ cleanup:
 
 int aeron_archive_check_for_error_response(aeron_archive_t *aeron_archive)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int rc = 0;
-
-    if (!aeron_subscription_is_connected(aeron_archive->subscription))
-    {
-        if (NULL == aeron_archive->ctx->error_handler)
-        {
-            AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "not connected");
-            rc = -1;
-        }
-        else
-        {
-            aeron_archive->ctx->error_handler(
-                aeron_archive->ctx->error_handler_clientd,
-                AERON_ERROR_CODE_GENERIC_ERROR,
-                "not connected");
-        }
-
-        goto cleanup;
-    }
-
     aeron_archive_control_response_poller_t *poller = aeron_archive->control_response_poller;
 
     if (aeron_archive_control_response_poller_poll(poller) < 0)
@@ -586,8 +639,12 @@ int aeron_archive_add_recorded_publication(
     const char *channel,
     int32_t stream_id)
 {
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
+
     aeron_async_add_publication_t *async;
     aeron_publication_t *_publication = NULL;
+
+    int rc = -1;
 
     if (aeron_async_add_publication(
         &async,
@@ -596,25 +653,31 @@ int aeron_archive_add_recorded_publication(
         stream_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        return -1;
+        aeron_archive_context_check_for_fatal_error(aeron_archive);
+        goto unlock;
     }
 
     if (aeron_async_add_publication_poll(&_publication, async) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        return -1;
+        goto unlock;
     }
+
     while (NULL == _publication)
     {
-        aeron_archive_idle(aeron_archive);
-
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
-
         if (aeron_async_add_publication_poll(&_publication, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
-            return -1;
+            goto unlock;
         }
+
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto unlock;
+        }
+
+        aeron_archive_idle(aeron_archive);
     }
 
     aeron_publication_constants_t constants;
@@ -623,14 +686,12 @@ int aeron_archive_add_recorded_publication(
     {
         // not original
         AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "publication already added for channel=%s streamId=%" PRIi32, channel, stream_id);
-        return -1;
+        goto unlock;
     }
 
     char *recording_channel;
     size_t recording_channel_len = strlen(channel) + 50; // add enough space for an additional session id
     aeron_alloc((void **)&recording_channel, recording_channel_len);
-
-    int rc = 0;
 
     if (aeron_archive_channel_with_session_id(
         recording_channel,
@@ -639,7 +700,6 @@ int aeron_archive_add_recorded_publication(
         constants.session_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        rc = -1;
         goto cleanup;
     }
 
@@ -652,14 +712,17 @@ int aeron_archive_add_recorded_publication(
         false) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        rc = -1;
         goto cleanup;
     }
 
     *publication_p = _publication;
+    rc = 0;
 
 cleanup:
     aeron_free(recording_channel);
+
+unlock:
+    aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
 }
 
@@ -669,8 +732,11 @@ int aeron_archive_add_recorded_exclusive_publication(
     const char *channel,
     int32_t stream_id)
 {
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
+
     aeron_async_add_exclusive_publication_t *async;
     aeron_exclusive_publication_t *_exclusive_publication = NULL;
+    int rc = -1;
 
     if (aeron_async_add_exclusive_publication(
         &async,
@@ -679,25 +745,31 @@ int aeron_archive_add_recorded_exclusive_publication(
         stream_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        return -1;
+        aeron_archive_context_check_for_fatal_error(aeron_archive);
+        goto unlock;
     }
 
     if (aeron_async_add_exclusive_publication_poll(&_exclusive_publication, async) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        return -1;
+        goto unlock;
     }
+
     while (NULL == _exclusive_publication)
     {
-        aeron_archive_idle(aeron_archive);
-
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
-
         if (aeron_async_add_exclusive_publication_poll(&_exclusive_publication, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
-            return -1;
+            goto unlock;
         }
+
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto unlock;
+        }
+
+        aeron_archive_idle(aeron_archive);
     }
 
     aeron_publication_constants_t constants;
@@ -707,8 +779,6 @@ int aeron_archive_add_recorded_exclusive_publication(
     size_t recording_channel_len = strlen(channel) + 50; // add enough space for an additional session id
     aeron_alloc((void **)&recording_channel, recording_channel_len);
 
-    int rc = 0;
-
     if (aeron_archive_channel_with_session_id(
         recording_channel,
         recording_channel_len,
@@ -716,7 +786,6 @@ int aeron_archive_add_recorded_exclusive_publication(
         constants.session_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        rc = -1;
         goto cleanup;
     }
 
@@ -729,14 +798,17 @@ int aeron_archive_add_recorded_exclusive_publication(
         false) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        rc = -1;
         goto cleanup;
     }
 
     *exclusive_publication_p = _exclusive_publication;
+    rc = 0;
 
 cleanup:
     aeron_free(recording_channel);
+
+unlock:
+    aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
 }
 
@@ -748,8 +820,7 @@ int aeron_archive_start_recording(
     aeron_archive_source_location_t source_location,
     bool auto_stop)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -783,8 +854,7 @@ int aeron_archive_get_recording_position(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -815,8 +885,7 @@ int aeron_archive_get_start_position(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -847,8 +916,7 @@ int aeron_archive_get_stop_position(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -879,8 +947,7 @@ int aeron_archive_get_max_recorded_position(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -910,8 +977,7 @@ int aeron_archive_stop_recording_subscription(
     aeron_archive_t *aeron_archive,
     int64_t subscription_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -942,8 +1008,7 @@ int aeron_archive_try_stop_recording_subscription(
     aeron_archive_t *aeron_archive,
     int64_t subscription_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -975,8 +1040,7 @@ int aeron_archive_stop_recording_channel_and_stream(
     const char *channel,
     int32_t stream_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1009,8 +1073,7 @@ int aeron_archive_try_stop_recording_channel_and_stream(
     const char *channel,
     int32_t stream_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1043,8 +1106,7 @@ int aeron_archive_try_stop_recording_by_identity(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1137,8 +1199,7 @@ int aeron_archive_find_last_matching_recording(
     int32_t stream_id,
     int32_t session_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1159,7 +1220,7 @@ int aeron_archive_find_last_matching_recording(
         rc = aeron_archive_poll_for_response(
             recording_id_p,
             aeron_archive,
-            "AeronArchive::findLastMatchingRecording",
+            "aeron_archive_find_last_matching_recording",
             correlation_id);
     }
 
@@ -1174,8 +1235,7 @@ int aeron_archive_list_recording(
     aeron_archive_recording_descriptor_consumer_func_t recording_descriptor_consumer,
     void *recording_descriptor_consumer_clientd)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1195,7 +1255,7 @@ int aeron_archive_list_recording(
         rc = aeron_archive_poll_for_descriptors(
             count_p,
             aeron_archive,
-            "AeronArchive::listRecording",
+            "aeron_archive_list_recording",
             correlation_id,
             1,
             recording_descriptor_consumer,
@@ -1216,8 +1276,7 @@ int aeron_archive_list_recordings(
     aeron_archive_recording_descriptor_consumer_func_t recording_descriptor_consumer,
     void *recording_descriptor_consumer_clientd)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1238,7 +1297,7 @@ int aeron_archive_list_recordings(
         rc = aeron_archive_poll_for_descriptors(
             count_p,
             aeron_archive,
-            "AeronArchive::listRecordings",
+            "aeron_archive_list_recordings",
             correlation_id,
             record_count,
             recording_descriptor_consumer,
@@ -1261,8 +1320,7 @@ int aeron_archive_list_recordings_for_uri(
     aeron_archive_recording_descriptor_consumer_func_t recording_descriptor_consumer,
     void *recording_descriptor_consumer_clientd)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1285,7 +1343,7 @@ int aeron_archive_list_recordings_for_uri(
         rc = aeron_archive_poll_for_descriptors(
             count_p,
             aeron_archive,
-            "AeronArchive::listRecordingsForUri",
+            "aeron_archive_list_recordings_for_uri",
             correlation_id,
             record_count,
             recording_descriptor_consumer,
@@ -1374,8 +1432,7 @@ int aeron_archive_start_replay(
     int32_t replay_stream_id,
     aeron_archive_replay_params_t *params)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int rc = aeron_archive_start_replay_locked(replay_session_id_p, aeron_archive, recording_id, replay_channel, replay_stream_id, params);
 
@@ -1488,25 +1545,23 @@ static int aeron_archive_replay_locked(
         goto cleanup;
     }
 
-    if (aeron_async_add_subscription_poll(&subscription, async_add_subscription) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        rc = -1;
-        goto cleanup;
-    }
-
     while (NULL == subscription)
     {
-        aeron_archive_idle(aeron_archive);
-
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
-
         if (aeron_async_add_subscription_poll(&subscription, async_add_subscription) < 0)
         {
             AERON_APPEND_ERR("%s", "");
             rc = -1;
             goto cleanup;
         }
+
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            rc = -1;
+            goto cleanup;
+        }
+
+        aeron_archive_idle(aeron_archive);
     }
 
     *subscription_p = subscription;
@@ -1524,8 +1579,7 @@ int aeron_archive_replay(
     int32_t replay_stream_id,
     aeron_archive_replay_params_t *params)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int rc = aeron_archive_replay_locked(subscription_p, aeron_archive, recording_id, replay_channel, replay_stream_id, params);
 
@@ -1540,8 +1594,7 @@ int aeron_archive_truncate_recording(
     int64_t recording_id,
     int64_t position)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1572,8 +1625,7 @@ int aeron_archive_stop_replay(
     aeron_archive_t *aeron_archive,
     int64_t replay_session_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1603,8 +1655,7 @@ int aeron_archive_stop_all_replays(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1641,8 +1692,7 @@ int aeron_archive_list_recording_subscriptions(
     aeron_archive_recording_subscription_descriptor_consumer_func_t recording_subscription_descriptor_consumer,
     void *recording_subscription_descriptor_consumer_clientd)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1684,8 +1734,7 @@ int aeron_archive_purge_recording(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1720,8 +1769,7 @@ int aeron_archive_extend_recording(
     aeron_archive_source_location_t source_location,
     bool auto_stop)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1759,8 +1807,7 @@ int aeron_archive_replicate(
     int32_t src_control_stream_id,
     aeron_archive_replication_params_t *params)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1793,8 +1840,7 @@ int aeron_archive_stop_replication(
     aeron_archive_t *aeron_archive,
     int64_t replication_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1825,8 +1871,7 @@ int aeron_archive_try_stop_replication(
     aeron_archive_t *aeron_archive,
     int64_t replication_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1858,8 +1903,7 @@ int aeron_archive_detach_segments(
     int64_t recording_id,
     int64_t new_start_position)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1891,8 +1935,7 @@ int aeron_archive_delete_detached_segments(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1924,8 +1967,7 @@ int aeron_archive_purge_segments(
     int64_t recording_id,
     int64_t new_start_position)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1957,8 +1999,7 @@ int aeron_archive_attach_segments(
     aeron_archive_t *aeron_archive,
     int64_t recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -1990,8 +2031,7 @@ int aeron_archive_migrate_segments(
     int64_t src_recording_id,
     int64_t dst_recording_id)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -2020,8 +2060,7 @@ int aeron_archive_migrate_segments(
 
 int aeron_archive_update_channel(aeron_archive_t *aeron_archive, int64_t recording_id, const char *new_channel)
 {
-    aeron_mutex_lock(&aeron_archive->lock);
-    ENSURE_NOT_REENTRANT_CHECK_RETURN(aeron_archive, -1);
+    AERON_ARCHIVE_LOCK_AND_CHECK_EXECUTION_ALLOWED(aeron_archive);
 
     int64_t correlation_id = aeron_archive_next_correlation_id(aeron_archive);
     int rc;
@@ -2117,7 +2156,11 @@ int aeron_archive_poll_for_response(
         // make sure the session id matches
         if (poller->control_session_id != aeron_archive->control_session_id)
         {
-            aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+            if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                return -1;
+            }
             continue;
         }
 
@@ -2205,7 +2248,11 @@ int aeron_archive_poll_for_descriptors(
             deadline_ns = aeron_nano_clock() + aeron_archive->ctx->message_timeout_ns;
         }
 
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
 
         if (fragments > 0)
         {
@@ -2214,7 +2261,8 @@ int aeron_archive_poll_for_descriptors(
 
         if (!aeron_subscription_is_connected(aeron_archive->subscription))
         {
-            AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "not connected");
+            aeron_archive_set_archive_not_connected_error(aeron_archive);
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
 
@@ -2277,7 +2325,11 @@ int aeron_archive_poll_for_subscription_descriptors(
             deadline_ns = aeron_nano_clock() + aeron_archive->ctx->message_timeout_ns;
         }
 
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
 
         if (fragments > 0)
         {
@@ -2286,7 +2338,8 @@ int aeron_archive_poll_for_subscription_descriptors(
 
         if (!aeron_subscription_is_connected(aeron_archive->subscription))
         {
-            AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "subscription is not connected");
+            aeron_archive_set_archive_not_connected_error(aeron_archive);
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
 
@@ -2339,15 +2392,19 @@ int aeron_archive_replay_via_response_channel(
             return -1;
         }
 
-        aeron_archive_idle(aeron_archive);
-
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
-
         if (aeron_async_add_subscription_poll(&replay_subscription, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
             return -1;
         }
+
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        aeron_archive_idle(aeron_archive);
     }
 
     if (aeron_archive_initiate_replay_via_response_channel(
@@ -2372,9 +2429,13 @@ int aeron_archive_replay_via_response_channel(
             return -1;
         }
 
-        aeron_archive_idle(aeron_archive);
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
 
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+        aeron_archive_idle(aeron_archive);
     }
 
     *subscription_p = replay_subscription;
@@ -2487,6 +2548,7 @@ int aeron_archive_initiate_replay_via_response_channel(
         aeron_archive->ctx->control_request_stream_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_archive_context_check_for_fatal_error(aeron_archive);
         goto cleanup;
     }
 
@@ -2507,15 +2569,19 @@ int aeron_archive_initiate_replay_via_response_channel(
             goto cleanup;
         }
 
-        aeron_archive_idle(aeron_archive);
-
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
-
         if (aeron_async_add_exclusive_publication_poll(&exclusive_publication, async) < 0)
         {
             AERON_APPEND_ERR("%s", "");
             goto cleanup;
         }
+
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto cleanup;
+        }
+
+        aeron_archive_idle(aeron_archive);
     }
 
     // create a (short-lived) proxy based on the exclusive publication just created
@@ -2551,7 +2617,11 @@ int aeron_archive_initiate_replay_via_response_channel(
 
         aeron_archive_idle(aeron_archive);
 
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto cleanup_proxy;
+        }
     }
 
     int64_t *pub_limit_counter = aeron_counters_reader_addr(counters_reader, pub_limit_counter_id);
@@ -2566,7 +2636,11 @@ int aeron_archive_initiate_replay_via_response_channel(
 
         aeron_archive_idle(aeron_archive);
 
-        aeron_archive_context_invoke_aeron_client(aeron_archive->ctx);
+        if (aeron_archive_invoke_aeron_client(aeron_archive) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto cleanup_proxy;
+        }
     }
 
     // using the newly created proxy (based on the newly created exclusive publisher), send the replay request
