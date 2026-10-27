@@ -17,6 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.FragmentAssembler;
+import io.aeron.Image;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.client.ClusterException;
@@ -34,6 +35,12 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
 {
     static final int FRAGMENT_LIMIT = 10;
 
+    private final ConsensusConnectionDecoder consensusConnectionDecoder =
+        new ConsensusConnectionDecoder();
+    private final CompactCommitPositionDecoder compactCommitPositionDecoder =
+        new CompactCommitPositionDecoder();
+    private final CompactLeadershipConfirmAckDecoder compactLeadershipConfirmAckDecoder =
+        new CompactLeadershipConfirmAckDecoder();
     private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
     private final CanvassPositionDecoder canvassPositionDecoder = new CanvassPositionDecoder();
     private final RequestVoteDecoder requestVoteDecoder = new RequestVoteDecoder();
@@ -171,15 +178,14 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     messageHeaderDecoder.blockLength(),
                     messageHeaderDecoder.version());
 
+                final long term = appendPositionDecoder.leadershipTermId();
+                final long position = appendPositionDecoder.logPosition();
+                final int followerId = appendPositionDecoder.followerMemberId();
                 final short flagsDecodedValue = appendPositionDecoder.flags();
                 final short flags = AppendPositionDecoder.flagsNullValue() == flagsDecodedValue ?
                     ConsensusModuleAgent.APPEND_POSITION_FLAG_NONE : flagsDecodedValue;
 
-                consensusModuleAgent.onAppendPosition(
-                    appendPositionDecoder.leadershipTermId(),
-                    appendPositionDecoder.logPosition(),
-                    appendPositionDecoder.followerMemberId(),
-                    flags);
+                consensusModuleAgent.onAppendPosition(term, position, followerId, flags, image(header));
 
                 break;
 
@@ -194,6 +200,37 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     commitPositionDecoder.leadershipTermId(),
                     commitPositionDecoder.logPosition(),
                     commitPositionDecoder.leaderMemberId());
+                break;
+
+            case ConsensusConnectionDecoder.TEMPLATE_ID:
+                consensusConnectionDecoder.wrap(
+                    buffer, offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
+                consensusModuleAgent.onConsensusConnection(
+                    consensusConnectionDecoder.memberId(),
+                    image(header));
+                break;
+
+            case CompactCommitPositionDecoder.TEMPLATE_ID:
+                compactCommitPositionDecoder.wrap(
+                    buffer, offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
+                consensusModuleAgent.onCompactCommitPosition(
+                    compactCommitPositionDecoder.leadershipTermId(),
+                    compactCommitPositionDecoder.logPosition(),
+                    compactCommitPositionDecoder.confirmationCounter(),
+                    image(header));
+                break;
+
+            case CompactLeadershipConfirmAckDecoder.TEMPLATE_ID:
+                compactLeadershipConfirmAckDecoder.wrap(
+                    buffer, offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
+                consensusModuleAgent.onCompactLeadershipConfirmAck(
+                    compactLeadershipConfirmAckDecoder.leadershipTermId(),
+                    compactLeadershipConfirmAckDecoder.confirmationCounter(),
+                    compactLeadershipConfirmAckDecoder.followerMemberId(),
+                    image(header));
                 break;
 
             case CatchupPositionDecoder.TEMPLATE_ID:
@@ -385,5 +422,10 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     header);
             }
         }
+    }
+
+    private static Image image(final Header header)
+    {
+        return null != header && header.context() instanceof Image ? (Image)header.context() : null;
     }
 }

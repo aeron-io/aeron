@@ -15,25 +15,35 @@
  */
 package io.aeron.cluster;
 
+import static io.aeron.cluster.CompactConsensusTestSupport.completeElection;
+import static io.aeron.cluster.CompactConsensusTestSupport.newContext;
+import static io.aeron.cluster.CompactConsensusTestSupport.setActiveMembers;
+
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.ConcurrentPublication;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
+import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.UnavailableImageHandler;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.cluster.client.ClusterEvent;
+import io.aeron.cluster.codecs.AppendPositionDecoder;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.ClusterAction;
 import io.aeron.cluster.codecs.EventCode;
+import io.aeron.cluster.codecs.CompactLeadershipConfirmAckDecoder;
+import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.cluster.service.ClusterTerminationException;
 import io.aeron.driver.DutyCycleTracker;
+import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.Header;
+import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.security.AuthorisationService;
 import io.aeron.security.DefaultAuthenticatorSupplier;
 import io.aeron.status.ReadableCounter;
@@ -58,6 +68,8 @@ import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongConsumer;
 
@@ -661,6 +673,265 @@ class ConsensusModuleAgentTest
     }
 
     @Test
+    void shouldSharePublicationCreditBetweenAppendPositionAndConfirmationAck()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        for (int cycle = 1; cycle <= 32; cycle++)
+        {
+            follower.recordedPosition = cycle * 64L;
+            follower.requestConfirmation(cycle);
+
+            // Continuous writes and reads compete for one frame of publication credit per duty cycle.
+            assertEquals(1, follower.update(1));
+            assertEquals(cycle, follower.messages.size());
+            if (1 == (cycle & 1))
+            {
+                follower.assertAppendPosition(cycle - 1, follower.recordedPosition);
+            }
+            else
+            {
+                follower.assertConfirmationAck(cycle - 1, cycle);
+            }
+        }
+    }
+
+    @Test
+    void shouldRetryPendingConfirmationWhileRecordingContinues()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        follower.recordedPosition = 64;
+        follower.requestConfirmation(7);
+        assertEquals(1, follower.update(1));
+        follower.assertAppendPosition(0, 64);
+
+        follower.recordedPosition = 128;
+        assertEquals(1, follower.update(1));
+        follower.assertConfirmationAck(1, 7);
+
+        follower.recordedPosition = 192;
+        assertEquals(1, follower.update(1));
+        follower.assertAppendPosition(2, 192);
+        assertEquals(0, follower.update(1));
+        assertEquals(3, follower.messages.size());
+    }
+
+    @Test
+    void shouldRetainLatestConfirmationAcrossBackpressure()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        follower.recordedPosition = 64;
+        follower.requestConfirmation(7);
+        assertEquals(0, follower.update(0));
+
+        follower.recordedPosition = 128;
+        follower.requestConfirmation(8);
+        assertEquals(0, follower.update(0));
+        assertTrue(follower.messages.isEmpty());
+
+        assertEquals(2, follower.update(2));
+        follower.assertConfirmationAck(0, 8);
+        follower.assertAppendPosition(1, 128);
+        assertEquals(0, follower.update(2));
+        assertEquals(2, follower.messages.size());
+    }
+
+    @Test
+    void shouldSendAppendPositionAndConfirmationInSameCycleWithoutBackpressure()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        for (int round = 1; round <= 3; round++)
+        {
+            follower.recordedPosition = round * 64L;
+            follower.requestConfirmation(round);
+            assertEquals(2, follower.update(2));
+            follower.assertAppendPosition((round - 1) * 2, follower.recordedPosition);
+            follower.assertConfirmationAck((round - 1) * 2 + 1, round);
+        }
+        assertEquals(6, follower.messages.size());
+    }
+
+    @Test
+    void shouldContinueAppendHeartbeatsWithoutConfirmationTraffic()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        follower.recordedPosition = 64;
+        assertEquals(1, follower.update(1));
+        follower.assertAppendPosition(0, 64);
+        assertEquals(0, follower.update(1));
+
+        follower.nowNs += ctx.leaderHeartbeatIntervalNs();
+        assertEquals(1, follower.update(1));
+        follower.assertAppendPosition(1, 64);
+        assertEquals(2, follower.messages.size());
+    }
+
+    @Test
+    void shouldConfirmOnlyAfterTheRequestedRoundIsBroadcastAndEchoed()
+    {
+        final LeaderConfirmationFixture leader = new LeaderConfirmationFixture();
+        final FollowerPositionFixture follower = new FollowerPositionFixture(1, 0);
+        final long token = leader.agent.triggerQuorumConfirmation();
+        assertFalse(leader.agent.isLeadershipConfirmedSince(token));
+
+        leader.broadcastTo(follower);
+        assertFalse(leader.agent.isLeadershipConfirmedSince(token));
+        assertEquals(2, follower.update(2));
+        assertFalse(leader.agent.isLeadershipConfirmedSince(token));
+        follower.deliverLastAckTo(leader);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(token));
+
+        final long nextToken = leader.agent.triggerQuorumConfirmation();
+        follower.deliverLastAckTo(leader);
+        assertFalse(leader.agent.isLeadershipConfirmedSince(nextToken));
+        leader.broadcastTo(follower);
+        assertEquals(1, follower.update(1));
+        follower.deliverLastAckTo(leader);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(nextToken));
+    }
+
+    @Test
+    void shouldCoalesceRequestsWithoutAdvancingOnOrdinaryCommitTraffic()
+    {
+        final LeaderConfirmationFixture leader = new LeaderConfirmationFixture();
+        final FollowerPositionFixture follower = new FollowerPositionFixture(1, 0);
+        final long first = leader.agent.triggerQuorumConfirmation();
+        assertEquals(first, leader.agent.triggerQuorumConfirmation());
+        leader.broadcastTo(follower);
+        final long round = leader.lastBroadcastRound;
+        assertEquals(2, follower.update(2));
+        follower.deliverLastAckTo(leader);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(first));
+
+        leader.broadcastTo(follower);
+        assertEquals(round, leader.lastBroadcastRound);
+        assertEquals(0, follower.update(2));
+
+        final long next = leader.agent.triggerQuorumConfirmation();
+        leader.broadcastTo(follower);
+        assertEquals(round + 1, leader.lastBroadcastRound);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(first));
+        assertFalse(leader.agent.isLeadershipConfirmedSince(next));
+    }
+
+    @Test
+    void shouldIgnoreAcknowledgementsFromIneligibleSendersAndStates()
+    {
+        final LeaderConfirmationFixture leader = new LeaderConfirmationFixture();
+        final FollowerPositionFixture follower = new FollowerPositionFixture(1, 0);
+        final long token = leader.agent.triggerQuorumConfirmation();
+        leader.broadcastTo(follower);
+        final long round = leader.lastBroadcastRound;
+        leader.agent.onCompactLeadershipConfirmAck(42, round, 99, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(41, round, 1, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(42, Aeron.NULL_VALUE, 1, leader.followerImages[1]);
+        assertFalse(leader.agent.isLeadershipConfirmedSince(token));
+        assertFalse(leader.members[1].compactConfirmation.confirmed(42, token));
+
+        Tests.setField(leader.agent, "election", mock(Election.class));
+        leader.agent.onCompactLeadershipConfirmAck(42, round, 1, leader.followerImages[1]);
+        assertEquals(Aeron.NULL_VALUE, leader.agent.triggerQuorumConfirmation());
+        assertFalse(leader.agent.isLeadershipConfirmedSince(token));
+        Tests.setField(leader.agent, "election", null);
+        for (final Cluster.Role role : new Cluster.Role[]{ Cluster.Role.FOLLOWER, Cluster.Role.CANDIDATE })
+        {
+            leader.agent.role(role);
+            leader.agent.onCompactLeadershipConfirmAck(42, round, 1, leader.followerImages[1]);
+            assertEquals(Aeron.NULL_VALUE, leader.agent.triggerQuorumConfirmation());
+            assertFalse(leader.agent.isLeadershipConfirmedSince(token));
+        }
+        assertFalse(leader.members[1].compactConfirmation.confirmed(42, token));
+
+        leader.agent.role(Cluster.Role.LEADER);
+        assertEquals(2, follower.update(2));
+        follower.deliverLastAckTo(leader);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(token));
+        assertFalse(leader.agent.isLeadershipConfirmedSince(Aeron.NULL_VALUE));
+        assertFalse(leader.agent.isLeadershipConfirmedSince(
+            Long.MAX_VALUE));
+    }
+
+    @Test
+    void shouldNotWalkBackAnAcknowledgedRound()
+    {
+        final LeaderConfirmationFixture leader = new LeaderConfirmationFixture();
+        final FollowerPositionFixture follower = new FollowerPositionFixture(1, 0);
+        final long first = leader.agent.triggerQuorumConfirmation();
+        leader.broadcastTo(follower);
+        final long firstRound = leader.lastBroadcastRound;
+        assertEquals(2, follower.update(2));
+        follower.deliverLastAckTo(leader);
+
+        final long next = leader.agent.triggerQuorumConfirmation();
+        leader.broadcastTo(follower);
+        assertEquals(1, follower.update(1));
+        follower.deliverLastAckTo(leader);
+        leader.agent.onCompactLeadershipConfirmAck(42, firstRound, 1, leader.followerImages[1]);
+        assertTrue(leader.members[1].compactConfirmation.confirmed(42, next));
+        assertTrue(leader.agent.isLeadershipConfirmedSince(first));
+        assertTrue(leader.agent.isLeadershipConfirmedSince(next));
+    }
+
+    @Test
+    void shouldNotEchoDuplicateOlderOrAbsentRounds()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        follower.requestConfirmation(7);
+        assertEquals(2, follower.update(2));
+        follower.assertConfirmationAck(1, 7);
+        for (final int round : new int[]{ 7, 6, Aeron.NULL_VALUE })
+        {
+            follower.requestConfirmation(round);
+            assertEquals(0, follower.update(2));
+        }
+        follower.requestConfirmation(8);
+        assertEquals(1, follower.update(1));
+        follower.assertConfirmationAck(2, 8);
+    }
+
+    @Test
+    void shouldDiscardBackpressuredFollowerEchoWhenAnElectionCompletes()
+    {
+        final FollowerPositionFixture follower = new FollowerPositionFixture();
+        follower.requestConfirmation(7);
+        assertEquals(0, follower.update(0));
+        follower.beginTerm(43);
+        assertEquals(1, follower.update(2));
+        follower.assertAppendPosition(0, 0);
+        assertEquals(0, follower.update(2));
+        follower.requestConfirmation(1);
+        assertEquals(1, follower.update(1));
+        follower.assertConfirmationAck(1, 1);
+    }
+
+    @Test
+    void shouldUseOrdinaryElectionCommitsAndDiscardEarlierTermTokens()
+    {
+        final LeaderConfirmationFixture leader = new LeaderConfirmationFixture();
+        final FollowerPositionFixture follower = new FollowerPositionFixture(1, 0);
+        final long oldToken = leader.agent.triggerQuorumConfirmation();
+        leader.broadcastTo(follower);
+        assertEquals(2, follower.update(2));
+        follower.deliverLastAckTo(leader);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(oldToken));
+        leader.agent.triggerQuorumConfirmation();
+
+        Tests.setField(leader.agent, "election", mock(Election.class));
+        leader.agent.publishCommitPosition(1000, 43);
+        assertEquals(Aeron.NULL_VALUE, leader.lastBroadcastRound);
+        assertFalse(leader.agent.isLeadershipConfirmedSince(oldToken));
+        assertEquals(Aeron.NULL_VALUE, leader.agent.triggerQuorumConfirmation());
+
+        leader.beginTerm(43);
+        follower.beginTerm(43);
+        final long freshToken = leader.agent.triggerQuorumConfirmation();
+        leader.broadcastTo(follower);
+        follower.update(2);
+        follower.deliverLastAckTo(leader);
+        assertTrue(leader.agent.isLeadershipConfirmedSince(freshToken));
+        assertFalse(leader.agent.isLeadershipConfirmedSince(oldToken));
+    }
+
+    @Test
     void notifiedCommitPositionShouldNotGoBackwardsUponElectionCompletion()
     {
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
@@ -1033,6 +1304,176 @@ class ConsensusModuleAgentTest
             assertEquals(NodeControl.ToggleState.NEUTRAL.code(), nodeControlToggle.get());
             assertNull(Tests.getField(agent, "recordingLogValidator"));
             verify(mockValidatorArchive).close();
+        }
+    }
+
+    private final class LeaderConfirmationFixture
+    {
+        private final ConsensusModuleAgent agent;
+        private final ClusterMember[] members;
+        private long lastBroadcastRound;
+        private final Image[] followerImages = { mock(Image.class), mock(Image.class), mock(Image.class) };
+        private long position;
+        private long term;
+
+        private LeaderConfirmationFixture()
+        {
+            final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+            final ConsensusModule.Context context = newContext()
+                .clusterMemberId(0).epochClock(clock.asEpochClock()).clusterClock(clock)
+                .recordingLog(mock(RecordingLog.class)).ingressChannel("aeron:udp");
+            agent = new ConsensusModuleAgent(context);
+            agent.state(ConsensusModule.State.ACTIVE, "");
+            agent.role(Cluster.Role.LEADER);
+            members = setActiveMembers(agent, 0, 1, 2);
+            final ConsensusPublisher publisher = mock(ConsensusPublisher.class);
+            when(publisher.consensusConnection(any(), anyInt())).thenReturn(true);
+            doAnswer(invocation ->
+            {
+                lastBroadcastRound = invocation.getArgument(3);
+                return true;
+            }).when(publisher).compactCommitPosition(any(), anyLong(), anyLong(), anyLong());
+            doAnswer(invocation ->
+            {
+                lastBroadcastRound = Aeron.NULL_VALUE;
+                return null;
+            }).when(publisher).commitPosition(any(), anyLong(), anyLong(), anyInt());
+            for (int i = 1; i < members.length; i++)
+            {
+                members[i].publication(mock(ExclusivePublication.class));
+                agent.onConsensusConnection(i, followerImages[i]);
+            }
+            Tests.setField(agent, "consensusPublisher", publisher);
+            beginTerm(42);
+        }
+
+        private void beginTerm(final long term)
+        {
+            this.term = term;
+            completeElection(agent, term, members[0], position);
+        }
+
+        private void broadcastTo(final FollowerPositionFixture follower)
+        {
+            position += 64;
+            assertEquals(1, agent.updateLeaderPosition(position, position, position));
+            follower.agent.onCompactCommitPosition(term, position, lastBroadcastRound, follower.leaderImage);
+        }
+    }
+
+    private final class FollowerPositionFixture
+    {
+        private static final long LEADERSHIP_TERM_ID = 42;
+        private final ConsensusModuleAgent agent;
+        private final ClusterMember leader;
+        private final int memberId;
+        private final Image leaderImage = mock(Image.class);
+        private long term = LEADERSHIP_TERM_ID;
+        private final List<UnsafeBuffer> messages = new ArrayList<>();
+        private int frameCredit;
+        private long recordedPosition;
+        private long nowNs;
+
+        private FollowerPositionFixture()
+        {
+            this(0, 1);
+        }
+
+        private FollowerPositionFixture(final int memberId, final int leaderId)
+        {
+            this.memberId = memberId;
+            final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+            final ConsensusModule.Context context = newContext()
+                .clusterMemberId(memberId)
+                .clusterMembers(
+                    memberId + ",localhost:20000,localhost:20001,localhost:20002,localhost:0,localhost:8010")
+                .epochClock(clock.asEpochClock()).clusterClock(clock)
+                .recordingLog(mock(RecordingLog.class)).ingressChannel("aeron:udp");
+            agent = new ConsensusModuleAgent(context);
+            agent.state(ConsensusModule.State.ACTIVE, "");
+            agent.role(Cluster.Role.FOLLOWER);
+            agent.leadershipTermId(LEADERSHIP_TERM_ID);
+            leader = setActiveMembers(agent, 0, 1, 2)[leaderId];
+            agent.onConsensusConnection(leaderId, leaderImage);
+
+            final ExclusivePublication publication = mock(ExclusivePublication.class);
+            when(publication.tryClaim(anyInt(), any(BufferClaim.class))).thenAnswer(invocation ->
+            {
+                if (0 == frameCredit)
+                {
+                    return Publication.BACK_PRESSURED;
+                }
+
+                --frameCredit;
+                final int length = invocation.getArgument(0);
+                final UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+                final BufferClaim claim = invocation.getArgument(1);
+                claim.wrap(buffer, 0, DataHeaderFlyweight.HEADER_LENGTH + length);
+                messages.add(buffer);
+                return messages.size() * 64L;
+            });
+            leader.publication(publication);
+            // Credit tests start after connection setup; CompactConsensusTest exercises the announcements.
+            leader.compactConfirmation.announced(publication);
+            Tests.setField(agent, "leaderMember", leader);
+            Tests.setField(agent, "consensusPublisher", new ConsensusPublisher());
+            final ReadableCounter appendPosition = mock(ReadableCounter.class);
+            when(appendPosition.get()).thenAnswer(invocation -> recordedPosition);
+            Tests.setField(agent, "appendPosition", appendPosition);
+            beginTerm(LEADERSHIP_TERM_ID);
+        }
+
+        private void requestConfirmation(final long counter)
+        {
+            agent.onCompactCommitPosition(term, recordedPosition, counter, leaderImage);
+        }
+
+        private int update(final int frameCredit)
+        {
+            this.frameCredit = frameCredit;
+            return agent.updateFollowerPosition(++nowNs);
+        }
+
+        private void beginTerm(final long term)
+        {
+            this.term = term;
+            completeElection(agent, term, leader, ++nowNs);
+        }
+
+        private void deliverLastAckTo(final LeaderConfirmationFixture target)
+        {
+            final CompactLeadershipConfirmAckDecoder ack =
+                new CompactLeadershipConfirmAckDecoder().wrapAndApplyHeader(
+                    messages.get(messages.size() - 1), DataHeaderFlyweight.HEADER_LENGTH, new MessageHeaderDecoder());
+            target.agent.onCompactLeadershipConfirmAck(
+                ack.leadershipTermId(), ack.confirmationCounter(), ack.followerMemberId(),
+                target.followerImages[memberId]);
+        }
+
+        private void assertAppendPosition(final int index, final long position)
+        {
+            final UnsafeBuffer buffer = messages.get(index);
+            final MessageHeaderDecoder header =
+                new MessageHeaderDecoder().wrap(buffer, DataHeaderFlyweight.HEADER_LENGTH);
+            assertEquals(AppendPositionDecoder.TEMPLATE_ID, header.templateId());
+            final AppendPositionDecoder decoder =
+                new AppendPositionDecoder().wrapAndApplyHeader(buffer, DataHeaderFlyweight.HEADER_LENGTH, header);
+            assertEquals(term, decoder.leadershipTermId());
+            assertEquals(memberId, decoder.followerMemberId());
+            assertEquals(position, decoder.logPosition());
+        }
+
+        private void assertConfirmationAck(final int index, final long counter)
+        {
+            final UnsafeBuffer buffer = messages.get(index);
+            final MessageHeaderDecoder header =
+                new MessageHeaderDecoder().wrap(buffer, DataHeaderFlyweight.HEADER_LENGTH);
+            assertEquals(CompactLeadershipConfirmAckDecoder.TEMPLATE_ID, header.templateId());
+            final CompactLeadershipConfirmAckDecoder decoder = new CompactLeadershipConfirmAckDecoder()
+                .wrapAndApplyHeader(buffer, DataHeaderFlyweight.HEADER_LENGTH, header);
+            assertEquals(term, decoder.leadershipTermId());
+            assertEquals(memberId, decoder.followerMemberId());
+            assertEquals(counter, decoder.confirmationCounter());
         }
     }
 }

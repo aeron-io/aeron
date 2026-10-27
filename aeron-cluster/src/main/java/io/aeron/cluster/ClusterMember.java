@@ -53,6 +53,7 @@ public final class ClusterMember
     private long changeCorrelationId = NULL_VALUE;
     private long logPosition = NULL_POSITION;
     private long timeOfLastAppendPositionNs = NULL_VALUE;
+    final CompactConfirmation.Peer compactConfirmation = new CompactConfirmation.Peer();
     private ExclusivePublication publication;
     private String consensusChannel;
     private final String consensusEndpoint;
@@ -146,6 +147,7 @@ public final class ClusterMember
         candidateTermId = NULL_VALUE;
         leadershipTermId = NULL_VALUE;
         logPosition = NULL_POSITION;
+        compactConfirmation.resetConfirmation();
     }
 
     /**
@@ -892,6 +894,39 @@ public final class ClusterMember
         }
 
         return rankedPositions[length - 1];
+    }
+
+    /**
+     * Has a quorum echoed a round after {@code confirmationToken} in {@code leadershipTermId}?
+     * The leader counts itself. Other members must have echoed a successfully sent full-width round
+     * in the current term. Members without Compact support do not contribute to this quorum.
+     *
+     * @param members           cluster members, including the leader.
+     * @param leadershipTermId  the full term a non-self member must have echoed in.
+     * @param leaderMemberId    id of the leader, which is always counted.
+     * @param confirmationToken counter captured before requesting a new round.
+     * @return {@code true} if a quorum (counting the hosting member) qualifies, otherwise {@code false}.
+     */
+    public static boolean hasQuorumConfirmedSince(
+        final ClusterMember[] members,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final long confirmationToken)
+    {
+        final int quorum = quorumThreshold(members.length);
+        int confirmed = 0;
+        for (final ClusterMember member : members)
+        {
+            final boolean isConfirming = member.id == leaderMemberId ||
+                member.compactConfirmation.confirmed(leadershipTermId, confirmationToken);
+
+            if (isConfirming && ++confirmed >= quorum)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
