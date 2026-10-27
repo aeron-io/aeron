@@ -140,10 +140,12 @@ TEST_F(AeronArchiveRecordingPosTest, shouldGetSourceIdentity)
         8);
     ASSERT_GE(counter_id, 0);
 
-    char buffer[AERON_COUNTER_MAX_KEY_LENGTH] = {};
+    char buffer[AERON_COUNTER_MAX_KEY_LENGTH];
+    memset(buffer, 0xFF, sizeof(buffer));
     size_t length = sizeof(buffer);
     ASSERT_EQ(0, aeron_archive_recording_pos_get_source_identity(&m_reader, counter_id, buffer, &length));
-    EXPECT_EQ(sourceIdentity, std::string(buffer, length));
+    EXPECT_STREQ(sourceIdentity.c_str(), buffer);
+    EXPECT_EQ('\0', buffer[sourceIdentity.length()]);
 }
 
 TEST_F(AeronArchiveRecordingPosTest, shouldRejectNegativeSourceIdentityLength)
@@ -157,7 +159,7 @@ TEST_F(AeronArchiveRecordingPosTest, shouldRejectNegativeSourceIdentityLength)
     ASSERT_GE(counter_id, 0);
 
     char buffer[AERON_COUNTER_MAX_KEY_LENGTH];
-    std::memset(buffer, 0x5A, sizeof(buffer));
+    memset(buffer, 0x5A, sizeof(buffer));
     size_t length = sizeof(buffer);
     EXPECT_EQ(-1, aeron_archive_recording_pos_get_source_identity(&m_reader, 0, buffer, &length));
     EXPECT_EQ(EINVAL, aeron_errcode());

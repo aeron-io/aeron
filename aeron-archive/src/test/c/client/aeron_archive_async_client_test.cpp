@@ -105,13 +105,15 @@ protected:
         int32_t session_id = aeron_publication_session_id(publication);
 
         aeron_counters_reader_t *m_counters_reader = aeron_counters_reader(aeron);
-        int32_t m_counter_id = getRecordingCounterId(session_id, m_counters_reader);
+        int64_t archive_id = aeron_archive_get_archive_id(m_archive);
+        int32_t m_counter_id = getRecordingCounterId(session_id, archive_id, m_counters_reader);
         int64_t m_recording_id_from_counter = aeron_archive_recording_pos_get_recording_id(m_counters_reader, m_counter_id);
         *recording_id = m_recording_id_from_counter;
 
         EXPECT_EQ(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
             m_counters_reader,
-            m_recording_id_from_counter));
+            m_recording_id_from_counter,
+            archive_id));
 
         const char *buffer = "Hello, World!";
         size_t length = strlen(buffer);
@@ -186,12 +188,12 @@ protected:
         return subscription;
     }
 
-    static int32_t getRecordingCounterId(int32_t session_id, aeron_counters_reader_t *counters_reader)
+    static int32_t getRecordingCounterId(int32_t session_id, int64_t archive_id, aeron_counters_reader_t *counters_reader)
     {
         int32_t counter_id;
 
         while (AERON_NULL_COUNTER_ID ==
-            (counter_id = aeron_archive_recording_pos_find_counter_id_by_session_id(counters_reader, session_id)))
+            (counter_id = aeron_archive_recording_pos_find_counter_id_by_session_id(counters_reader, session_id, archive_id)))
         {
             std::this_thread::yield();
         }
@@ -664,7 +666,8 @@ TEST_F(AeronArchiveAsyncClientTest, shouldAllowToStopReplay)
     aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron.aeron());
     aeron_publication_constants_t pub_constants;
     ASSERT_EQ(0, aeron_exclusive_publication_constants(publication, &pub_constants));
-    const int32_t counter_id = getRecordingCounterId(pub_constants.session_id, counters_reader);
+    int64_t archive_id = aeron_archive_get_archive_id(m_archive);
+    const int32_t counter_id = getRecordingCounterId(pub_constants.session_id, archive_id, counters_reader);
     const int64_t recording_id = aeron_archive_recording_pos_get_recording_id(counters_reader, counter_id);
 
     aeron_archive_replay_params_t replay_params;

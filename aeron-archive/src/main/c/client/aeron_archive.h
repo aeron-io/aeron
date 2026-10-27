@@ -1236,7 +1236,7 @@ int64_t aeron_archive_recording_pos_get_recording_id(aeron_counters_reader_t *co
  * @param len_p a pointer to a size_t that initially indicates the length of the dst buffer.  After the function return successfully, len_p will be set to the length of the source identity string in dst
  * @return 0 for success, -1 for failure
  */
-int aeron_archive_recording_pos_get_source_identity(aeron_counters_reader_t *counters_reader, int32_t counter_id, const char *dst, size_t *len_p);
+int aeron_archive_recording_pos_get_source_identity(aeron_counters_reader_t *counters_reader, int32_t counter_id, char *dst, size_t *len_p);
 
 /**
  * Is the recording counter still active?

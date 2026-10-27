@@ -18,7 +18,6 @@
 #include <thread>
 #include <iostream>
 #include <vector>
-#include <cstring>
 
 #include <gtest/gtest.h>
 
@@ -108,11 +107,11 @@ public:
         return subscription;
     }
 
-    static std::int32_t getRecordingCounterId(std::int32_t sessionId, CountersReader &countersReader)
+    static std::int32_t getRecordingCounterId(std::int32_t sessionId, std::int64_t archiveId, CountersReader &countersReader)
     {
         std::int32_t counterId;
         while (CountersReader::NULL_COUNTER_ID ==
-            (counterId = RecordingPos::findCounterIdBySessionId(countersReader, sessionId)))
+            (counterId = RecordingPos::findCounterIdBySessionId(countersReader, sessionId, archiveId)))
         {
             std::this_thread::yield();
         }
@@ -342,10 +341,11 @@ public:
         std::int32_t sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive.context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = aeronArchive.archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         std::int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
         EXPECT_TRUE(RecordingPos::isActive(countersReader, counterId, recordingId));
-        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId));
+        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId, archiveId));
         EXPECT_EQ("aeron:ipc", RecordingPos::getSourceIdentity(countersReader, counterId));
 
         std::size_t halfCount = messageCount / 2;
@@ -567,7 +567,8 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordPublicationAndFindRecording)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingIdFromCounter = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -575,10 +576,9 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordPublicationAndFindRecording)
 
         stopPosition = publication->position();
 
-        YieldingIdleStrategy idleStrategy;
         while (countersReader.getCounterValue(counterId) < stopPosition)
         {
-            idleStrategy.idle();
+            std::this_thread::yield();
         }
 
         EXPECT_EQ(aeronArchive->getRecordingPosition(recordingIdFromCounter), stopPosition);
@@ -592,7 +592,10 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordPublicationAndFindRecording)
         0, "endpoint=localhost:3333", m_recordingStreamId, sessionId);
 
     EXPECT_EQ(recordingIdFromCounter, recordingId);
-    EXPECT_EQ(aeronArchive->getStopPosition(recordingIdFromCounter), stopPosition);
+    while (stopPosition != aeronArchive->getStopPosition(recordingId))
+    {
+        std::this_thread::yield();
+    }
 
     const std::int32_t count = aeronArchive->listRecording(
         recordingId,
@@ -659,7 +662,7 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordPublicationAndTryStopById)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
         recordingIdFromCounter = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -723,10 +726,11 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordThenReplay)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
         EXPECT_TRUE(RecordingPos::isActive(countersReader, counterId, recordingId));
-        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId));
+        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId, archiveId));
         EXPECT_EQ("aeron:ipc", RecordingPos::getSourceIdentity(countersReader, counterId));
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -789,7 +793,8 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordThenBoundedReplay)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingIdFromCounter = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -867,7 +872,8 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordThenReplayThenTruncate)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingIdFromCounter = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -938,7 +944,8 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordAndCancelReplayEarly)
             m_recordingChannel, m_recordingStreamId);
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(publication->sessionId(), countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(publication->sessionId(), archiveId, countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -992,7 +999,8 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordAndCancelReplayEarlyWithExclusivePub
             m_recordingChannel, m_recordingStreamId);
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(exclusivePublication->sessionId(), countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(exclusivePublication->sessionId(), archiveId, countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessagesExclusive(*exclusivePublication, messageCount, messagePrefix);
@@ -1051,7 +1059,8 @@ TEST_F(AeronArchiveWrapperTest, shouldGetStartPosition)
         m_recordingChannel, m_recordingStreamId, AeronArchive::SourceLocation::LOCAL, true);
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(publication->sessionId(), countersReader);
+    int64_t archiveId = aeronArchive->archiveId();
+    const std::int32_t counterId = getRecordingCounterId(publication->sessionId(), archiveId, countersReader);
     const std::int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
     offerMessages(*publication, messageCount, messagePrefix);
@@ -1085,7 +1094,8 @@ TEST_F(AeronArchiveWrapperTest, shouldReplayRecordingFromLateJoinPosition)
             *aeronArchive->context().aeron(), m_recordingChannel, m_recordingStreamId);
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(publication->sessionId(), countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(publication->sessionId(), archiveId, countersReader);
         const std::int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -1149,8 +1159,9 @@ TEST_F(AeronArchiveWrapperTest, shouldListRegisteredRecordingSubscriptions)
         *aeronArchive->context().aeron(), channelThree, expectedStreamId + 2);
 
     // await recording started
-    const auto sub2CounterId = getRecordingCounterId(pub2->sessionId(), countersReader);
-    const auto sub3CounterId = getRecordingCounterId(pub3->sessionId(), countersReader);
+    int64_t archiveId = aeronArchive->archiveId();
+    const auto sub2CounterId = getRecordingCounterId(pub2->sessionId(), archiveId, countersReader);
+    const auto sub3CounterId = getRecordingCounterId(pub3->sessionId(), archiveId, countersReader);
 
     const std::int32_t countOne = aeronArchive->listRecordingSubscriptions(
         0, 5, "ipc", expectedStreamId, true, consumer);
@@ -1253,10 +1264,11 @@ TEST_F(AeronArchiveWrapperTest, shouldMergeFromReplayToLive)
         recordingChannel, m_recordingStreamId, AeronArchive::SourceLocation::REMOTE, true);
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    int64_t archiveId = aeronArchive->archiveId();
+    const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
     const std::int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
     EXPECT_TRUE(RecordingPos::isActive(countersReader, counterId, recordingId));
-    EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId));
+    EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId, archiveId));
     EXPECT_EQ("127.0.0.1:23265", RecordingPos::getSourceIdentity(countersReader, counterId));
 
     offerMessages(*publication, initialMessageCount, messagePrefix);
@@ -1442,7 +1454,8 @@ TEST_F(AeronArchiveWrapperTest, shouldPurgeStoppedRecording)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = aeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingIdFromCounter = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -1502,7 +1515,7 @@ TEST_F(AeronArchiveWrapperTest, shouldReadRecordingDescriptor)
         [&]
         {
             CountersReader &countersReader = aeron->countersReader();
-            const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+            const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
             return RecordingPos::getRecordingId(countersReader, counterId);
         }();
 
@@ -1547,7 +1560,7 @@ TEST_F(AeronArchiveWrapperTest, shouldFindMultipleRecordingDescriptors)
 
     const std::int64_t nullCounterId = CountersReader::NULL_COUNTER_ID;
     EXPECT_NE(
-        nullCounterId, getRecordingCounterId(publication2->sessionId(), aeron->countersReader()));
+        nullCounterId, getRecordingCounterId(publication2->sessionId(), aeronArchive->archiveId(), aeron->countersReader()));
 
     std::set<std::int32_t> found_session_ids;
 
@@ -1597,7 +1610,7 @@ TEST_F(AeronArchiveWrapperTest, shouldFindRecordingDescriptorForUri)
 
     const std::int64_t nullCounterId = CountersReader::NULL_COUNTER_ID;
     EXPECT_NE(
-        nullCounterId, getRecordingCounterId(publication2->sessionId(), aeron->countersReader()));
+        nullCounterId, getRecordingCounterId(publication2->sessionId(), aeronArchive->archiveId(), aeron->countersReader()));
 
     std::set<std::int32_t> found_session_ids;
 
@@ -1659,7 +1672,7 @@ TEST_F(AeronArchiveWrapperTest, shouldReadJumboRecordingDescriptor)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -1733,10 +1746,11 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordReplicateThenReplay)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = srcAeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = srcAeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
         EXPECT_TRUE(RecordingPos::isActive(countersReader, counterId, recordingId));
-        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId));
+        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId, archiveId));
         EXPECT_EQ("aeron:ipc", RecordingPos::getSourceIdentity(countersReader, counterId));
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -1929,10 +1943,11 @@ TEST_P(AeronArchiveWrapperParamTest, shouldRecordReplicateThenStop)
     sessionId = publication->sessionId();
 
     CountersReader &countersReader = srcAeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    int64_t archiveId = srcAeronArchive->archiveId();
+    const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
     recordingId = RecordingPos::getRecordingId(countersReader, counterId);
     EXPECT_TRUE(RecordingPos::isActive(countersReader, counterId, recordingId));
-    EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId));
+    EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId, archiveId));
     EXPECT_EQ("aeron:ipc", RecordingPos::getSourceIdentity(countersReader, counterId));
 
     offerMessages(*publication, messageCount, messagePrefix);
@@ -2031,10 +2046,12 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordReplicateTwice)
         sessionId = publication->sessionId();
 
         CountersReader &countersReader = srcAeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        int64_t archiveId = srcAeronArchive->archiveId();
+        const std::int32_t counterId = getRecordingCounterId(sessionId, archiveId, countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
         EXPECT_TRUE(RecordingPos::isActive(countersReader, counterId, recordingId));
-        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(countersReader, recordingId));
+        EXPECT_EQ(counterId, RecordingPos::findCounterIdByRecordingId(
+            countersReader, recordingId, archiveId));
         EXPECT_EQ("aeron:ipc", RecordingPos::getSourceIdentity(countersReader, counterId));
 
         offerMessages(*publication, messageCount, messagePrefix);
@@ -2312,7 +2329,7 @@ TEST_F(AeronArchiveWrapperTest, shouldDisconnectAfterStopAllReplays)
     std::int32_t sessionId = publication->sessionId();
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
     std::int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
     offerMessages(*publication, 10, messagePrefix);
@@ -2364,7 +2381,7 @@ TEST_P(AeronArchiveWrapperParamTest, shouldRecordAndExtend)
         std::int32_t sessionId = publication->sessionId();
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, 10, messagePrefix);
@@ -2416,7 +2433,7 @@ TEST_P(AeronArchiveWrapperParamTest, shouldRecordAndExtend)
             false);
 
         CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-        const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+        const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
         recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
         offerMessages(*publication, 10, messagePrefix, 10);
@@ -2493,7 +2510,7 @@ TEST_F(AeronArchiveWrapperTest, shouldPurgeSegments)
     int32_t sessionId = publication->sessionId();
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
     int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
     int64_t targetPosition = (SEGMENT_LENGTH * 3L) + 1;
@@ -2552,7 +2569,7 @@ TEST_F(AeronArchiveWrapperTest, shouldDetachAndDeleteSegments)
     int32_t sessionId = publication->sessionId();
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
     int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
     int64_t targetPosition = (SEGMENT_LENGTH * 4L) + 1;
@@ -2613,7 +2630,7 @@ TEST_F(AeronArchiveWrapperTest, shouldDetachAndReattachSegments)
     int32_t sessionId = publication->sessionId();
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
     int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
     int64_t targetPosition = (SEGMENT_LENGTH * 5L) + 1;
@@ -2660,7 +2677,7 @@ TEST_F(AeronArchiveWrapperTest, shouldUpdateChannel)
     int32_t sessionId = publication->sessionId();
 
     CountersReader &countersReader = aeronArchive->context().aeron()->countersReader();
-    const std::int32_t counterId = getRecordingCounterId(sessionId, countersReader);
+    const std::int32_t counterId = getRecordingCounterId(sessionId, aeronArchive->archiveId(), countersReader);
     int64_t recordingId = RecordingPos::getRecordingId(countersReader, counterId);
 
     int64_t targetPosition = (SEGMENT_LENGTH * 5L) + 1;

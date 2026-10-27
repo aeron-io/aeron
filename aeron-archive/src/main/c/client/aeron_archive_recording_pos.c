@@ -24,6 +24,15 @@
 
 #define MAX_SOURCE_IDENTITY_LENGTH (AERON_COUNTER_MAX_KEY_LENGTH - sizeof(aeron_archive_recording_position_key_layout_t) - sizeof(int64_t))
 
+_Static_assert(offsetof(aeron_archive_recording_position_key_layout_t, recording_id) == 0,
+    "offsetof(aeron_archive_recording_position_key_layout_t, recording_id) is invalid");
+_Static_assert(offsetof(aeron_archive_recording_position_key_layout_t, session_id) == 8,
+    "offsetof(aeron_archive_recording_position_key_layout_t, session_id) is invalid");
+_Static_assert(offsetof(aeron_archive_recording_position_key_layout_t, source_identity_length) == 12,
+    "offsetof(aeron_archive_recording_position_key_layout_t, source_identity_length) is invalid");
+_Static_assert(sizeof(aeron_archive_recording_position_key_layout_t) == 16,
+    "sizeof(aeron_archive_recording_position_key_layout_t) does not match Java definition");
+
 static bool aeron_archive_recording_pos_matches_archive_id(aeron_archive_recording_position_key_layout_t *key, int64_t archive_id)
 {
     if (key->source_identity_length >= 0 &&
@@ -157,7 +166,7 @@ int64_t aeron_archive_recording_pos_get_recording_id(aeron_counters_reader_t *co
 }
 
 int aeron_archive_recording_pos_get_source_identity(
-    aeron_counters_reader_t *counters_reader, int32_t counter_id, const char *dst, size_t *len_p)
+    aeron_counters_reader_t *counters_reader, int32_t counter_id, char *dst, size_t *len_p)
 {
     int32_t state, type_id;
     aeron_archive_recording_position_key_layout_t *key;
@@ -186,13 +195,16 @@ int aeron_archive_recording_pos_get_source_identity(
             return -1;
         }
 
-        // use the shortest of the stored length, the space in the key and the caller's buffer
-        len = (size_t)source_identity_length;
-        len = len < MAX_SOURCE_IDENTITY_LENGTH ? len : MAX_SOURCE_IDENTITY_LENGTH;
-        len = len < *len_p ? len : *len_p;
+        if (*len_p > 0)
+        {
+            // use the shortest of the stored length, the space in the key and the caller's buffer
+            len = AERON_MIN((size_t)source_identity_length, MAX_SOURCE_IDENTITY_LENGTH);
+            len = AERON_MIN(len, *len_p - 1); // reserve space for NUL character at the end
 
-        // the source_identity string comes right after the key definition
-        memcpy((void *)dst, ((uint8_t *)key + sizeof(aeron_archive_recording_position_key_layout_t)), len);
+            // the source_identity string comes right after the key definition
+            memcpy((void *)dst, ((uint8_t *)key + sizeof(aeron_archive_recording_position_key_layout_t)), len);
+            dst[len] = '\0';
+        }
     }
 
     *len_p = len;

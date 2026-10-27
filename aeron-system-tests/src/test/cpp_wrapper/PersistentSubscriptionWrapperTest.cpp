@@ -106,11 +106,11 @@ public:
         std::shared_ptr<ExclusivePublication> publication = archive->addRecordedExclusivePublication(channel, streamId);
 
         CountersReader &counters = archive->context().aeron()->countersReader();
-        std::int32_t counterId = RecordingPos::findCounterIdBySessionId(counters, publication->sessionId());
+        std::int32_t counterId = CountersReader::NULL_COUNTER_ID;
         waitUntil(
             "recording counter found",
             [&] {
-                counterId = RecordingPos::findCounterIdBySessionId(counters, publication->sessionId());
+                counterId = RecordingPos::findCounterIdBySessionId(counters, publication->sessionId(), archive->archiveId());
                 return counterId != CountersReader::NULL_COUNTER_ID;
             });
 

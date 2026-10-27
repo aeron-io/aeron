@@ -251,11 +251,12 @@ public:
         m_maxPayloadLength = constants.max_payload_length;
 
         aeron_t *aeron = aeron_archive_context_get_aeron(aeron_archive_get_archive_context(archive));
+        int64_t archive_id = aeron_archive_get_archive_id(archive);
         aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron);
         const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
         int32_t rec_pos_id;
         while (AERON_NULL_COUNTER_ID == (rec_pos_id = aeron_archive_recording_pos_find_counter_id_by_session_id(
-            counters_reader, constants.session_id)))
+            counters_reader, constants.session_id, archive_id)))
         {
             if (std::chrono::steady_clock::now() >= deadline)
             {
@@ -520,9 +521,10 @@ public:
         aeron_exclusive_publication_constants(publication, &constants);
 
         const std::chrono::steady_clock::time_point counter_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        int64_t archive_id = aeron_archive_get_archive_id(archive);
         int32_t rec_pos_id;
         while (AERON_NULL_COUNTER_ID == (rec_pos_id = aeron_archive_recording_pos_find_counter_id_by_session_id(
-            counters_reader, constants.session_id)))
+            counters_reader, constants.session_id, archive_id)))
         {
             if (std::chrono::steady_clock::now() >= counter_deadline)
             {
@@ -4040,10 +4042,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRetryAndRecoverWhenLiveIsNo
     aeron_publication_constants_t constants;
     aeron_exclusive_publication_constants(exclusive_publication, &constants);
     aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron.aeron());
+    int64_t archive_id = aeron_archive_get_archive_id(recording_archive);
     int32_t rec_pos_id;
     waitUntil("recording counter found",
         [&] { rec_pos_id = aeron_archive_recording_pos_find_counter_id_by_session_id(
-            counters_reader, constants.session_id);
+            counters_reader, constants.session_id, archive_id);
             return rec_pos_id != AERON_NULL_COUNTER_ID; });
     int64_t recording_id = aeron_archive_recording_pos_get_recording_id(counters_reader, rec_pos_id);
 

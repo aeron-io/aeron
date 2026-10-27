@@ -216,12 +216,11 @@ typedef struct aeron_archive_recording_position_key_layout_stct
     int64_t recording_id;
     int32_t session_id;
     int32_t source_identity_length;
-    char source_identity[1];
-    // int64_t archive_id; -> variable position after `source_identity`
+    // char *source_identity; -> offset=16 (end of the struct)
+    // int64_t archive_id;    -> variable offset after the end of `source_identity`
 }
 aeron_archive_recording_position_key_layout_t;
 #pragma pack(pop)
-
 
 // Cluster counters
 

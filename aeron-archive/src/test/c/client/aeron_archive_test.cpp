@@ -264,7 +264,8 @@ public:
     void setupCounters(int32_t session_id)
     {
         m_counters_reader = aeron_counters_reader(m_aeron);
-        m_counter_id = getRecordingCounterId(session_id, m_counters_reader);
+        int64_t archive_id = aeron_archive_get_archive_id(m_archive);
+        m_counter_id = getRecordingCounterId(session_id, archive_id, m_counters_reader);
         m_recording_id_from_counter = aeron_archive_recording_pos_get_recording_id(m_counters_reader, m_counter_id);
     }
 
@@ -276,12 +277,12 @@ public:
         }
     }
 
-    static int32_t getRecordingCounterId(int32_t session_id, aeron_counters_reader_t *counters_reader)
+    static int32_t getRecordingCounterId(int32_t session_id, int64_t archive_id, aeron_counters_reader_t *counters_reader)
     {
         int32_t counter_id;
 
         while (AERON_NULL_COUNTER_ID ==
-            (counter_id = aeron_archive_recording_pos_find_counter_id_by_session_id(counters_reader, session_id)))
+            (counter_id = aeron_archive_recording_pos_find_counter_id_by_session_id(counters_reader, session_id, archive_id)))
         {
             std::this_thread::yield();
         }
@@ -489,6 +490,7 @@ public:
         aeron_publication_t *publication = addPublication(m_recordingChannel, m_recordingStreamId);
 
         int32_t session_id = aeron_publication_session_id(publication);
+        int64_t archive_id = aeron_archive_get_archive_id(m_archive);
 
         setupCounters(session_id);
         *recording_id = m_recording_id_from_counter;
@@ -503,11 +505,12 @@ public:
 
         EXPECT_EQ(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
             m_counters_reader,
-            m_recording_id_from_counter));
+            m_recording_id_from_counter,
+            archive_id));
 
         {
             size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
-            const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+            char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
 
             ASSERT_EQ_ERR(0,
                 aeron_archive_recording_pos_get_source_identity(
@@ -1342,13 +1345,16 @@ TEST_F(AeronCArchiveTest, shouldRecordThenReplay)
             m_recording_id_from_counter));
         EXPECT_TRUE(is_active);
 
+        int64_t archive_id = aeron_archive_get_archive_id(m_archive);
+
         EXPECT_EQ(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
             m_counters_reader,
-            m_recording_id_from_counter));
+            m_recording_id_from_counter,
+            archive_id));
 
         {
             size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
-            const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+            char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
 
             ASSERT_EQ_ERR(0,
                 aeron_archive_recording_pos_get_source_identity(
@@ -1944,9 +1950,10 @@ TEST_F(AeronCArchiveTest, shouldListRegisteredRecordingSubscriptions)
 
     // await recording started
     auto countersReader = aeron_counters_reader(m_aeron);
+    int64_t archive_id = aeron_archive_get_archive_id(m_archive);
     const auto sub2CounterId =
-        getRecordingCounterId(aeron_publication_session_id(pub2), countersReader);
-    const auto sub3CounterId = getRecordingCounterId(aeron_publication_session_id(pub3), countersReader);
+        getRecordingCounterId(aeron_publication_session_id(pub2), archive_id, countersReader);
+    const auto sub3CounterId = getRecordingCounterId(aeron_publication_session_id(pub3), archive_id, countersReader);
 
     int32_t count_one;
     ASSERT_EQ_ERR(0, aeron_archive_list_recording_subscriptions(
@@ -2127,13 +2134,15 @@ TEST_F(AeronCArchiveTest, shouldMergeFromReplayToLive)
         m_recording_id_from_counter));
     EXPECT_TRUE(is_active);
 
+    int64_t archive_id = aeron_archive_get_archive_id(m_archive);
     ASSERT_EQ_ERR(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
         m_counters_reader,
-        m_recording_id_from_counter));
+        m_recording_id_from_counter,
+        archive_id));
 
     {
         size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
-        const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+        char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
 
         ASSERT_EQ_ERR(0,
             aeron_archive_recording_pos_get_source_identity(
@@ -2687,13 +2696,15 @@ TEST_F(AeronCArchiveTest, shouldRecordReplicateThenReplay)
             m_recording_id_from_counter));
         EXPECT_TRUE(is_active);
 
+        int64_t archive_id = aeron_archive_get_archive_id(m_archive);
         EXPECT_EQ(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
             m_counters_reader,
-            m_recording_id_from_counter));
+            m_recording_id_from_counter,
+            archive_id));
 
         {
             size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
-            const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+            char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
 
             ASSERT_EQ_ERR(0,
                 aeron_archive_recording_pos_get_source_identity(
@@ -2940,13 +2951,15 @@ TEST_F(AeronCArchiveTest, shouldRecordReplicateTwice)
             m_recording_id_from_counter));
         EXPECT_TRUE(is_active);
 
+        int64_t archive_id = aeron_archive_get_archive_id(m_archive);
         EXPECT_EQ(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
             m_counters_reader,
-            m_recording_id_from_counter));
+            m_recording_id_from_counter,
+            archive_id));
 
         {
             size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
-            const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+            char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
 
             ASSERT_EQ_ERR(0,
                 aeron_archive_recording_pos_get_source_identity(
@@ -4553,13 +4566,15 @@ TEST_F(AeronCArchiveNoSetupTest, shouldNotHangClosingReplayMergeWhenUsingInvoker
         m_recording_id_from_counter));
     EXPECT_TRUE(is_active);
 
+    int64_t archive_id = aeron_archive_get_archive_id(m_archive);
     ASSERT_EQ_ERR(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
         m_counters_reader,
-        m_recording_id_from_counter));
+        m_recording_id_from_counter,
+        archive_id));
 
     {
         size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
-        const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+        char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
 
         ASSERT_EQ_ERR(0,
             aeron_archive_recording_pos_get_source_identity(
@@ -4755,8 +4770,10 @@ TEST_F(AeronCArchiveTest, shouldExitOnEmptyRecording)
         "aeron:ipc",
         10000));
 
+    int64_t archive_id = aeron_archive_get_archive_id(m_archive);
     int32_t recording_counter_id = getRecordingCounterId(
         aeron_publication_session_id(publication),
+        archive_id,
         counters_reader);
 
     int64_t recording_id = aeron_archive_recording_pos_get_recording_id(
