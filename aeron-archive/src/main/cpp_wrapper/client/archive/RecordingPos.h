@@ -24,14 +24,16 @@ namespace aeron { namespace archive { namespace client
 namespace RecordingPos
 {
 
-inline static std::int32_t findCounterIdByRecordingId(CountersReader &countersReader, std::int64_t recordingId)
+inline static std::int32_t findCounterIdByRecordingId(
+    CountersReader &countersReader, std::int64_t recordingId, std::int64_t archiveId)
 {
-    return aeron_archive_recording_pos_find_counter_id_by_recording_id(countersReader.countersReader(), recordingId);
+    return aeron_archive_recording_pos_find_counter_id_by_recording_id(countersReader.countersReader(), recordingId, archiveId);
 }
 
-inline static std::int32_t findCounterIdBySessionId(CountersReader &countersReader, std::int32_t sessionId)
+inline static std::int32_t findCounterIdBySessionId(
+    CountersReader &countersReader, std::int32_t sessionId, std::int64_t archiveId)
 {
-    return aeron_archive_recording_pos_find_counter_id_by_session_id(countersReader.countersReader(), sessionId);
+    return aeron_archive_recording_pos_find_counter_id_by_session_id(countersReader.countersReader(), sessionId, archiveId);
 }
 
 inline static std::int64_t getRecordingId(CountersReader &countersReader, std::int32_t counterId)

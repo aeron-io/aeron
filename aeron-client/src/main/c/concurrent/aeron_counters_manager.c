@@ -104,17 +104,17 @@ int32_t aeron_counters_manager_allocate(
     }
 
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)
-        (manager->metadata + (counter_id * AERON_COUNTERS_MANAGER_METADATA_LENGTH));
+        (manager->metadata + AERON_COUNTER_METADATA_OFFSET(counter_id));
 
     metadata->type_id = type_id;
     metadata->free_for_reuse_deadline_ms = AERON_COUNTER_NOT_FREE_TO_REUSE;
 
     if (NULL != key && key_length > 0)
     {
-        memcpy(metadata->key, key, (size_t)fmin((double)sizeof(metadata->key), (double)key_length));
+        memcpy(metadata->key, key, AERON_MIN(sizeof(metadata->key), key_length));
     }
 
-    size_t length = (size_t)fmin((double)sizeof(metadata->label), (double)label_length);
+    size_t length = AERON_MIN(sizeof(metadata->label), label_length);
 
     memcpy(metadata->label, label, length);
     metadata->label_length = (int32_t)length;

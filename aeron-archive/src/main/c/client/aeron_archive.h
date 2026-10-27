@@ -1197,20 +1197,24 @@ int64_t aeron_archive_segment_file_base_position(
 /**
  * Find the active counter id for a stream based on the recording id.
  *
- * @param counters_reader an aeron_counters_reader_t to search within
- * @param recording_id the recording id of an active recording
- * @return the counter id if found, otherwise AERON_NULL_COUNTER_ID
+ * @param counters_reader an aeron_counters_reader_t to search within.
+ * @param recording_id    the recording id of an active recording.
+ * @param archive_id      the archive id of an active recording.
+ * @return the counter id if found, otherwise AERON_NULL_COUNTER_ID. Never sets any errors.
  */
-int32_t aeron_archive_recording_pos_find_counter_id_by_recording_id(aeron_counters_reader_t *counters_reader, int64_t recording_id);
+int32_t aeron_archive_recording_pos_find_counter_id_by_recording_id(
+    aeron_counters_reader_t *counters_reader, int64_t recording_id, int64_t archive_id);
 
 /**
  * Find the active counter id for a stream based on the session id.
  *
- * @param counters_reader an aeron_counters_reader_t to search within
- * @param session_id the session id of an active recording
- * @return the counter id if found, otherwise AERON_NULL_COUNTER_ID
+ * @param counters_reader an aeron_counters_reader_t to search within.
+ * @param session_id      the session id of an active recording.
+ * @param archive_id      the archive id to match on.
+ * @return the counter id if found, otherwise AERON_NULL_COUNTER_ID. Never sets any errors.
  */
-int32_t aeron_archive_recording_pos_find_counter_id_by_session_id(aeron_counters_reader_t *counters_reader, int32_t session_id);
+int32_t aeron_archive_recording_pos_find_counter_id_by_session_id(
+    aeron_counters_reader_t *counters_reader, int32_t session_id, int64_t archive_id);
 
 /**
  * Get the recording id for a given counter id.

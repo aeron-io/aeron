@@ -200,6 +200,7 @@
 
 #define AERON_COUNTER_ARCHIVE_CONTROL_SESSION_TYPE_ID (113);
 
+// FIXME : naming
 #define AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID (114)
 
 #define AERON_PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID (115)
@@ -207,6 +208,20 @@
 #define AERON_PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID (116)
 
 #define AERON_PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID (117)
+
+#pragma pack(push)
+#pragma pack(4)
+typedef struct aeron_archive_recording_position_key_layout_stct
+{
+    int64_t recording_id;
+    int32_t session_id;
+    int32_t source_identity_length;
+    char source_identity[1];
+    // int64_t archive_id; -> variable position after `source_identity`
+}
+aeron_archive_recording_position_key_layout_t;
+#pragma pack(pop)
+
 
 // Cluster counters
 

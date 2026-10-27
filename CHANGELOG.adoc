@@ -38,8 +38,14 @@ now `AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`
 
 * **[Driver/C]** Remove linking to `wsock32` in favor of only using `ws2_32`. This is to avoid https://learn.microsoft.com/en-us/archive/blogs/wndp/winsock-header-weirdness[Winsock Header Weirdness].
 
-* **Breaking:** **[Archive/Java/C/C{plus}{plus} Wrapper]** Removed APIs to find `rec-pos` counter without specifying
-`archiveId` that were deprecated since 1.44.0.
+* **Breaking:** **[Archive/Java]** Removed APIs to find `rec-pos` counter without specifying
+`archiveId` that were deprecated since 1.44.0, i.e. `RecordingPos#findCounterIdByRecording(CountersReader, long)` and
+`RecordingPos#findCounterIdBySession(CountersReader countersReader, int)`.
+
+* **Breaking:** **[Archive/C/C{plus}{plus} Wrapper]** In order to support multiple Archives running against the same
+media driver the APIs that lookup `rec-pos` counters were modified to include `archiveId` parameter:
+** `aeron_archive_recording_pos_find_counter_id_by_recording_id` and `aeron_archive_recording_pos_find_counter_id_by_session_id`.
+** `aeron::archive::client::RecordingPos::findCounterIdByRecordingId` and `aeron::archive::client::RecordingPos::findCounterIdBySessionId`.
 
 === Changelog
 
