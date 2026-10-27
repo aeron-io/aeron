@@ -325,26 +325,6 @@ public final class Configuration
     public static final int RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT = 10;
 
     /**
-     * Property name for limit on number of {@code PublicationImage}s that the {@link Receiver} can process in a single
-     * duty cycle.
-     *
-     * @since 1.54.0
-     */
-    @Config
-    public static final String RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME =
-        "aeron.receiver.images.per.duty.cycle.limit";
-
-    /**
-     * The default limit on number of {@code PublicationImage}s that the {@link Receiver} can process in a single duty
-     * cycle.
-     *
-     * @see #RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME
-     * @since 1.54.0
-     */
-    @Config
-    public static final int RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT = 16;
-
-    /**
      * Property name for the limit of the number of driver managed resources that can be freed in a single duty cycle.
      */
     @Config
@@ -2042,16 +2022,6 @@ public final class Configuration
     public static int receiverPollToSlowWorkRatio()
     {
         return getInteger(RECEIVER_POLL_TO_SLOW_WORK_RATIO_PROP_NAME, RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT);
-    }
-
-    /**
-     * {@return Limit the number of {@code PublicationImage}s that the {@link Receiver} can process in a single duty cycle}.
-     * @see #RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME
-     * @since 1.54.0
-     */
-    public static int receiverImagesPerDutyCycleLimit()
-    {
-        return getInteger(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME, RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT);
     }
 
     /**

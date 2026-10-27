@@ -59,11 +59,9 @@ public final class Receiver implements Agent
     private final String roleName;
     private final ArrayList<PublicationImage> publicationImages = new ArrayList<>();
     private final int dutyCycleRatio;
-    private final int imagesPerCycleLimit;
     private long slowTickWorkDeadlineNs;
     private long reResolutionDeadlineNs;
     int dutyCycleCounter;
-    int nextImageIndex = -1;
 
     Receiver(final MediaDriver.Context ctx)
     {
@@ -79,7 +77,6 @@ public final class Receiver implements Agent
         roleName = threadName(AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC);
         statusMessageSendTimeoutNs = ctx.statusMessageTimeoutNs() >> 1;
         dutyCycleRatio = ctx.receiverPollToSlowWorkRatio();
-        imagesPerCycleLimit = ctx.receiverImagesPerDutyCycleLimit();
     }
 
     /**
@@ -350,16 +347,9 @@ public final class Receiver implements Agent
         }
 
         final ArrayList<PublicationImage> publicationImages = this.publicationImages;
-        int last = publicationImages.size() - 1;
-        int next = nextImageIndex;
-        if (next < 0)
+        for (int last = publicationImages.size() - 1, i = last; i >= 0; i--)
         {
-            nextImageIndex = next = last;
-        }
-
-        for (int limit = imagesPerCycleLimit; next >= 0 && limit > 0; next--, limit--)
-        {
-            final PublicationImage image = publicationImages.get(next);
+            final PublicationImage image = publicationImages.get(i);
             if (image.isConnected(nowNs))
             {
                 image.checkEosForDrainTransition(nowNs);
@@ -370,14 +360,13 @@ public final class Receiver implements Agent
             }
             else
             {
-                ArrayListUtil.fastUnorderedRemove(publicationImages, next, last--);
+                ArrayListUtil.fastUnorderedRemove(publicationImages, i, last--);
                 image.removeFromDispatcher();
                 image.receiverRelease();
                 workCount++;
             }
         }
 
-        nextImageIndex = next;
         dutyCycleCounter = 0;
         slowTickWorkDeadlineNs = nowNs + statusMessageSendTimeoutNs;
 

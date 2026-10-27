@@ -629,7 +629,6 @@ public final class MediaDriver implements AutoCloseable
         private int lossReportBufferLength = Configuration.lossReportBufferLength();
         private int sendToStatusMessagePollRatio = Configuration.sendToStatusMessagePollRatio();
         private int receiverPollToSlowWorkRatio = Configuration.receiverPollToSlowWorkRatio();
-        private int receiverImagesPerDutyCycleLimit = Configuration.receiverImagesPerDutyCycleLimit();
         private int resourceFreeLimit = Configuration.resourceFreeLimit();
         private int maxResend = Configuration.maxResend();
 
@@ -833,8 +832,6 @@ public final class MediaDriver implements AutoCloseable
                     sendToStatusMessagePollRatio, 1, Integer.MAX_VALUE, "sendToStatusMessagePollRatio");
                 validateValueRange(
                     receiverPollToSlowWorkRatio, 1, Integer.MAX_VALUE, "receiverPollToSlowWorkRatio");
-                validateValueRange(
-                    receiverImagesPerDutyCycleLimit, 1, Integer.MAX_VALUE, "receiverImagesPerDutyCycleLimit");
 
                 validateSessionIdRange(publicationReservedSessionIdLow, publicationReservedSessionIdHigh);
 
@@ -3405,30 +3402,6 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * {@return Get the limit on number of {@code PublicationImage}s that the {@link Receiver} can process in a
-         * single duty cycle}.
-         * @since 1.54.0
-         */
-        public int receiverImagesPerDutyCycleLimit()
-        {
-            return receiverImagesPerDutyCycleLimit;
-        }
-
-        /**
-         * Set the ratio of receiving data to slow work (e.g. draining command queue, sending pending status messages
-         * etc.) in the {@link Receiver}.
-         *
-         * @param limit to use.
-         * @return this for fluent API.
-         * @since 1.54.0
-         */
-        public Context receiverImagesPerDutyCycleLimit(final int limit)
-        {
-            this.receiverImagesPerDutyCycleLimit = limit;
-            return this;
-        }
-
-        /**
          * Get the group tag (gtag) to be sent in Status Messages from the Receiver.
          *
          * @return group tag value or null if not set.
@@ -5046,7 +5019,6 @@ public final class MediaDriver implements AutoCloseable
                 "\n    resolverBootstrapNeighbor='" + resolverBootstrapNeighbor + '\'' +
                 "\n    sendToStatusMessagePollRatio=" + sendToStatusMessagePollRatio +
                 "\n    receivePollToSlowWorkRatio=" + receiverPollToSlowWorkRatio +
-                "\n    receiverImagesPerDutyCycleLimit=" + receiverImagesPerDutyCycleLimit +
                 "\n    unicastFeedbackDelayGenerator=" + unicastFeedbackDelayGenerator +
                 "\n    multicastFeedbackDelayGenerator=" + multicastFeedbackDelayGenerator +
                 "\n    retransmitUnicastDelayGenerator=" + retransmitUnicastDelayGenerator +

@@ -56,8 +56,6 @@ import static io.aeron.driver.Configuration.NAK_MAX_BACKOFF_DEFAULT_NS;
 import static io.aeron.driver.Configuration.NAK_MULTICAST_MAX_BACKOFF_PROP_NAME;
 import static io.aeron.driver.Configuration.NAK_UNICAST_DELAY_MIN_VALUE_NS;
 import static io.aeron.driver.Configuration.NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME;
-import static io.aeron.driver.Configuration.RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT;
-import static io.aeron.driver.Configuration.RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME;
 import static io.aeron.driver.Configuration.RECEIVER_POLL_TO_SLOW_WORK_RATIO_DEFAULT;
 import static io.aeron.driver.Configuration.RECEIVER_POLL_TO_SLOW_WORK_RATIO_PROP_NAME;
 import static io.aeron.driver.Configuration.UNTETHERED_LINGER_TIMEOUT_PROP_NAME;
@@ -570,17 +568,6 @@ class MediaDriverContextTest
         assertThat(exception.getMessage(), startsWith("ERROR - receiverPollToSlowWorkRatio less than min size of 1:"));
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = { -5, 0 })
-    void shouldRejectInvalidReceiverImagesPerDutyCycleLimit(final int limit)
-    {
-        context.receiverImagesPerDutyCycleLimit(limit);
-
-        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
-        assertThat(
-            exception.getMessage(), startsWith("ERROR - receiverImagesPerDutyCycleLimit less than min size of 1:"));
-    }
-
     @Test
     void receiverPollToSlowWorkRatioDefaultValue()
     {
@@ -599,27 +586,6 @@ class MediaDriverContextTest
         finally
         {
             System.clearProperty(RECEIVER_POLL_TO_SLOW_WORK_RATIO_PROP_NAME);
-        }
-    }
-
-    @Test
-    void receiverImagesPerDutyCycleLimitDefaultValue()
-    {
-        assertEquals(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_DEFAULT, context.receiverImagesPerDutyCycleLimit());
-    }
-
-    @Test
-    void receiverImagesPerDutyCycleLimitFromSystemProperty()
-    {
-        System.setProperty(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME, "8");
-        try
-        {
-            final Context context = new Context();
-            assertEquals(8, context.receiverImagesPerDutyCycleLimit());
-        }
-        finally
-        {
-            System.clearProperty(RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_PROP_NAME);
         }
     }
 }
