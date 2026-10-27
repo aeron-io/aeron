@@ -55,6 +55,11 @@ protected:
         }
     }
 
+    ~AeronArchiveRecordingPosTest()
+    {
+        aeron_counters_manager_close(&m_counters_manager);
+    }
+
     int32_t allocateRecPosCounter(
         int64_t recordingId,
         int32_t sessionId,
