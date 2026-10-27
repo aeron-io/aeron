@@ -36,7 +36,10 @@ finds a problem.
 now `AERON_THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS`
 (`aeron_driver_context_set/get_thread_affinity_fail_on_validation_errors`).
 
-* **[Driver/C]** Remove linking to wsock32 in favor of only using ws2_32. This is to avoid header weirdness: https://learn.microsoft.com/en-us/archive/blogs/wndp/winsock-header-weirdness.
+* **[Driver/C]** Remove linking to `wsock32` in favor of only using `ws2_32`. This is to avoid https://learn.microsoft.com/en-us/archive/blogs/wndp/winsock-header-weirdness[Winsock Header Weirdness].
+
+* **Breaking:** **[Archive/Java/C/C{plus}{plus} Wrapper]** Removed APIs to find `rec-pos` counter without specifying
+`archiveId` that were deprecated since 1.44.0.
 
 === Changelog
 

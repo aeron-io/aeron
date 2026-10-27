@@ -132,20 +132,6 @@ public final class RecordingPos
     }
 
     /**
-     * Find the active counter id for a stream based on the recording id.
-     *
-     * @param countersReader to search within.
-     * @param recordingId    for the active recording.
-     * @return the counter id if found otherwise {@link CountersReader#NULL_COUNTER_ID}.
-     * @deprecated Use {@link #findCounterIdByRecording(CountersReader, long, long)} instead.
-     */
-    @Deprecated
-    public static int findCounterIdByRecording(final CountersReader countersReader, final long recordingId)
-    {
-        return findCounterIdByRecording(countersReader, recordingId, Aeron.NULL_VALUE);
-    }
-
-    /**
      * Find the active counter id for a stream based on the recording id and archive id.
      *
      * @param countersReader to search within.
@@ -185,20 +171,6 @@ public final class RecordingPos
         }
 
         return NULL_COUNTER_ID;
-    }
-
-    /**
-     * Find the active counter id for a stream based on the session id.
-     *
-     * @param countersReader to search within.
-     * @param sessionId      for the active recording.
-     * @return the counter id if found otherwise {@link CountersReader#NULL_COUNTER_ID}.
-     * @deprecated Use {@link #findCounterIdBySession(CountersReader, int, long)} instead.
-     */
-    @Deprecated
-    public static int findCounterIdBySession(final CountersReader countersReader, final int sessionId)
-    {
-        return findCounterIdBySession(countersReader, sessionId, Aeron.NULL_VALUE);
     }
 
     /**
