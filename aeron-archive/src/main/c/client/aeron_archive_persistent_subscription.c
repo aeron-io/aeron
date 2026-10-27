@@ -541,7 +541,7 @@ int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persist
     if (NULL == context->state_counter)
     {
         if (aeron_archive_persistent_subscription_persistent_subscription_allocate_counter(&context->state_counter, context->aeron,
-            AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID, "Persistent Subscription State",
+            AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID, "Persistent Subscription State",
             context->replay_stream_id, context->replay_channel,
             context->live_stream_id, context->live_channel) < 0)
         {
@@ -552,7 +552,7 @@ int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persist
     if (NULL == context->join_difference_counter)
     {
         if (aeron_archive_persistent_subscription_persistent_subscription_allocate_counter(&context->join_difference_counter, context->aeron,
-            AERON_PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID, "Persistent Subscription Join Difference",
+            AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID, "Persistent Subscription Join Difference",
             context->replay_stream_id, context->replay_channel,
             context->live_stream_id, context->live_channel) < 0)
         {
@@ -563,7 +563,7 @@ int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persist
     if (NULL == context->live_left_counter)
     {
         if (aeron_archive_persistent_subscription_persistent_subscription_allocate_counter(&context->live_left_counter, context->aeron,
-            AERON_PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID, "Persistent Subscription Live Left Count",
+            AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID, "Persistent Subscription Live Left Count",
             context->replay_stream_id, context->replay_channel,
             context->live_stream_id, context->live_channel) < 0)
         {
@@ -574,7 +574,7 @@ int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persist
     if (NULL == context->live_joined_counter)
     {
         if (aeron_archive_persistent_subscription_persistent_subscription_allocate_counter(&context->live_joined_counter, context->aeron,
-            AERON_PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID, "Persistent Subscription Live Joined Count",
+            AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID, "Persistent Subscription Live Joined Count",
             context->replay_stream_id, context->replay_channel,
             context->live_stream_id, context->live_channel) < 0)
         {

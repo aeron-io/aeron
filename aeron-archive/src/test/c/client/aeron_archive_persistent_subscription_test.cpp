@@ -851,13 +851,13 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldAutoAllocateCounters)
            const uint8_t *, size_t, const char *, size_t, void *clientd)
         {
             int32_t **ptrs = static_cast<int32_t **>(clientd);
-            if (type_id == AERON_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID)
+            if (type_id == AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID)
                 *ptrs[0] = id;
-            else if (type_id == AERON_PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID)
+            else if (type_id == AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID)
                 *ptrs[1] = id;
-            else if (type_id == AERON_PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID)
+            else if (type_id == AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID)
                 *ptrs[2] = id;
-            else if (type_id == AERON_PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID)
+            else if (type_id == AERON_COUNTER_ARCHIVE_PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID)
                 *ptrs[3] = id;
         },
         counter_id_ptrs);
