@@ -262,7 +262,7 @@ public:
             now_ms = now_ns / 1000000LL;
             if (doWork(updateDriverHeartbeat) < 0)
             {
-                break;
+                return -1;
             }
             work_count++;
         }
@@ -1202,9 +1202,10 @@ TEST_F(ClientConductorTest, shouldCreateServiceIntervalTimeoutError)
     m_conductor.error_handler = save_last_errorcode;
 
     doWork();
-    doWorkForNs(CLIENT_LIVENESS_TIMEOUT + 1, false, CLIENT_LIVENESS_TIMEOUT + 1);
+    ASSERT_EQ(-1, doWorkForNs(CLIENT_LIVENESS_TIMEOUT + 1, false, CLIENT_LIVENESS_TIMEOUT + 1));
 
     ASSERT_EQ(AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, errorcode);
+    ASSERT_EQ(-AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldCreateDriverTimeoutError)

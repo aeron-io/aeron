@@ -1343,6 +1343,8 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
             char *buffer = "MediaDriver has been shutdown";
             conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
 
+            AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
+
             return -1;
         }
 
@@ -1359,6 +1361,8 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
                 (int64_t)(now_ms - last_keepalive_ms),
                 (int64_t)conductor->driver_timeout_ms);
             conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
+            AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
 
             return -1;
         }
@@ -1416,6 +1420,8 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
                 char buffer[64];
                 snprintf(buffer, sizeof(buffer), "unexpected close of heartbeat timestamp counter: %" PRId32, id);
                 conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
+                AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
 
                 return -1;
             }
@@ -1776,6 +1782,8 @@ static int aeron_client_conductor_on_check_timeouts(aeron_client_conductor_t *co
                 (int64_t)(now_ns - conductor->time_of_last_service_ns));
             conductor->error_handler(
                 conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+
+            AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
 
             return -1;
         }
