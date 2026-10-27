@@ -6595,8 +6595,6 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_create_pub
 
     if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
     {
-        aeron_driver_receiver_proxy_on_remove_init_in_progress(
-            conductor->context->receiver_proxy, endpoint, command->session_id, command->stream_id);
         return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_DONE;
     }
 
@@ -6694,8 +6692,6 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_create_pub
 
     if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
     {
-        aeron_driver_receiver_proxy_on_remove_init_in_progress(
-            conductor->context->receiver_proxy, endpoint, command->session_id, command->stream_id);
         return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_DONE;
     }
 
@@ -6937,8 +6933,11 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_create_pub
     return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_RUNNING;
 
 error:
-    aeron_driver_receiver_proxy_on_remove_init_in_progress(
-        conductor->context->receiver_proxy, endpoint, command->session_id, command->stream_id);
+    if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE == endpoint->conductor_fields.status)
+    {
+        aeron_driver_receiver_proxy_on_remove_init_in_progress(
+            conductor->context->receiver_proxy, endpoint, command->session_id, command->stream_id);
+    }
     return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_ERROR;
 }
 

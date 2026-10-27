@@ -1782,3 +1782,217 @@ TEST_F(ClosedReceiverEndpoint, shouldNotReuseClosedTaggedEndpoint)
     ASSERT_EQ(nullptr, tagged_subscription);
     ASSERT_EQ(-AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE, aeron_errcode()) << aeron_errmsg();
 }
+
+static std::atomic<bool> aeron_c_system_test_async_logbuffer_delay_should_block;
+static std::atomic<bool> aeron_c_system_test_async_logbuffer_delay_start_block;
+
+class BlockLogbufferCreationTest : public CSystemTestBase, public testing::Test
+{
+protected:
+    BlockLogbufferCreationTest() : CSystemTestBase(
+        std::vector<std::pair<std::string, std::string>>{},
+        [](aeron_driver_context_t *context)
+        {
+            aeron_driver_context_set_threading_mode(context, AERON_THREADING_MODE_DEDICATED);
+            aeron_driver_context_set_timer_interval_ns(context, 1000);
+
+            aeron_free(context->receiver_idle_strategy_state);
+            aeron_free((void *)context->receiver_idle_strategy_name);
+            context->receiver_idle_strategy_state = nullptr;
+            context->receiver_idle_strategy_name = aeron_strndup("sleep", AERON_MAX_PATH);
+            context->receiver_idle_strategy_func = idleStrategySleepingIdle;
+
+            context->raw_log_map_func = blockRawLogMapping;
+        })
+    {
+    }
+
+    void SetUp()
+    {
+        aeron_c_system_test_async_logbuffer_delay_start_block.store(false);
+        aeron_c_system_test_async_logbuffer_delay_should_block.store(true);
+    }
+
+    void TearDown()
+    {
+        aeron_c_system_test_async_logbuffer_delay_should_block.store(false);
+    }
+
+    static void idleStrategySleepingIdle(void *state, int work_count)
+    {
+        aeron_nano_sleep(1000000);
+    }
+
+    static int blockRawLogMapping(
+        aeron_mapped_raw_log_t *log, const char *path, bool use_sparse_file, std::uint64_t term_length, std::uint64_t page_size)
+    {
+        aeron_c_system_test_async_logbuffer_delay_start_block.store(true);
+
+        while (aeron_c_system_test_async_logbuffer_delay_should_block.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
+        return aeron_raw_log_map(log, path, use_sparse_file, term_length, page_size);
+    }
+
+    static bool sendSetupFrame()
+    {
+        aeron_socket_t socket = aeron_socket(AF_INET, SOCK_DGRAM, 0);
+        if (-1 == socket)
+        {
+            return false;
+        }
+
+        struct sockaddr_in receiver_endpoint = {};
+        receiver_endpoint.sin_family = AF_INET;
+        receiver_endpoint.sin_port = htons(24325);
+        if (1 != inet_pton(AF_INET, "127.0.0.1", &receiver_endpoint.sin_addr.s_addr))
+        {
+            aeron_close_socket(socket);
+            return false;
+        }
+
+        if (aeron_connect(socket, (sockaddr *)&receiver_endpoint, sizeof(receiver_endpoint)) < 0)
+        {
+            aeron_close_socket(socket);
+            return false;
+        }
+
+        uint8_t setup_buffer[sizeof(aeron_setup_header_t)];
+        auto *setup_header = (aeron_setup_header_t *)setup_buffer;
+        setup_header->frame_header.frame_length = sizeof(aeron_setup_header_t);
+        setup_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
+        setup_header->frame_header.flags = 0;
+        setup_header->frame_header.type = AERON_HDR_TYPE_SETUP;
+        setup_header->frame_header.flags = 0;
+        setup_header->term_offset = 0;
+        setup_header->session_id = 1;
+        setup_header->stream_id = STREAM_ID;
+        setup_header->initial_term_id = 0;
+        setup_header->active_term_id = 0;;
+        setup_header->term_length = 65536;
+        setup_header->mtu = 1408;
+        setup_header->ttl = 1;
+
+        if (aeron_send(socket, (const void *)setup_buffer, sizeof(aeron_setup_header_t), 0) != (ssize_t)sizeof(setup_buffer))
+        {
+            aeron_close_socket(socket);
+            return false;
+        }
+
+        aeron_close_socket(socket);
+        return true;
+    }
+
+    static void findNumOfReceivingEndpoints(
+        int64_t value,
+        int32_t id,
+        int32_t type_id,
+        const uint8_t *key,
+        size_t key_length,
+        const char *label,
+        size_t label_length,
+        void *clientd)
+    {
+        if (AERON_COUNTER_RECEIVE_CHANNEL_STATUS_TYPE_ID == type_id)
+        {
+            (*(int32_t *)clientd)++;
+        }
+    }
+};
+
+TEST_F(BlockLogbufferCreationTest, shouldNotUseFreedReceiverEndpointIfReceiverEndpointClosingDuringNativeLogbufferCreation)
+{
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_subscription_t *async_sub = nullptr;
+    ASSERT_EQ(0, aeron_async_add_subscription(
+        &async_sub, m_aeron, PUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(async_sub);
+    ASSERT_NE(nullptr, subscription) << aeron_errmsg();
+
+    int64_t deadline_ms = aeron_epoch_clock() + 1000;
+    aeron_counters_reader_t *counters_reader = aeron_counters_reader(m_aeron);
+    int32_t num_receiving_endpoints = 0;
+    while (1 != num_receiving_endpoints)
+    {
+        num_receiving_endpoints = 0;
+        aeron_counters_reader_foreach_counter(counters_reader, findNumOfReceivingEndpoints, &num_receiving_endpoints);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting for receiving endpoint counter";
+    }
+
+    ASSERT_TRUE(sendSetupFrame());
+    deadline_ms = aeron_epoch_clock() + 1000;
+    while (!aeron_c_system_test_async_logbuffer_delay_start_block.load())
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting to map new publication image";
+    }
+
+    deadline_ms = aeron_epoch_clock() + 1000;
+    std::atomic<bool> removed(false);
+    aeron_subscription_constants_t constants;
+    aeron_subscription_constants(subscription, &constants);
+    ASSERT_EQ(aeron_async_remove_subscription(constants.registration_id, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting to remove receive endpoint";
+    }
+
+    aeron_c_system_test_async_logbuffer_delay_should_block.store(false);
+
+    deadline_ms = aeron_epoch_clock() + 1000;
+    num_receiving_endpoints = 1;
+    while (0 != num_receiving_endpoints)
+    {
+        num_receiving_endpoints = 0;
+        aeron_counters_reader_foreach_counter(counters_reader, findNumOfReceivingEndpoints, &num_receiving_endpoints);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting to release endpoints";
+    }
+
+    deadline_ms = aeron_epoch_clock() + 1000;
+    aeron_subscription_t *subscription_to_ensure_receiver_rb_is_drained = nullptr;
+    while (nullptr == subscription_to_ensure_receiver_rb_is_drained)
+    {
+        aeron_async_add_subscription_t *async_sub_to_ensure_receive_rb_is_drained = nullptr;
+        ASSERT_EQ(0, aeron_async_add_subscription(
+            &async_sub_to_ensure_receive_rb_is_drained, m_aeron, PUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+        subscription_to_ensure_receiver_rb_is_drained = awaitSubscriptionOrError(async_sub_to_ensure_receive_rb_is_drained);
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting to add new receive endpoint";
+    }
+
+    deadline_ms = aeron_epoch_clock() + 1000;
+    num_receiving_endpoints = 0;
+    while (1 != num_receiving_endpoints)
+    {
+        num_receiving_endpoints = 0;
+        aeron_counters_reader_foreach_counter(counters_reader, findNumOfReceivingEndpoints, &num_receiving_endpoints);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting for receiving endpoint counter";
+    }
+
+    deadline_ms = aeron_epoch_clock() + 1000;
+    std::atomic<bool> removed_to_ensure_receiver_rb_is_drained(false);
+    aeron_subscription_constants_t constants_to_ensure_receiver_rb_is_drained;
+    aeron_subscription_constants(subscription_to_ensure_receiver_rb_is_drained, &constants_to_ensure_receiver_rb_is_drained);
+    ASSERT_EQ(aeron_async_remove_subscription(constants_to_ensure_receiver_rb_is_drained.registration_id, m_aeron, setFlagOnClose, &removed_to_ensure_receiver_rb_is_drained), 0);
+    while (!removed_to_ensure_receiver_rb_is_drained)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting to remove receive endpoint";
+    }
+
+    deadline_ms = aeron_epoch_clock() + 1000;
+    num_receiving_endpoints = 1;
+    while (0 != num_receiving_endpoints)
+    {
+        num_receiving_endpoints = 0;
+        aeron_counters_reader_foreach_counter(counters_reader, findNumOfReceivingEndpoints, &num_receiving_endpoints);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting to release endpoints";
+    }
+}
