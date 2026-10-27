@@ -69,13 +69,13 @@ protected:
         key->recording_id = recordingId;
         key->session_id = sessionId;
         key->source_identity_length = sourceIdentityLength;
-        uint8_t *source_identity = reinterpret_cast<uint8_t *>(keyBuffer + sizeof(aeron_archive_recording_position_key_layout_t));
+        uint8_t *source_identity = keyBuffer + sizeof(aeron_archive_recording_position_key_layout_t);
         size_t length = strlen(sourceIdentity);
         memcpy(source_identity, sourceIdentity, length);
         size_t archiveIdOffset = AERON_MIN(
             MAX_SOURCE_IDENTITY_LENGTH, (size_t)sourceIdentityLength >= length ? length : sourceIdentityLength);
-        int64_t *keyArchiveId = reinterpret_cast<int64_t *>(source_identity + archiveIdOffset);
-        *keyArchiveId = archiveId;
+        uint8_t *keyArchiveId = source_identity + archiveIdOffset;
+        memcpy(keyArchiveId, &archiveId, sizeof(int64_t));
 
         int32_t counter_id = aeron_counters_manager_allocate(
           &m_counters_manager,
@@ -88,8 +88,8 @@ protected:
         return counter_id;
     }
 
-    alignas(64) uint8_t m_metadata[NUM_COUNTERS * sizeof(aeron_counter_metadata_descriptor_t)] = {};
-    alignas(64) uint8_t m_values[NUM_COUNTERS * sizeof(aeron_counter_value_descriptor_t)] = {};
+    uint8_t m_metadata[NUM_COUNTERS * AERON_COUNTER_METADATA_LENGTH] = {};
+    uint8_t m_values[NUM_COUNTERS * AERON_COUNTER_VALUE_LENGTH] = {};
     aeron_clock_cache_t m_cached_clock;
     aeron_counters_reader_t m_reader = {};
     aeron_counters_manager_t m_counters_manager = {};
