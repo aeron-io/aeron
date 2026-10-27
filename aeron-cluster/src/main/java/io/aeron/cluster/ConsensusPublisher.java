@@ -32,6 +32,12 @@ final class ConsensusPublisher
 
     private final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();
     private final BufferClaim bufferClaim = new BufferClaim();
+    private final ConsensusConnectionEncoder consensusConnectionEncoder =
+        new ConsensusConnectionEncoder();
+    private final CompactCommitPositionEncoder compactCommitPositionEncoder =
+        new CompactCommitPositionEncoder();
+    private final CompactLeadershipConfirmAckEncoder compactLeadershipConfirmAckEncoder =
+        new CompactLeadershipConfirmAckEncoder();
     private final MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
     private final CanvassPositionEncoder canvassPositionEncoder = new CanvassPositionEncoder();
     private final RequestVoteEncoder requestVoteEncoder = new RequestVoteEncoder();
@@ -303,6 +309,88 @@ final class ConsensusPublisher
             checkResult(position, publication);
         }
         while (--attempts > 0);
+    }
+
+    boolean consensusConnection(
+        final ExclusivePublication publication, final int memberId)
+    {
+        if (null == publication)
+        {
+            return false;
+        }
+        final int length = MessageHeaderEncoder.ENCODED_LENGTH + ConsensusConnectionEncoder.BLOCK_LENGTH;
+        int attempts = SEND_ATTEMPTS;
+        do
+        {
+            final long position = publication.tryClaim(length, bufferClaim);
+            if (position > 0)
+            {
+                consensusConnectionEncoder
+                    .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
+                    .memberId(memberId);
+                bufferClaim.commit();
+                return true;
+            }
+            checkResult(position, publication);
+        }
+        while (--attempts > 0);
+        return false;
+    }
+
+    boolean compactCommitPosition(
+        final ExclusivePublication publication, final long leadershipTermId, final long logPosition, final long round)
+    {
+        if (null == publication)
+        {
+            return false;
+        }
+        final int length = MessageHeaderEncoder.ENCODED_LENGTH + CompactCommitPositionEncoder.BLOCK_LENGTH;
+        int attempts = SEND_ATTEMPTS;
+        do
+        {
+            final long position = publication.tryClaim(length, bufferClaim);
+            if (position > 0)
+            {
+                compactCommitPositionEncoder
+                    .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
+                    .leadershipTermId(leadershipTermId)
+                    .logPosition(logPosition)
+                    .confirmationCounter(round);
+                bufferClaim.commit();
+                return true;
+            }
+            checkResult(position, publication);
+        }
+        while (--attempts > 0);
+        return false;
+    }
+
+    boolean compactLeadershipConfirmAck(
+        final ExclusivePublication publication, final long leadershipTermId, final long round, final int memberId)
+    {
+        if (null == publication)
+        {
+            return false;
+        }
+        final int length = MessageHeaderEncoder.ENCODED_LENGTH + CompactLeadershipConfirmAckEncoder.BLOCK_LENGTH;
+        int attempts = SEND_ATTEMPTS;
+        do
+        {
+            final long position = publication.tryClaim(length, bufferClaim);
+            if (position > 0)
+            {
+                compactLeadershipConfirmAckEncoder
+                    .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
+                    .leadershipTermId(leadershipTermId)
+                    .confirmationCounter(round)
+                    .followerMemberId(memberId);
+                bufferClaim.commit();
+                return true;
+            }
+            checkResult(position, publication);
+        }
+        while (--attempts > 0);
+        return false;
     }
 
     boolean catchupPosition(
