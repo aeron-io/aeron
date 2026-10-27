@@ -1738,3 +1738,47 @@ TEST_P(CSystemTest, shouldValidatePublicationVectorCapacityAgainst)
 
     aeron_driver_context_close(context);
 }
+
+class ClosedReceiverEndpoint : public CSystemTestBase, public testing::Test
+{
+protected:
+    ClosedReceiverEndpoint() : CSystemTestBase(
+        std::vector<std::pair<std::string, std::string>>{},
+        [](aeron_driver_context_t *context)
+        {
+            aeron_driver_context_set_threading_mode(context, AERON_THREADING_MODE_DEDICATED);
+            aeron_driver_context_set_timer_interval_ns(context, 3000000000);
+        })
+    {
+    }
+};
+
+TEST_F(ClosedReceiverEndpoint, shouldNotReuseClosedTaggedEndpoint)
+{
+    const char *original_tagged_channel_uri = "aeron:udp?endpoint=localhost:4000|tags=1001";
+    const char *tagged_channel_uri = "aeron:udp?tags=1001";
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_subscription_t *async_sub = nullptr;
+    ASSERT_EQ(0, aeron_async_add_subscription(
+        &async_sub, m_aeron, original_tagged_channel_uri, STREAM_ID, nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(async_sub);
+    ASSERT_NE(nullptr, subscription) << aeron_errmsg();
+
+    aeron_subscription_constants_t constants;
+    aeron_subscription_constants(subscription, &constants);
+    std::atomic<bool> removed(false);
+    ASSERT_EQ(aeron_async_remove_subscription(constants.registration_id, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::yield();
+    }
+
+    aeron_async_add_subscription_t *async_tagged_sub = nullptr;
+    ASSERT_EQ(0, aeron_async_add_subscription(
+        &async_tagged_sub, m_aeron, tagged_channel_uri, STREAM_ID, nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+    aeron_subscription_t *tagged_subscription = awaitSubscriptionOrError(async_tagged_sub);
+    ASSERT_EQ(nullptr, tagged_subscription);
+    ASSERT_EQ(-AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE, aeron_errcode()) << aeron_errmsg();
+}

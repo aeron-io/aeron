@@ -5151,7 +5151,7 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_networ
     udp_channel = NULL;
     async_command->async_parse.channel = NULL;
 
-    if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSING == endpoint->conductor_fields.status)
+    if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
     {
         AERON_SET_ERR(
             -AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE,
