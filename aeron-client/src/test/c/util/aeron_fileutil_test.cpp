@@ -458,6 +458,7 @@ TEST_F(FileUtilTest, openFileCreateNewShouldFailIfFileExists)
     fclose(existing);
 
     EXPECT_EQ(nullptr, aeron_open_file_create_new(path));
+    EXPECT_EQ(EEXIST, aeron_errcode());
     EXPECT_EQ("original", readFileContents(path));
 
     aeron_err_clear();
@@ -497,11 +498,29 @@ TEST_F(FileUtilTest, openFileCreateNewShouldNotFollowSymlink)
     ASSERT_EQ(0, symlink(target, link));
 
     EXPECT_EQ(nullptr, aeron_open_file_create_new(link));
+    EXPECT_EQ(EEXIST, aeron_errcode());
     EXPECT_EQ("victim data", readFileContents(target));
 
     aeron_err_clear();
     aeron_delete_file(link);
     aeron_delete_file(target);
+}
+
+TEST_F(FileUtilTest, openFileCreateNewShouldNotFollowDanglingSymlink)
+{
+    const char *target = "aeron_create_new_dangling_target.txt";
+    const char *link = "aeron_create_new_dangling_link.log";
+    aeron_delete_file(link);
+    aeron_delete_file(target);
+
+    ASSERT_EQ(0, symlink(target, link));
+
+    EXPECT_EQ(nullptr, aeron_open_file_create_new(link));
+    EXPECT_EQ(EEXIST, aeron_errcode());
+    EXPECT_FALSE(aeron_file_exists(target));
+
+    aeron_err_clear();
+    aeron_delete_file(link);
 }
 #endif
 

@@ -126,7 +126,7 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
         }
         else
         {
-            AERON_APPEND_ERR("Failed to open: %s", buffer);
+            AERON_APPEND_ERR("%s", "");
 
             FILE *fallback_logger = stderr;
             AERON_FPRINTF(fallback_logger, "ERROR: Failed to save existing errors to: %s\n", buffer);
