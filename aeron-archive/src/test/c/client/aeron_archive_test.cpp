@@ -5192,7 +5192,7 @@ TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsW
     uint8_t cnc[8192];
     memset(cnc, 0, sizeof(cnc));
 
-    aeron_cnc_metadata_t *cnc_metadata = reinterpret_cast<aeron_cnc_metadata_t *>(cnc);
+    auto *cnc_metadata = reinterpret_cast<aeron_cnc_metadata_t *>(cnc);
     cnc_metadata->to_driver_buffer_length = 1024;
     cnc_metadata->to_clients_buffer_length = 1024 + AERON_BROADCAST_BUFFER_TRAILER_LENGTH;
     cnc_metadata->counter_metadata_buffer_length = 1024;
@@ -5208,8 +5208,8 @@ TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsW
     aeron_context->cnc_map.addr = &cnc;
     aeron_context->cnc_map.length = sizeof(cnc);
     aeron_context->use_conductor_agent_invoker = true;
-    aeron_context->idle_strategy_func = aeron_idle_strategy_noop_idle;
-    aeron_context->idle_strategy_state = nullptr;
+    aeron_context_set_idle_strategy(aeron_context, "noop");
+    aeron_context_set_idle_strategy_init_args(aeron_context, nullptr);
     ASSERT_TRUE(aeron_cnc_is_file_length_sufficient(&aeron_context->cnc_map));
 
     aeron_t *client = nullptr;
@@ -5236,13 +5236,14 @@ TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsW
         client->context->idle_strategy_state));
     EXPECT_EQ(0, aeron_start(client));
 
-    aeron_archive_context_t context = {};
-    context.message_retry_attempts = 1;
-    context.aeron = client;
-    context.owns_aeron_client = false;
+    aeron_archive_context_t *context = nullptr;
+    aeron_archive_context_init(&context);
+    context->message_retry_attempts = 1;
+    context->aeron = client;
+    context->owns_aeron_client = false;
     auto channel = "aeron:ipc?term-length=64k|mtu=1408|sparse=true";
-    aeron_archive_context_set_control_request_channel(&context, channel);
-    aeron_archive_context_set_control_response_channel(&context, channel);
+    aeron_archive_context_set_control_request_channel(context, channel);
+    aeron_archive_context_set_control_response_channel(context, channel);
 
     struct invoker_data
     {
@@ -5262,12 +5263,13 @@ TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsW
         }
         data->called = true;
     };
-    aeron_archive_context_set_delegating_invoker(&context, test_invoker, &invoker_data);
+    aeron_archive_context_set_delegating_invoker(context, test_invoker, &invoker_data);
 
-    EXPECT_EQ(-1, aeron_archive_context_conclude(&context));
+    EXPECT_EQ(-1, aeron_archive_context_conclude(context));
     EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
     EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("client must be closed and discarded"));
 
     EXPECT_EQ(0, aeron_close(client));
     EXPECT_EQ(0, aeron_context_close(aeron_context));
+    EXPECT_EQ(0, aeron_archive_context_close(context));
 }
