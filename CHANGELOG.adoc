@@ -1,6 +1,8 @@
 = Aeron Releases
 
-== 1.54.0 (unreleased)
+== 1.55.0 (unreleased)
+
+== 1.54.0 (2026-10-27)
 
 === New & Noteworthy
 
@@ -47,8 +49,39 @@ media driver the APIs that lookup `rec-pos` counters were modified to include `a
 ** `aeron_archive_recording_pos_find_counter_id_by_recording_id` and `aeron_archive_recording_pos_find_counter_id_by_session_id`.
 ** `aeron::archive::client::RecordingPos::findCounterIdByRecordingId` and `aeron::archive::client::RecordingPos::findCounterIdBySessionId`.
 
+*  **Breaking:** **[Client/C]** Error handling changes around `do_work` functions used in `aeron_agent`. If such a
+function returns a negative value then the `aeron_agent` will terminate its work loop, i.e. it will exit silently after
+clearing the error.
+
+*  **Breaking:** **[Client/C]** `aeron_client_conductor_do_work` and its wrapper `aeron_main_do_work` will now
+return `-1` when conductor encounters a non-recoverable error (e.g. driver timeout). The actual error is available via
+`aeron_errcode()/aeron_errmsg()` but only during the call to `aeron_client_conductor_do_work` that detected the error.
+Any subsequent invocation of the `aeron_client_conductor_do_work` or almost every other public method in
+`aeron_client_conductor_t` will also fail but will set a special error code
+`AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE (1005)`.
++
+TIP: Aeron error codes have a positive range but are reported via `AERON_SET_ERR` as negative values
+(e.g. `-1005` for `AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE`).
+
 === Changelog
 
+* **[Archive]** Fix SIGSEGV when closing sessions after the archive's Aeron client times out. (#2204)
+* **[Driver/C]** Prevent an untethered subscription in `LINGER` state from keeping an image, network publication (spy)
+or an IPC publication stuck in `DRAINING` state forever.
+* **[C]** Remove linking to `wsock32`. (https://github.com/aeron-io/aeron/pull/2206[#2206]).
+* **[Cluster]** Move taking a zero service consensus module snapshot from `slowTickWork` to `consensusWork`.
+* **[Driver/C]** Validate that `network_publication_max_messages_per_send` does not exceed `sender_io_vector_capacity`.
+* **[Samples/C]** Fix `streaming_exclusive_publisher` message size parsing with `-L` option.
+* **[Samples/C]** Do not set `AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND`, because default value is larger.
+* **[Archive/Java]** Improve Archive final frame recovery. (https://github.com/aeron-io/aeron/pull/2217[#2217])
+* **[Client/C]** Fail fast when invoking `aeron_t` or `aeron_archive_t` operations if object is in invalid state.
+* **[Client/C]** Handle negative return from `aeron_agent_do_work_func_t` in the `aeron_agent_runner_t`.
+* **[Driver/C]** Fix a SEGV when conductor freed endpoint before receiver tried to remove state from data packet dispatcher.
+* **[Driver/C]** Fix a SEGV when creating a tagged network subscription, i.e. don't allow driver conductor to re-use a `CLOSED` endpoint.
+* **[Archive/Java]** Remove deprecated `findCounterIdByRecording` and `findCounterIdBySession` overloads.
+* **[Archive/C/C{plus}{plus} Wrapper]** Change APIs that lookup `rec-pos` counters to include `archiveId`.
+* **[Archive/C]** Rename persistent subscription specific counter constants.
+* **[C/C{plus}{plus} Wrapper]** Add missing counter types.
 * **[Archive/Java]** Fix SIGSEGV when closing sessions after the archive's Aeron client times out. (https://github.com/aeron-io/aeron/pull/2204[#2204])
 * **[Cluster]** Fix 15s deadlock when the clustered service's Aeron client times out. (https://github.com/aeron-io/aeron/pull/2205[#2205])
 * **[Archive/Java]** Invoke `AgentInvokers` while waiting for the replay control publication to connect when starting replay using response channels.
