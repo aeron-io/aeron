@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -472,6 +472,35 @@ class ReplaySessionTest
             validateFrame(termBuffer, 2 * FRAME_LENGTH, FRAME_LENGTH, 2, END_FRAG_FLAG, sessionId, streamId);
             verify(mockReplayPub).appendPadding(FRAME_LENGTH - HEADER_LENGTH);
 
+            assertTrue(replaySession.isDone());
+        }
+    }
+
+    @Test
+    void shouldResumeReplayWhenMidFrameLimitIsExtended()
+    {
+        recordingSummary.stopPosition = NULL_POSITION;
+        recordingPosition = START_POSITION + FRAME_LENGTH;
+        when(mockReplayPub.isConnected()).thenReturn(true);
+        final UnsafeBuffer termBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(4096));
+        mockPublication(mockReplayPub, termBuffer);
+
+        try (ReplaySession replaySession = replaySession(
+            START_POSITION, 3 * FRAME_LENGTH, 1L, mockReplayPub, mockControlSession, recordingPositionCounter, null))
+        {
+            assertNotEquals(0, replaySession.doWork());
+            assertEquals(FRAME_LENGTH, offerBlockOffset);
+
+            recordingPosition += FRAME_ALIGNMENT / 2;
+            assertEquals(0, replaySession.doWork());
+            assertEquals(FRAME_LENGTH, offerBlockOffset);
+            assertEquals(ReplaySession.State.REPLAY, replaySession.state());
+
+            recordingPosition = START_POSITION + 3 * FRAME_LENGTH;
+            assertNotEquals(0, replaySession.doWork());
+            assertEquals(3 * FRAME_LENGTH, offerBlockOffset);
+            validateFrame(termBuffer, FRAME_LENGTH, FRAME_LENGTH, 1, BEGIN_FRAG_FLAG, 0, 0);
+            validateFrame(termBuffer, 2 * FRAME_LENGTH, FRAME_LENGTH, 2, END_FRAG_FLAG, 0, 0);
             assertTrue(replaySession.isDone());
         }
     }
