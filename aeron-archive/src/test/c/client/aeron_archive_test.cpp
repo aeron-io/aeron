@@ -5269,4 +5269,5 @@ TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsW
     EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("client must be closed and discarded"));
 
     EXPECT_EQ(0, aeron_close(client));
+    EXPECT_EQ(0, aeron_context_close(aeron_context));
 }
