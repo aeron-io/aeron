@@ -277,14 +277,6 @@ int aeron_driver_context_set_receiver_poll_to_slow_work_ratio(aeron_driver_conte
 size_t aeron_driver_context_get_receiver_poll_to_slow_work_ratio(aeron_driver_context_t *context);
 
 /**
- * Limit the number of images that the Receiver can process in a single duty cycle.
- */
-#define AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT_ENV_VAR "AERON_RECEIVER_IMAGES_PER_DUTY_CYCLE_LIMIT"
-
-int aeron_driver_context_set_receiver_images_per_duty_cycle_limit(aeron_driver_context_t *context, int32_t value);
-int32_t aeron_driver_context_get_receiver_images_per_duty_cycle_limit(aeron_driver_context_t *context);
-
-/**
  * Status Message timeout in nanoseconds.
  */
 #define AERON_RCV_STATUS_MESSAGE_TIMEOUT_ENV_VAR "AERON_RCV_STATUS_MESSAGE_TIMEOUT"

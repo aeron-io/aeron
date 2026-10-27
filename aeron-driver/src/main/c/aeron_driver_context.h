@@ -227,7 +227,6 @@ typedef struct aeron_driver_context_stct
     int32_t publication_reserved_session_id_low;            /* aeron.publication.reserved.session.id.low = -1 */
     int32_t publication_reserved_session_id_high;           /* aeron.publication.reserved.session.id.high = 1000 */
     uint8_t multicast_ttl;                                  /* aeron.socket.multicast.ttl = 0 */
-    int32_t receiver_images_per_duty_cycle_limit;           /* aeron.receiver.images.per.duty.cycle.limit = 16 */
     uint32_t receiver_io_vector_capacity;                   /* aeron.receiver.io.vector.capacity = 4 */
     uint32_t sender_io_vector_capacity;                     /* aeron.sender.io.vector.capacity = 4 */
     uint32_t network_publication_max_messages_per_send;     /* aeron.network.publication.max.messages.per.send = 4 */

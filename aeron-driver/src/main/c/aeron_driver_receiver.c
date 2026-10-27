@@ -92,8 +92,6 @@ int aeron_driver_receiver_init(
     receiver->duty_cycle_ratio = context->receiver_poll_to_slow_work_ratio;
     receiver->status_message_send_timeout_ns = (int64_t)(context->status_message_timeout_ns >> 1);
     receiver->slow_tick_work_deadline_ns = 0;
-    receiver->images_per_cycle_limit = context->receiver_images_per_duty_cycle_limit;
-    receiver->next_image_index = -1;
 
     receiver->receiver_proxy.command_queue = &context->receiver_command_queue;
     receiver->receiver_proxy.fail_counter = aeron_system_counter_addr(
@@ -135,15 +133,9 @@ static int aeron_driver_receiver_slow_tick_work(aeron_driver_receiver_t *receive
         receiver,
         AERON_COMMAND_DRAIN_LIMIT);
 
-    int next = receiver->next_image_index;
-    if (next < 0)
+    for (int i = (int)receiver->images.length - 1; i >= 0; i--)
     {
-        next = (int)receiver->images.length - 1;
-    }
-
-    for (int limit = receiver->images_per_cycle_limit; next >= 0 && limit > 0; next--, limit--)
-    {
-        aeron_publication_image_t *image = receiver->images.array[next].image;
+        aeron_publication_image_t *image = receiver->images.array[i].image;
 
         if (NULL != image->endpoint)
         {
@@ -182,7 +174,6 @@ static int aeron_driver_receiver_slow_tick_work(aeron_driver_receiver_t *receive
         }
     }
 
-    receiver->next_image_index = next;
     receiver->duty_cycle_counter = 0;
     receiver->slow_tick_work_deadline_ns = now_ns + receiver->status_message_send_timeout_ns;
 

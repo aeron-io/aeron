@@ -590,7 +590,6 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     AERON_FPRINTF(fpout, "\n    loss_report_length=%" PRIu64, (uint64_t)context->loss_report_length);
     AERON_FPRINTF(fpout, "\n    send_to_sm_poll_ratio=%" PRIu64, (uint64_t)context->send_to_sm_poll_ratio);
     AERON_FPRINTF(fpout, "\n    receiver_poll_to_slow_work_ratio=%" PRIu64, (uint64_t)context->receiver_poll_to_slow_work_ratio);
-    AERON_FPRINTF(fpout, "\n    receiver_images_per_duty_cycle_limit=%" PRIi32, context->receiver_images_per_duty_cycle_limit);
     AERON_FPRINTF(fpout, "\n    receiver_io_vector_capacity=%" PRIu64, (uint64_t)context->receiver_io_vector_capacity);
     AERON_FPRINTF(fpout, "\n    sender_io_vector_capacity=%" PRIu64, (uint64_t)context->sender_io_vector_capacity);
     AERON_FPRINTF(

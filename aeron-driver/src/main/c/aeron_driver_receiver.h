@@ -94,8 +94,6 @@ typedef struct aeron_driver_receiver_stct
     int64_t status_message_send_timeout_ns;
     size_t duty_cycle_counter;
     size_t duty_cycle_ratio;
-    int32_t images_per_cycle_limit;
-    int32_t next_image_index;
 
     int64_t *errors_counter;
     int64_t *invalid_frames_counter;
