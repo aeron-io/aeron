@@ -21,6 +21,8 @@ The driver binary requires the following dependencies.
 	- Windows Version >= Vista 
 	- MSVC >= v141 (Visual Studio 2017)
 	
+**Note:** The C Media Driver is supported in production on Linux. Windows build can be used for local development.
+
 ## Configuration
 
 All configuration for the C media driver is done, currently, via environment variables. The variables are directly related to the Java properties
