@@ -918,7 +918,13 @@ final class ConsensusModuleAgent
         else if (Cluster.Role.LEADER == role)
         {
             final ClusterMember follower = clusterMemberByIdMap.get(followerMemberId);
-            if (null != follower && logLeadershipTermId <= this.leadershipTermId)
+            if (null != follower && leadershipTermId > this.leadershipTermId)
+            {
+                enterElection(false, "unexpected canvass position:" +
+                    " this.leadershipTermId=" + this.leadershipTermId +
+                    " leadershipTermId=" + leadershipTermId);
+            }
+            else if (null != follower && logLeadershipTermId <= this.leadershipTermId)
             {
                 updateMemberLogPosition(follower, logLeadershipTermId, logPosition);
                 stopExistingCatchupReplay(follower);

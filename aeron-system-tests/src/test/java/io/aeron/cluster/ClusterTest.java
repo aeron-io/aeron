@@ -99,6 +99,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -196,6 +197,36 @@ class ClusterTest
         assertEquals(FOLLOWER, follower.role());
         assertEquals(1 /* new counter */, follower.consensusModule().context().electionCounter().get());
         assertEquals(1, leader.consensusModule().context().electionCounter().get());
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void shouldRejoinAfterRestartWithVoteInHigherTermThanLeader() throws IOException
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        TestNode follower = cluster.followers().get(0);
+        awaitElectionClosed(follower);
+
+        final File clusterDir = follower.consensusModule().context().clusterDir();
+        cluster.stopNode(follower);
+
+        // Simulate that the follower voted in a later term whose election never completed.
+        try (NodeStateFile nodeStateFile = new NodeStateFile(clusterDir, false, 0))
+        {
+            nodeStateFile.proposeMaxCandidateTermId(
+                nodeStateFile.candidateTerm().candidateTermId() + 1, 0, System.currentTimeMillis());
+        }
+
+        final long leaderElectionCount = leader.electionCount();
+        follower = cluster.startStaticNode(follower.index(), false);
+
+        // The leader steps down outside of an election when it sees the follower's newer term.
+        Tests.await(() -> leader.electionCount() > leaderElectionCount);
+        awaitElectionClosed(follower);
+        cluster.awaitLeader();
     }
 
     @Test
