@@ -1318,8 +1318,12 @@ static void aeron_client_conductor_force_close_resource(void *clientd, int64_t k
     }
 }
 
-static void aeron_client_conductor_force_close_resources(aeron_client_conductor_t *conductor)
+static void aeron_client_conductor_force_close_resources(
+    aeron_client_conductor_t *conductor, int error_code, const char* error_message)
 {
+    conductor->fatal_error_code = error_code;
+    conductor->error_handler(conductor->error_handler_clientd, error_code, error_message);
+
     /*
      * loop will be terminating. So, will not process lingering, etc. Let the aeron_close() cleanup
      * everything when the app is ready, but we want to mark everything as closed so that it won't be used.
@@ -1330,6 +1334,22 @@ static void aeron_client_conductor_force_close_resources(aeron_client_conductor_
         &conductor->image_by_key_map, aeron_client_conductor_force_close_image, NULL);
     aeron_int64_to_ptr_hash_map_for_each(
         &conductor->resource_by_id_map, aeron_client_conductor_force_close_resource, NULL);
+
+    size_t error_message_length = strlen(error_message);
+    for (size_t i = 0, size = conductor->registering_resources.length; i < size; i++)
+    {
+        aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status)
+        {
+            aeron_client_conductor_on_resource_registration_error(
+                resource, error_code, error_message_length, error_message);
+        }
+    }
+
+    aeron_err_clear();
+    AERON_SET_ERR(-conductor->fatal_error_code, "%s", error_message);
 }
 
 static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *conductor, int64_t now_ns)
@@ -1341,22 +1361,13 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
 
         if (AERON_NULL_VALUE == last_keepalive_ms)
         {
-            conductor->fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
-            aeron_client_conductor_force_close_resources(conductor);
-
-            char *buffer = "MediaDriver has been shutdown";
-            conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
-
-            AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
-
+            aeron_client_conductor_force_close_resources(
+                conductor, AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "MediaDriver has been shutdown");
             return -1;
         }
 
         if (now_ms > (last_keepalive_ms + (int64_t)conductor->driver_timeout_ms))
         {
-            conductor->fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
-            aeron_client_conductor_force_close_resources(conductor);
-
             char buffer[128];
             snprintf(
                 buffer,
@@ -1366,8 +1377,7 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
                 (int64_t)conductor->driver_timeout_ms);
             conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
 
-            AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
-
+            aeron_client_conductor_force_close_resources(conductor, AERON_CLIENT_ERROR_DRIVER_TIMEOUT, buffer);
             return -1;
         }
 
@@ -1418,15 +1428,11 @@ static int aeron_client_conductor_check_liveness(aeron_client_conductor_t *condu
             if (!aeron_counter_heartbeat_timestamp_is_active(
                 &conductor->counters_reader, id, AERON_COUNTER_CLIENT_HEARTBEAT_TIMESTAMP_TYPE_ID, conductor->client_id))
             {
-                conductor->fatal_error_code = AERON_CLIENT_ERROR_DRIVER_TIMEOUT;
-                aeron_client_conductor_force_close_resources(conductor);
-
                 char buffer[64];
                 snprintf(buffer, sizeof(buffer), "unexpected close of heartbeat timestamp counter: %" PRId32, id);
                 conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
 
-                AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
-
+                aeron_client_conductor_force_close_resources(conductor, AERON_CLIENT_ERROR_DRIVER_TIMEOUT, buffer);
                 return -1;
             }
 
@@ -1776,9 +1782,6 @@ static int aeron_client_conductor_on_check_timeouts(aeron_client_conductor_t *co
     {
         if (now_ns > (conductor->time_of_last_service_ns + (int64_t)conductor->inter_service_timeout_ns))
         {
-            conductor->fatal_error_code = AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT;
-            aeron_client_conductor_force_close_resources(conductor);
-
             char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
             snprintf(buffer, sizeof(buffer),
                 "service interval exceeded in ns: timeout=%" PRId64 ", interval=%" PRId64,
@@ -1787,8 +1790,7 @@ static int aeron_client_conductor_on_check_timeouts(aeron_client_conductor_t *co
             conductor->error_handler(
                 conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
 
-            AERON_SET_ERR(-conductor->fatal_error_code, "%s", buffer);
-
+            aeron_client_conductor_force_close_resources(conductor, AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, buffer);
             return -1;
         }
 
@@ -2774,13 +2776,9 @@ int aeron_client_conductor_do_work(aeron_client_conductor_t *conductor)
         &conductor->to_client_buffer, aeron_client_conductor_on_driver_response, conductor);
     if (result < 0)
     {
-        conductor->fatal_error_code = AERON_CLIENT_ERROR_BROADCAST_RECEIVER_ILLEGAL_STATE;
-        aeron_client_conductor_force_close_resources(conductor);
-
         AERON_APPEND_ERR("%s", "aeron_broadcast_receiver_receive failed");
-        conductor->error_handler(
-            conductor->error_handler_clientd, AERON_CLIENT_ERROR_BROADCAST_RECEIVER_ILLEGAL_STATE, aeron_errmsg());
-
+        aeron_client_conductor_force_close_resources(
+            conductor, AERON_CLIENT_ERROR_BROADCAST_RECEIVER_ILLEGAL_STATE, aeron_errmsg());
         return -1;
     }
     work_count += result;
@@ -3705,12 +3703,7 @@ int aeron_client_conductor_on_client_timeout(aeron_client_conductor_t *conductor
 {
     if (response->client_id == conductor->client_id)
     {
-        conductor->fatal_error_code = AERON_CLIENT_ERROR_CLIENT_TIMEOUT;
-        aeron_client_conductor_force_close_resources(conductor);
-
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%s", "client timeout from driver");
-        conductor->error_handler(conductor->error_handler_clientd, conductor->fatal_error_code, buffer);
+        aeron_client_conductor_force_close_resources(conductor, AERON_CLIENT_ERROR_CLIENT_TIMEOUT, "client timeout from driver");
     }
 
     return 0;

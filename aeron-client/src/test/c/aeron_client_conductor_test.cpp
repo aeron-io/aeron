@@ -1208,6 +1208,25 @@ TEST_F(ClientConductorTest, shouldCreateServiceIntervalTimeoutError)
     ASSERT_EQ(-AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, aeron_errcode());
 }
 
+TEST_F(ClientConductorTest, shouldFreeRegisteredResourcesOnTimeout)
+{
+    int errorcode = 0;
+    m_conductor.error_handler_clientd = &errorcode;
+    m_conductor.error_handler = save_last_errorcode;
+
+    aeron_async_add_publication_t *async = nullptr;
+    EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    EXPECT_EQ(AERON_CLIENT_REGISTRATION_STATUS_AWAITING, async->registration_status);
+
+    doWork();
+    ASSERT_EQ(-1, doWorkForNs(CLIENT_LIVENESS_TIMEOUT + 1, false, CLIENT_LIVENESS_TIMEOUT + 1));
+
+    ASSERT_EQ(AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, errorcode);
+    ASSERT_EQ(-AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, aeron_errcode());
+    EXPECT_EQ(AERON_CLIENT_REGISTRATION_STATUS_ERRORED, async->registration_status);
+    ASSERT_EQ(AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, async->error_code);
+}
+
 TEST_F(ClientConductorTest, shouldCreateDriverTimeoutError)
 {
     int errorcode = 0;
