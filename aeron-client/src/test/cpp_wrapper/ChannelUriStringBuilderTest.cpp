@@ -133,6 +133,20 @@ TEST(ChannelUriStringBuilderTest, shouldGenerateReceiverWindowLength)
         "aeron:udp?endpoint=localhost:9999|rcv-wnd=4096");
 }
 
+TEST(ChannelUriStringBuilderTest, shouldGeneratePublicationWindowLength)
+{
+    ChannelUriStringBuilder builder;
+
+    builder
+        .media(UDP_MEDIA)
+        .endpoint("localhost:9999")
+        .publicationWindowLength(4096);
+
+    ASSERT_EQ(
+        builder.build(),
+        "aeron:udp?endpoint=localhost:9999|pub-wnd=4096");
+}
+
 TEST(ChannelUriStringBuilderTest, shouldGenerateUntetheredLingerTimeout)
 {
     ChannelUriStringBuilder builder;
