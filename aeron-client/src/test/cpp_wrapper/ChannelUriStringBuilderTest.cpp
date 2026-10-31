@@ -103,7 +103,7 @@ TEST(ChannelUriStringBuilderTest, shouldGenerateInitialPosition)
         "aeron:udp?endpoint=localhost:9999|term-length=131072|init-term-id=777|term-id=780|term-offset=64");
 }
 
-TEST(ChannelUriStringBuilderTest, shouldGenerateSocketSndRcvbufLengths)
+TEST(ChannelUriStringBuilderTest, shouldGenerateSocketSndRcvbufLengthsAndTos)
 {
     ChannelUriStringBuilder builder;
 
@@ -111,11 +111,12 @@ TEST(ChannelUriStringBuilderTest, shouldGenerateSocketSndRcvbufLengths)
         .media(UDP_MEDIA)
         .endpoint("localhost:9999")
         .socketSndbufLength(8192)
-        .socketRcvbufLength(4096);
+        .socketRcvbufLength(4096)
+        .socketTos(255);
 
     ASSERT_EQ(
         builder.build(),
-        "aeron:udp?endpoint=localhost:9999|so-sndbuf=8192|so-rcvbuf=4096");
+        "aeron:udp?endpoint=localhost:9999|so-sndbuf=8192|so-rcvbuf=4096|so-tos=255");
 }
 
 TEST(ChannelUriStringBuilderTest, shouldGenerateReceiverWindowLength)
