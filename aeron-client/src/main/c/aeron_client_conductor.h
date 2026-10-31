@@ -32,10 +32,10 @@
 typedef enum aeron_client_registration_status_en
 {
     AERON_CLIENT_REGISTRATION_STATUS_AWAITING,
-    AERON_CLIENT_REGISTRATION_STATUS_REGISTERED,      // driver by driver
-    AERON_CLIENT_REGISTRATION_STATUS_ERRORED,        // driver by driver
-    AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT,      // driver by driver
-    AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED, // driver by client
+    AERON_CLIENT_REGISTRATION_STATUS_REGISTERED,      // driven by driver
+    AERON_CLIENT_REGISTRATION_STATUS_ERRORED,         // driven by driver
+    AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT,       // driven by driver
+    AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED,  // driven by client
 }
 aeron_client_registration_status_t;
 
