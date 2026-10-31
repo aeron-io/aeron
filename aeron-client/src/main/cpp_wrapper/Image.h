@@ -130,7 +130,7 @@ public:
 
     ~Image()
     {
-        aeron_image_release(m_image);
+        aeron_subscription_image_release(m_subscription, m_image);
     }
 
     /**
