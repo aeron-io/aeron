@@ -585,6 +585,7 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
     if (file_length > min_length)
     {
         aeron_mapped_file_t cnc_mmap;
+        // codeql[cpp/path-injection]
         if (aeron_map_existing_file(&cnc_mmap, filename) < 0)
         {
             AERON_APPEND_ERR("%s", "Failed to map cnc for driver termination");
