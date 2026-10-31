@@ -64,6 +64,7 @@ public:
         m_ssc.reset(nullptr);
         m_socketRcvbufLength.reset(nullptr);
         m_socketSndbufLength.reset(nullptr);
+        m_socketTos.reset(nullptr);
         m_receiverWindowLength.reset(nullptr);
         m_isSessionIdTagged = false;
         m_mediaReceiveTimestampOffset.reset(nullptr);
@@ -334,6 +335,23 @@ public:
         return *this;
     }
 
+    inline this_t &socketTos(std::int32_t socketTos)
+    {
+        if (socketTos < 0 || socketTos > 255)
+        {
+            throw IllegalArgumentException("socketTos must be between 0 and 255 inclusive: " + std::to_string(socketTos), SOURCEINFO, EINVAL);
+        }
+
+        m_socketTos.reset(new Value(socketTos));
+        return *this;
+    }
+
+    inline this_t &socketTos(std::nullptr_t)
+    {
+        m_socketTos.reset(nullptr);
+        return *this;
+    }
+
     inline this_t &receiverWindowLength(std::uint32_t receiverWindowLength)
     {
         m_receiverWindowLength.reset(new Value(receiverWindowLength));
@@ -511,6 +529,7 @@ public:
 
         append(sb, SOCKET_SNDBUF_PARAM_NAME, m_socketSndbufLength);
         append(sb, SOCKET_RCVBUF_PARAM_NAME, m_socketRcvbufLength);
+        append(sb, SOCKET_TOS_PARAM_NAME, m_socketTos);
         append(sb, RECEIVER_WINDOW_LENGTH_PARAM_NAME, m_receiverWindowLength);
         append(sb, MEDIA_RCV_TIMESTAMP_OFFSET_PARAM_NAME, m_mediaReceiveTimestampOffset);
         append(sb, CHANNEL_RCV_TIMESTAMP_OFFSET_PARAM_NAME, m_channelReceiveTimestampOffset);
@@ -572,6 +591,7 @@ private:
     std::unique_ptr<Value> m_ssc;
     std::unique_ptr<Value> m_socketSndbufLength;
     std::unique_ptr<Value> m_socketRcvbufLength;
+    std::unique_ptr<Value> m_socketTos;
     std::unique_ptr<Value> m_receiverWindowLength;
     std::unique_ptr<Value> m_responseCorrelationId;
     std::unique_ptr<Value> m_nakDelay;

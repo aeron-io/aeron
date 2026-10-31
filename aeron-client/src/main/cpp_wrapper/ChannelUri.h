@@ -63,6 +63,7 @@ static constexpr const char GROUP_TAG_PARAM_NAME[] = "gtag";
 static constexpr const char SPIES_SIMULATE_CONNECTION_PARAM_NAME[] = "ssc";
 static constexpr const char SOCKET_SNDBUF_PARAM_NAME[] = "so-sndbuf";
 static constexpr const char SOCKET_RCVBUF_PARAM_NAME[] = "so-rcvbuf";
+static constexpr const char SOCKET_TOS_PARAM_NAME[] = "so-tos";
 static constexpr const char RECEIVER_WINDOW_LENGTH_PARAM_NAME[] = "rcv-wnd";
 static constexpr const char MEDIA_RCV_TIMESTAMP_OFFSET_PARAM_NAME[] = "media-rcv-ts-offset";
 static constexpr const char CHANNEL_RCV_TIMESTAMP_OFFSET_PARAM_NAME[] = "channel-rcv-ts-offset";
