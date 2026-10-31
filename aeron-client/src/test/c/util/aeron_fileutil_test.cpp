@@ -16,6 +16,7 @@
 
 #include <exception>
 #include <functional>
+#include <string>
 
 #include <gtest/gtest.h>
 
@@ -31,6 +32,7 @@ int aeron_create_file(const char *path, size_t length, bool sparse_file);
 #include <io.h>
 #else
 #include <unistd.h>
+#include <sys/stat.h>
 #endif
 
 #if defined(AERON_COMPILER_GCC)
@@ -412,6 +414,115 @@ TEST_F(FileUtilTest, recursiveMkdir)
     ASSERT_EQ(0, aeron_mkdir_recursive(dirY, S_IRWXU | S_IRWXG | S_IRWXO));
     ASSERT_EQ(0, aeron_mkdir_recursive(dirZ, S_IRWXU | S_IRWXG | S_IRWXO));
 }
+
+static std::string readFileContents(const char *path)
+{
+    std::string contents;
+    FILE *f = fopen(path, "r");
+    if (nullptr != f)
+    {
+        char buffer[256];
+        size_t length;
+        while ((length = fread(buffer, 1, sizeof(buffer), f)) > 0)
+        {
+            contents.append(buffer, length);
+        }
+        fclose(f);
+    }
+
+    return contents;
+}
+
+TEST_F(FileUtilTest, openFileCreateNewShouldCreateWritableFile)
+{
+    const char *path = "aeron_create_new_test.log";
+    aeron_delete_file(path);
+
+    auto f = static_cast<FILE *>(aeron_open_file_create_new(path));
+    ASSERT_NE(nullptr, f) << aeron_errmsg();
+    fputs("saved errors", f);
+    fclose(f);
+
+    EXPECT_EQ("saved errors", readFileContents(path));
+    aeron_delete_file(path);
+}
+
+TEST_F(FileUtilTest, openFileCreateNewShouldFailIfFileExists)
+{
+    const char *path = "aeron_create_new_existing.log";
+    aeron_delete_file(path);
+
+    auto existing = static_cast<FILE *>(aeron_open_file_create_new(path));
+    ASSERT_NE(nullptr, existing) << aeron_errmsg();
+    fputs("original", existing);
+    fclose(existing);
+
+    EXPECT_EQ(nullptr, aeron_open_file_create_new(path));
+    EXPECT_EQ(EEXIST, aeron_errcode());
+    EXPECT_EQ("original", readFileContents(path));
+
+    aeron_err_clear();
+    aeron_delete_file(path);
+}
+
+#if !defined(_MSC_VER)
+TEST_F(FileUtilTest, openFileCreateNewShouldNotBeWorldWritable)
+{
+    const char *path = "aeron_create_new_mode.log";
+    aeron_delete_file(path);
+
+    const mode_t old_umask = umask(0);
+    auto f = static_cast<FILE *>(aeron_open_file_create_new(path));
+    umask(old_umask);
+    ASSERT_NE(nullptr, f) << aeron_errmsg();
+    fclose(f);
+
+    struct stat sb = {};
+    ASSERT_EQ(0, stat(path, &sb));
+    EXPECT_EQ(0644, sb.st_mode & 0777);
+
+    aeron_delete_file(path);
+}
+
+TEST_F(FileUtilTest, openFileCreateNewShouldNotFollowSymlink)
+{
+    const char *target = "aeron_create_new_target.txt";
+    const char *link = "aeron_create_new_link.log";
+    aeron_delete_file(link);
+    aeron_delete_file(target);
+
+    auto existing = static_cast<FILE *>(aeron_open_file_create_new(target));
+    ASSERT_NE(nullptr, existing) << aeron_errmsg();
+    fputs("victim data", existing);
+    fclose(existing);
+    ASSERT_EQ(0, symlink(target, link));
+
+    EXPECT_EQ(nullptr, aeron_open_file_create_new(link));
+    EXPECT_EQ(EEXIST, aeron_errcode());
+    EXPECT_EQ("victim data", readFileContents(target));
+
+    aeron_err_clear();
+    aeron_delete_file(link);
+    aeron_delete_file(target);
+}
+
+TEST_F(FileUtilTest, openFileCreateNewShouldNotFollowDanglingSymlink)
+{
+    const char *target = "aeron_create_new_dangling_target.txt";
+    const char *link = "aeron_create_new_dangling_link.log";
+    aeron_delete_file(link);
+    aeron_delete_file(target);
+
+    ASSERT_EQ(0, symlink(target, link));
+
+    EXPECT_EQ(nullptr, aeron_open_file_create_new(link));
+    EXPECT_EQ(EEXIST, aeron_errcode());
+    EXPECT_FALSE(aeron_file_exists(target));
+
+    aeron_err_clear();
+    aeron_delete_file(link);
+}
+#endif
 
 TEST_F(FileUtilTest, shouldNotDestroyDataWhilePreTouching)
 {
