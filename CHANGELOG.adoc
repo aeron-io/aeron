@@ -7,11 +7,13 @@
 
 * **[Client/C]** Allow unavailable image to be retained and released for safe execution of the `on_unavailable_image`
 callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
+* **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never arrive.  (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.1 (unreleased)
 
 * **[Client/C]** Allow unavailable image to be retained and released for safe execution of the `on_unavailable_image`
 callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
+* **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never arrive.  (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.0 (2026-10-27)
 
