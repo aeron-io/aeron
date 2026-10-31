@@ -74,6 +74,7 @@ static constexpr const char UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME[] = "unte
 static constexpr const char UNTETHERED_LINGER_TIMEOUT_PARAM_NAME[] = "untethered-linger-timeout";
 static constexpr const char UNTETHERED_RESTING_TIMEOUT_PARAM_NAME[] = "untethered-resting-timeout";
 static constexpr const char MAX_RESEND_PARAM_NAME[] = "max-resend";
+static constexpr const char PUBLICATION_WINDOW_LENGTH_PARAM_NAME[] = "pub-wnd";
 
 using namespace aeron::util;
 

@@ -76,6 +76,7 @@ public:
         m_untetheredLingerTimeout.reset(nullptr);
         m_untetheredRestingTimeout.reset(nullptr);
         m_maxResend.reset(nullptr);
+        m_publicationWindowLength.reset(nullptr);
 
         return *this;
     }
@@ -339,7 +340,7 @@ public:
     {
         if (socketTos < 0 || socketTos > 255)
         {
-            throw IllegalArgumentException("socketTos must be between 0 and 255 inclusive: " + std::to_string(socketTos), SOURCEINFO, EINVAL);
+            throw IllegalArgumentException("socket tos must be between 0 and 255 inclusive: " + std::to_string(socketTos), SOURCEINFO, EINVAL);
         }
 
         m_socketTos.reset(new Value(socketTos));
@@ -436,6 +437,23 @@ public:
     inline this_t &maxResend(std::int32_t maxResend)
     {
         m_maxResend.reset(new Value(maxResend));
+        return *this;
+    }
+
+    inline this_t &publicationWindowLength(std::int32_t publicationWindowLength)
+    {
+        if (publicationWindowLength < 0)
+        {
+            throw IllegalArgumentException("publication window length value cannot be negative: " + std::to_string(publicationWindowLength), SOURCEINFO, EINVAL);
+        }
+
+        m_publicationWindowLength.reset(new Value(publicationWindowLength));
+        return *this;
+    }
+
+    inline this_t &publicationWindowLength(std::nullptr_t)
+    {
+        m_publicationWindowLength.reset(nullptr);
         return *this;
     }
 
@@ -540,6 +558,7 @@ public:
         append(sb, UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, m_untetheredLingerTimeout);
         append(sb, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, m_untetheredRestingTimeout);
         append(sb, MAX_RESEND_PARAM_NAME, m_maxResend);
+        append(sb, PUBLICATION_WINDOW_LENGTH_PARAM_NAME, m_publicationWindowLength);
 
         std::string result = sb.str();
         const char lastChar = result.back();
@@ -599,6 +618,7 @@ private:
     std::unique_ptr<Value> m_untetheredLingerTimeout;
     std::unique_ptr<Value> m_untetheredRestingTimeout;
     std::unique_ptr<Value> m_maxResend;
+    std::unique_ptr<Value> m_publicationWindowLength;
     std::unique_ptr<std::string> m_mediaReceiveTimestampOffset;
     std::unique_ptr<std::string> m_channelReceiveTimestampOffset;
     std::unique_ptr<std::string> m_channelSendTimestampOffset;
