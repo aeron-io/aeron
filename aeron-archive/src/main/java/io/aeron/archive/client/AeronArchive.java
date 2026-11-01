@@ -453,6 +453,7 @@ public final class AeronArchive implements AutoCloseable
         try
         {
             ensureConnected();
+            context.runInvokers();
 
             final ControlResponsePoller poller = controlResponsePoller;
             if (!poller.subscription().isConnected())
@@ -498,6 +499,7 @@ public final class AeronArchive implements AutoCloseable
         try
         {
             ensureConnected();
+            context.runInvokers();
 
             final ControlResponsePoller poller = controlResponsePoller;
             if (!poller.subscription().isConnected())
@@ -557,6 +559,7 @@ public final class AeronArchive implements AutoCloseable
         try
         {
             ensureConnected();
+            context.runInvokers();
 
             final ControlResponsePoller poller = controlResponsePoller;
             if (poller.poll() != 0 && poller.isPollComplete())

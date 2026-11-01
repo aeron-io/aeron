@@ -45,6 +45,7 @@ import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SPARSE_PARAM_NAME;
 import static io.aeron.CommonContext.TERM_LENGTH_PARAM_NAME;
+import static io.aeron.archive.client.AeronArchive.NOT_CONNECTED_MSG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -573,5 +574,90 @@ class AeronArchiveTest
         {
             System.clearProperty(AeronArchive.Configuration.MESSAGE_RETRY_ATTEMPTS_PROP_NAME);
         }
+    }
+
+    @Test
+    void pollForRecordingSignalsShouldRunInvokers()
+    {
+        final Context context = mock(Context.class);
+        when(context.aeron()).thenReturn(aeron);
+        when(context.lock()).thenReturn(NoOpLock.INSTANCE);
+
+        final Aeron.Context aeronCtx = new Aeron.Context();
+        aeronCtx.nanoClock(SystemNanoClock.INSTANCE);
+        when(aeron.context()).thenReturn(aeronCtx);
+
+        when(controlResponsePoller.subscription()).thenReturn(mock(Subscription.class));
+
+        final AeronArchive aeronArchive = new AeronArchive(
+            context,
+            controlResponsePoller,
+            archiveProxy,
+            1,
+            111);
+
+        assertEquals(0, aeronArchive.pollForRecordingSignals());
+
+        final InOrder inOrder = inOrder(context, controlResponsePoller);
+        inOrder.verify(context).runInvokers();
+        inOrder.verify(controlResponsePoller).poll();
+        inOrder.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void pollForErrorResponseShouldRunInvokers()
+    {
+        final Context context = mock(Context.class);
+        when(context.aeron()).thenReturn(aeron);
+        when(context.lock()).thenReturn(NoOpLock.INSTANCE);
+
+        final Aeron.Context aeronCtx = new Aeron.Context();
+        aeronCtx.nanoClock(SystemNanoClock.INSTANCE);
+        when(aeron.context()).thenReturn(aeronCtx);
+
+        when(controlResponsePoller.subscription()).thenReturn(mock(Subscription.class));
+
+        final AeronArchive aeronArchive = new AeronArchive(
+            context,
+            controlResponsePoller,
+            archiveProxy,
+            1,
+            111);
+
+        assertEquals(NOT_CONNECTED_MSG, aeronArchive.pollForErrorResponse());
+
+        final InOrder inOrder = inOrder(context, controlResponsePoller);
+        inOrder.verify(context).runInvokers();
+        inOrder.verify(controlResponsePoller).subscription();
+        inOrder.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void checkForErrorResponseShouldRunInvokers()
+    {
+        final Context context = mock(Context.class);
+        when(context.aeron()).thenReturn(aeron);
+        when(context.lock()).thenReturn(NoOpLock.INSTANCE);
+
+        final Aeron.Context aeronCtx = new Aeron.Context();
+        aeronCtx.nanoClock(SystemNanoClock.INSTANCE);
+        when(aeron.context()).thenReturn(aeronCtx);
+
+        when(controlResponsePoller.subscription()).thenReturn(mock(Subscription.class));
+
+        final AeronArchive aeronArchive = new AeronArchive(
+            context,
+            controlResponsePoller,
+            archiveProxy,
+            1,
+            111);
+
+        assertThrowsExactly(ArchiveException.class, aeronArchive::checkForErrorResponse);
+
+        final InOrder inOrder = inOrder(context, controlResponsePoller, errorHandler);
+        inOrder.verify(context).runInvokers();
+        inOrder.verify(controlResponsePoller).subscription();
+        inOrder.verify(context).errorHandler();
+        inOrder.verifyNoMoreInteractions();
     }
 }
