@@ -2,6 +2,8 @@
 
 == 1.55.0 (unreleased)
 
+* **[Client/C]** For aeron_image_is_end_of_stream and aeron_image_is_publication_revoked return false if null image rather than true with an aeron error code
+
 === New & Noteworthy
 === Changelog
 

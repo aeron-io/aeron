@@ -174,8 +174,7 @@ bool aeron_image_is_end_of_stream(aeron_image_t *image)
 {
     if (NULL == image)
     {
-        AERON_SET_ERR(EINVAL, "Parameters must not be null, image: %s", AERON_NULL_STR(image));
-        return -1;
+        return false;
     }
 
     bool is_closed;
@@ -232,8 +231,7 @@ bool aeron_image_is_publication_revoked(aeron_image_t *image)
 {
     if (NULL == image)
     {
-        AERON_SET_ERR(EINVAL, "Parameters must not be null, image: %s", AERON_NULL_STR(image));
-        return -1;
+        return false;
     }
 
     bool is_publication_revoked;
