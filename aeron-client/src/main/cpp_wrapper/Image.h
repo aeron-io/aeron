@@ -120,6 +120,8 @@ public:
     typedef std::vector<std::shared_ptr<Image>> list_t;
     typedef std::shared_ptr<Image> *array_t;
 
+    Image() = default;
+
     Image(aeron_subscription_t *subscription, aeron_image_t *image) :
         m_subscription(subscription), m_image(image), m_sourceIdentity()
     {
@@ -181,7 +183,10 @@ public:
     inline std::int64_t subscriptionRegistrationId() const
     {
         aeron_subscription_constants_t constants;
-        aeron_subscription_constants(m_subscription, &constants);
+        if (aeron_subscription_constants(m_subscription, &constants) < 0)
+        {
+            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
         return constants.registration_id;
     }
 
@@ -210,9 +215,9 @@ public:
      *
      * @return source identity of the sending publisher as an abstract concept appropriate for the media.
      */
-    inline std::string sourceIdentity() const
+    inline const std::string &sourceIdentity() const
     {
-        return m_constants.source_identity;
+        return m_sourceIdentity;
     }
 
     /**
@@ -225,6 +230,11 @@ public:
         return aeron_image_is_closed(m_image);
     }
 
+    /**
+     * Was the associated publication revoked?
+     *
+     * @return true if the associated publication was revoked.
+     */
     inline bool isPublicationRevoked() const
     {
         return aeron_image_is_publication_revoked(m_image);
@@ -274,7 +284,13 @@ public:
      */
     inline std::int64_t endOfStreamPosition() const
     {
-        return aeron_image_end_of_stream_position(m_image);
+        std::int64_t position = aeron_image_end_of_stream_position(m_image);
+        if (position < 0)
+        {
+            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
+
+        return position;
     }
 
     inline void reject(std::string reason)
