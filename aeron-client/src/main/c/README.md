@@ -19,6 +19,8 @@ The C API library requires the following dependencies.
 	- Windows Version >= Vista 
 	- MSVC >= v141 (Visual Studio 2017)
 
+**Note:** The C API is supported in production on Linux. Windows build can be used for local development.
+
 ## Documentation and Samples
 
 The C API has a single header that contains the API documentation 
