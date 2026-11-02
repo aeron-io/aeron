@@ -309,3 +309,35 @@ TEST_P(ImageTest, shouldBlockPollImage)
 
     invoker.invoke();
 }
+
+TEST_F(ImageTest, shouldSafelyHandleNullSubscriptionAndImage)
+{
+    Image image{};
+
+    ASSERT_EQ(0, image.termBufferLength());
+    ASSERT_EQ(0, image.positionBitsToShift());
+    ASSERT_EQ(0, image.sessionId());
+    ASSERT_EQ(0, image.correlationId());
+    ASSERT_THROW(image.subscriptionRegistrationId(), util::IllegalArgumentException);
+    ASSERT_EQ(0, image.joinPosition());
+    ASSERT_EQ(0, image.initialTermId());
+    ASSERT_EQ("", image.sourceIdentity());
+    ASSERT_TRUE(image.isClosed());
+    ASSERT_FALSE(image.isPublicationRevoked());
+    ASSERT_THROW(image.position(), util::IllegalArgumentException);
+    ASSERT_EQ(0, image.subscriberPositionId());
+    ASSERT_FALSE(image.isEndOfStream());
+    ASSERT_THROW(image.endOfStreamPosition(), util::IllegalArgumentException);
+    ASSERT_THROW(image.reject("because"), util::IllegalArgumentException);
+    ASSERT_THROW(image.activeTransportCount(), util::IllegalArgumentException);
+
+    auto fragmentHandler = [](AtomicBuffer &, index_t, index_t, Header &) {};
+    auto controlledFragmentHandler = [](AtomicBuffer &, index_t, index_t, Header &) { return ControlledPollAction::CONTINUE; };
+    auto blockHandler = [](AtomicBuffer&, index_t, index_t, std::int32_t, std::int32_t) {};
+
+    ASSERT_THROW(image.poll(fragmentHandler, 1), util::IllegalArgumentException);
+    ASSERT_THROW(image.boundedPoll(fragmentHandler, 1, 1), util::IllegalArgumentException);
+    ASSERT_THROW(image.controlledPoll(controlledFragmentHandler, 1), util::IllegalArgumentException);
+    ASSERT_THROW(image.boundedControlledPoll(controlledFragmentHandler, 1, 1), util::IllegalArgumentException);
+    ASSERT_THROW(image.blockPoll(blockHandler, 1), util::IllegalArgumentException);
+}

@@ -747,6 +747,15 @@ bool aeron_image_is_closed(aeron_image_t *image)
 
 int aeron_image_reject(aeron_image_t *image, const char *reason)
 {
+    if (NULL == image)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "Parameters must not be null, image: %s",
+            AERON_NULL_STR(image));
+        return -1;
+    }
+
     return aeron_subscription_reject_image(
         image->subscription,
         image->key.correlation_id,
