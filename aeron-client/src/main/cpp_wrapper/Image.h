@@ -18,9 +18,7 @@
 #define AERON_IMAGE_H
 
 #include <algorithm>
-#include <array>
 #include <vector>
-#include <atomic>
 #include <cassert>
 #include <functional>
 #include <memory>
@@ -132,7 +130,80 @@ public:
 
     ~Image()
     {
-        aeron_subscription_image_release(m_subscription, m_image);
+        if (nullptr != m_subscription && nullptr != m_image)
+        {
+            aeron_subscription_image_release(m_subscription, m_image);
+        }
+    }
+
+    Image(const Image& other) :
+        m_subscription(other.m_subscription), m_image(other.m_image), m_constants(other.m_constants), m_sourceIdentity(other.m_sourceIdentity)
+    {
+        if (nullptr != m_subscription && nullptr != m_image)
+        {
+            aeron_subscription_image_retain(m_subscription, m_image);
+        }
+    }
+
+    Image& operator=(const Image& other)
+    {
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        std::string copiedSourceIdentity = other.m_sourceIdentity;
+
+        if (nullptr != m_subscription && nullptr != m_image)
+        {
+            aeron_subscription_image_release(m_subscription, m_image);
+        }
+
+        m_subscription = other.m_subscription;
+        m_image = other.m_image;
+        m_constants = other.m_constants;
+        m_sourceIdentity = std::move(copiedSourceIdentity);
+
+        if (nullptr != m_subscription && nullptr != m_image)
+        {
+            aeron_subscription_image_retain(m_subscription, m_image);
+        }
+
+        return *this;
+    }
+
+    Image(Image&& other) noexcept :
+        m_subscription(other.m_subscription), m_image(other.m_image), m_constants(other.m_constants), m_sourceIdentity(std::move(other.m_sourceIdentity))
+    {
+        other.m_subscription = nullptr;
+        other.m_image = nullptr;
+        other.m_constants = {};
+        other.m_sourceIdentity.clear();
+    }
+
+    Image& operator=(Image&& other) noexcept
+    {
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        if (nullptr != m_subscription && nullptr != m_image)
+        {
+            aeron_subscription_image_release(m_subscription, m_image);
+        }
+
+        m_subscription = other.m_subscription;
+        m_image = other.m_image;
+        m_constants = other.m_constants;
+        m_sourceIdentity = std::move(other.m_sourceIdentity);
+
+        other.m_subscription = nullptr;
+        other.m_image = nullptr;
+        other.m_constants = {};
+        other.m_sourceIdentity.clear();
+
+        return *this;
     }
 
     /**

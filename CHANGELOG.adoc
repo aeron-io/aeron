@@ -2,6 +2,7 @@
 
 == 1.55.0 (unreleased)
 
+* **[Client/C{plus}{plus} Wrapper]** Add copy and move constructor and assignment for Image for the correct aeron_image_t refcounts
 * **[Client/C{plus}{plus} Wrapper]** Throw exceptions for Image wrapper methods that encounter c errors
 * **[Client/C]** For aeron_image_end_of_stream_position return -1 if null image
 * **[Client/C]** For aeron_image_is_end_of_stream and aeron_image_is_publication_revoked return false if null image rather than true with an aeron error code
