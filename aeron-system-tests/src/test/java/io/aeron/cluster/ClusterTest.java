@@ -3426,8 +3426,6 @@ class ClusterTest
         final List<TestNode> followers = cluster.followers();
         TestNode fastFollower = followers.get(0);
         final TestNode slowFollower = followers.get(1);
-        final ClusterMember[] clusterMembers =
-            ClusterMember.parse(leader.consensusModule().context().clusterMembers());
 
         cluster.connectClient();
 
