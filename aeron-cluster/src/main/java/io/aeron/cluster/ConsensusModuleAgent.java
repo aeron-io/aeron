@@ -74,6 +74,7 @@ import org.agrona.concurrent.status.CountersReader;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -127,6 +128,10 @@ final class ConsensusModuleAgent
 
     private final long leaderHeartbeatIntervalNs;
     private final long leaderHeartbeatTimeoutNs;
+
+    // Allow the driver to release the previous replay publication before retrying.
+    private final long[] catchupReplayRetryOffsetsNs;
+
     private long unavailableCounterHandlerRegistrationId;
     private long leadershipTermId = NULL_VALUE;
     private long expectedAckPosition = 0;
@@ -176,6 +181,8 @@ final class ConsensusModuleAgent
     private final ConsensusAdapter consensusAdapter;
     private final ConsensusPublisher consensusPublisher = new ConsensusPublisher();
     private final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap = new Int2ObjectHashMap<>();
+    private final Int2ObjectHashMap<PendingCatchupReplay> pendingCatchupReplayByMemberIdMap =
+        new Int2ObjectHashMap<>();
     private final SessionManager sessionManager;
     private final Long2LongCounterMap expiredTimerCountByCorrelationIdMap = new Long2LongCounterMap(0);
     private final LongArrayQueue uncommittedTimers = new LongArrayQueue(Long.MAX_VALUE);
@@ -217,6 +224,8 @@ final class ConsensusModuleAgent
         this.timerService = ctx.timerServiceSupplier().newInstance(clusterTimeUnit, this);
         this.leaderHeartbeatIntervalNs = ctx.leaderHeartbeatIntervalNs();
         this.leaderHeartbeatTimeoutNs = ctx.leaderHeartbeatTimeoutNs();
+        this.catchupReplayRetryOffsetsNs = new long[]{
+            leaderHeartbeatTimeoutNs / 4, leaderHeartbeatTimeoutNs / 2, leaderHeartbeatTimeoutNs / 8 * 7 };
         this.egressPublisher = ctx.egressPublisher();
         this.moduleState = ctx.moduleStateCounter();
         this.commitPosition = ctx.commitPositionCounter();
@@ -1153,16 +1162,24 @@ final class ConsensusModuleAgent
             final ClusterMember follower = clusterMemberByIdMap.get(followerMemberId);
             if (null != follower && follower.catchupReplaySessionId() == NULL_VALUE)
             {
-                final ChannelUri channel = ChannelUri.parse(ctx.followerCatchupChannel());
-                channel.put(ENDPOINT_PARAM_NAME, catchupEndpoint);
-                channel.put(SESSION_ID_PARAM_NAME, Integer.toString(logPublisher.sessionId()));
-                channel.put(LINGER_PARAM_NAME, "0");
-                channel.put(EOS_PARAM_NAME, "false");
-                channel.put(ALIAS_PARAM_NAME, "catchup-followerId-" + follower.id());
+                pendingCatchupReplayByMemberIdMap.remove(followerMemberId);
 
-                follower.catchupReplaySessionId(archive.startReplay(
-                    logRecordingId, logPosition, Long.MAX_VALUE, channel.toString(), ctx.logStreamId()));
-                follower.catchupReplayCorrelationId(archive.lastCorrelationId());
+                final long receivedNs = clusterClock.timeNanos();
+                final String replayChannel = catchupReplayChannel(follower, catchupEndpoint);
+                final ArchiveException refusal = tryStartCatchupReplay(follower, logPosition, replayChannel);
+                if (null != refusal)
+                {
+                    final PendingCatchupReplay pending = new PendingCatchupReplay(
+                        followerMemberId,
+                        logPosition,
+                        replayChannel,
+                        receivedNs,
+                        receivedNs + leaderHeartbeatTimeoutNs,
+                        catchupReplayRetryOffsetsNs,
+                        refusal);
+                    pending.scheduleNextAttempt(clusterClock.timeNanos());
+                    pendingCatchupReplayByMemberIdMap.put(followerMemberId, pending);
+                }
             }
         }
     }
@@ -1340,6 +1357,10 @@ final class ConsensusModuleAgent
         {
             logRoleChange(memberId, role, newRole);
             role = newRole;
+            if (Cluster.Role.LEADER != newRole)
+            {
+                pendingCatchupReplayByMemberIdMap.clear();
+            }
             if (!clusterRoleCounter.isClosed())
             {
                 clusterRoleCounter.set(newRole.code());
@@ -1966,6 +1987,8 @@ final class ConsensusModuleAgent
         {
             if (follower.logPosition() >= logPublisher.position())
             {
+                pendingCatchupReplayByMemberIdMap.remove(follower.id());
+
                 if (NULL_VALUE != follower.catchupReplayCorrelationId())
                 {
                     if (archive.archiveProxy().stopReplay(
@@ -2052,6 +2075,8 @@ final class ConsensusModuleAgent
 
     void stopAllCatchups()
     {
+        pendingCatchupReplayByMemberIdMap.clear();
+
         for (final ClusterMember member : activeMembers)
         {
             if (member.catchupReplaySessionId() != NULL_VALUE)
@@ -2149,6 +2174,11 @@ final class ConsensusModuleAgent
 
     void leadershipTermId(final long leadershipTermId)
     {
+        if (leadershipTermId != this.leadershipTermId)
+        {
+            pendingCatchupReplayByMemberIdMap.clear();
+        }
+
         this.leadershipTermId = leadershipTermId;
         ctx.leadershipTermIdCounter().setRelease(leadershipTermId);
         for (final PendingServiceMessageTracker tracker : pendingServiceMessageTrackers)
@@ -2417,6 +2447,7 @@ final class ConsensusModuleAgent
         }
 
         workCount += pollArchiveEvents();
+        workCount += retryPendingCatchupReplays();
 
         workCount += sessionManager.sendRedirects(leadershipTermId, leaderMember.id(), nowNs);
         workCount += sessionManager.sendRejections(leadershipTermId, leaderMember.id(), nowNs);
@@ -3492,8 +3523,106 @@ final class ConsensusModuleAgent
         }
     }
 
+    private String catchupReplayChannel(final ClusterMember follower, final String catchupEndpoint)
+    {
+        final ChannelUri channel = ChannelUri.parse(ctx.followerCatchupChannel());
+        channel.put(ENDPOINT_PARAM_NAME, catchupEndpoint);
+        channel.put(SESSION_ID_PARAM_NAME, Integer.toString(logPublisher.sessionId()));
+        channel.put(LINGER_PARAM_NAME, "0");
+        channel.put(EOS_PARAM_NAME, "false");
+        channel.put(ALIAS_PARAM_NAME, "catchup-followerId-" + follower.id());
+
+        return channel.toString();
+    }
+
+    private ArchiveException tryStartCatchupReplay(
+        final ClusterMember follower, final long logPosition, final String replayChannel)
+    {
+        try
+        {
+            follower.catchupReplaySessionId(archive.startReplay(
+                logRecordingId, logPosition, Long.MAX_VALUE, replayChannel, ctx.logStreamId()));
+            follower.catchupReplayCorrelationId(archive.lastCorrelationId());
+            return null;
+        }
+        catch (final ArchiveException ex)
+        {
+            if (ArchiveException.GENERIC == ex.errorCode() && AeronArchive.State.CONNECTED == archive.state())
+            {
+                return ex;
+            }
+
+            throw ex;
+        }
+    }
+
+    private int retryPendingCatchupReplays()
+    {
+        if (pendingCatchupReplayByMemberIdMap.isEmpty())
+        {
+            return 0;
+        }
+
+        int workCount = 0;
+        final Iterator<PendingCatchupReplay> iterator = pendingCatchupReplayByMemberIdMap.values().iterator();
+        while (iterator.hasNext())
+        {
+            final PendingCatchupReplay pending = iterator.next();
+            final long nowNs = clusterClock.timeNanos();
+            if (nowNs < pending.nextAttemptNs)
+            {
+                continue;
+            }
+
+            final ClusterMember follower = clusterMemberByIdMap.get(pending.followerMemberId);
+            if (null == follower || NULL_VALUE != follower.catchupReplaySessionId())
+            {
+                iterator.remove();
+            }
+            else if (nowNs >= pending.deadlineNs)
+            {
+                iterator.remove();
+                ctx.countedErrorHandler().onError(new ClusterEvent(
+                    "catchup replay failed - followerMemberId=" + pending.followerMemberId +
+                    " logPosition=" + pending.logPosition +
+                    " attempts=" + pending.attempts +
+                    ": " + pending.lastRefusal.getMessage()));
+                workCount++;
+            }
+            else
+            {
+                final ArchiveException refusal;
+                try
+                {
+                    refusal = tryStartCatchupReplay(follower, pending.logPosition, pending.replayChannel);
+                }
+                catch (final RuntimeException ex)
+                {
+                    iterator.remove();
+                    throw ex;
+                }
+
+                pending.attempts++;
+                workCount++;
+                if (null == refusal)
+                {
+                    iterator.remove();
+                }
+                else
+                {
+                    pending.lastRefusal = refusal;
+                    pending.scheduleNextAttempt(clusterClock.timeNanos());
+                }
+            }
+        }
+
+        return workCount;
+    }
+
     private void stopExistingCatchupReplay(final ClusterMember follower)
     {
+        pendingCatchupReplayByMemberIdMap.remove(follower.id());
+
         if (NULL_VALUE != follower.catchupReplaySessionId())
         {
             if (archive.archiveProxy().stopReplay(
@@ -3696,5 +3825,48 @@ final class ConsensusModuleAgent
             "memberId=" + memberId +
             ", election=" + election +
             '}';
+    }
+
+    private static final class PendingCatchupReplay
+    {
+        private final int followerMemberId;
+        private final long logPosition;
+        private final String replayChannel;
+        private final long receivedNs;
+        private final long deadlineNs;
+        private final long[] retryOffsetsNs;
+        private int retryIndex;
+        private long nextAttemptNs;
+        private int attempts = 1;
+        private ArchiveException lastRefusal;
+
+        private PendingCatchupReplay(
+            final int followerMemberId,
+            final long logPosition,
+            final String replayChannel,
+            final long receivedNs,
+            final long deadlineNs,
+            final long[] retryOffsetsNs,
+            final ArchiveException lastRefusal)
+        {
+            this.followerMemberId = followerMemberId;
+            this.logPosition = logPosition;
+            this.replayChannel = replayChannel;
+            this.receivedNs = receivedNs;
+            this.deadlineNs = deadlineNs;
+            this.retryOffsetsNs = retryOffsetsNs;
+            this.lastRefusal = lastRefusal;
+        }
+
+        private void scheduleNextAttempt(final long nowNs)
+        {
+            // Skip the offsets that passed during a late tick or a slow refusal.
+            while (retryIndex < retryOffsetsNs.length && receivedNs + retryOffsetsNs[retryIndex] <= nowNs)
+            {
+                retryIndex++;
+            }
+
+            nextAttemptNs = retryIndex < retryOffsetsNs.length ? receivedNs + retryOffsetsNs[retryIndex] : deadlineNs;
+        }
     }
 }
