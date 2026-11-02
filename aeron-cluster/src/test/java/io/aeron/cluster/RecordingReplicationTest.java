@@ -16,21 +16,30 @@
 package io.aeron.cluster;
 
 import io.aeron.Aeron;
+import io.aeron.Counter;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ControlResponsePoller;
 import io.aeron.archive.client.ReplicationParams;
 import io.aeron.archive.codecs.RecordingSignal;
+import io.aeron.archive.status.RecordingPos;
 import io.aeron.cluster.client.ClusterException;
+import io.aeron.exceptions.AeronException;
+import io.aeron.test.Tests;
+import org.agrona.DirectBuffer;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.status.CountersManager;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
+import static org.agrona.concurrent.status.CountersReader.COUNTER_LENGTH;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -220,5 +229,170 @@ class RecordingReplicationTest
         assertThrows(
             ClusterException.class,
             () -> logReplication.poll(t0 + PROGRESS_CHECK_INTERVAL_NS + PROGRESS_CHECK_TIMEOUT_NS));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "SYNC, 64, ERROR, ERROR - log replication failed to stop",
+        "EXTEND, 32, WARN, WARN - log replication has not progressed"
+    })
+    void shouldRefreshProgressDeadlineForSignalPositionAdvance(
+        final RecordingSignal signal,
+        final long signalPosition,
+        final AeronException.Category category,
+        final String message)
+    {
+        final long t0 = 20L;
+        final long stopPosition = 64;
+        final long oldDeadlineNs = t0 + PROGRESS_CHECK_TIMEOUT_NS;
+        final RecordingReplication logReplication = newRecordingReplication(stopPosition, t0);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 0, RecordingSignal.REPLICATE);
+        logReplication.poll(t0);
+        logReplication.poll(oldDeadlineNs - 1);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, signalPosition, signal);
+        assertDoesNotThrow(() -> logReplication.poll(oldDeadlineNs));
+        assertFalse(logReplication.hasReplicationEnded());
+        verify(aeronArchive, never()).tryStopReplication(anyLong());
+
+        final long refreshedDeadlineNs = oldDeadlineNs + PROGRESS_CHECK_TIMEOUT_NS;
+        assertDoesNotThrow(() -> logReplication.poll(refreshedDeadlineNs - 1));
+        assertEquals(signalPosition, logReplication.position());
+
+        final ClusterException exception = assertThrows(
+            ClusterException.class, () -> logReplication.poll(refreshedDeadlineNs));
+        assertEquals(message, exception.getMessage());
+        assertEquals(category, exception.category());
+        verify(aeronArchive).tryStopReplication(REPLICATION_ID);
+    }
+
+    @Test
+    void shouldEndWhenReplicateEndFollowsSyncSignalledJustBeforeProgressDeadline()
+    {
+        final long t0 = 20L;
+        final long stopPosition = 64;
+        final long oldDeadlineNs = t0 + PROGRESS_CHECK_TIMEOUT_NS;
+        final RecordingReplication logReplication = newRecordingReplication(stopPosition, t0);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 32, RecordingSignal.REPLICATE);
+        logReplication.poll(t0);
+        logReplication.poll(oldDeadlineNs - 1);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, stopPosition, RecordingSignal.SYNC);
+        assertDoesNotThrow(() -> logReplication.poll(oldDeadlineNs));
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, NULL_POSITION, RecordingSignal.REPLICATE_END);
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, stopPosition, RecordingSignal.STOP);
+        assertEquals(0, logReplication.poll(oldDeadlineNs + PROGRESS_CHECK_TIMEOUT_NS));
+        assertTrue(logReplication.hasSynced());
+        assertTrue(logReplication.hasReplicationEnded());
+        assertTrue(logReplication.hasStopped());
+        assertEquals(stopPosition, logReplication.position());
+
+        logReplication.close();
+        verify(aeronArchive, never()).tryStopReplication(anyLong());
+    }
+
+    @Test
+    void shouldNotRefreshProgressDeadlineForSignalsWhichDoNotAdvancePosition()
+    {
+        final long t0 = 20L;
+        final long stopPosition = 64;
+        final long oldDeadlineNs = t0 + PROGRESS_CHECK_TIMEOUT_NS;
+        final RecordingReplication logReplication = newRecordingReplication(stopPosition, t0);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 32, RecordingSignal.REPLICATE);
+        logReplication.poll(t0);
+        logReplication.poll(oldDeadlineNs - 1);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, NULL_POSITION, RecordingSignal.SYNC);
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 32, RecordingSignal.SYNC);
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 32, RecordingSignal.EXTEND);
+        logReplication.onSignal(REPLICATION_ID + 1, DST_RECORDING_ID, stopPosition, RecordingSignal.SYNC);
+
+        final ClusterException exception = assertThrows(
+            ClusterException.class, () -> logReplication.poll(oldDeadlineNs));
+        assertEquals("WARN - log replication has not progressed", exception.getMessage());
+        assertTrue(logReplication.hasSynced());
+        verify(aeronArchive).tryStopReplication(REPLICATION_ID);
+    }
+
+    @Test
+    void shouldNotRefreshProgressDeadlineForSignalPositionBelowCurrentPosition()
+    {
+        final long t0 = 20L;
+        final long stopPosition = 64;
+        final long oldDeadlineNs = t0 + PROGRESS_CHECK_TIMEOUT_NS;
+        final RecordingReplication logReplication = newRecordingReplication(stopPosition, t0);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 32, RecordingSignal.REPLICATE);
+        logReplication.poll(t0);
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 16, RecordingSignal.REPLICATE);
+        assertDoesNotThrow(() -> logReplication.poll(oldDeadlineNs - 1));
+        assertEquals(16, logReplication.position());
+
+        final ClusterException exception = assertThrows(
+            ClusterException.class, () -> logReplication.poll(oldDeadlineNs));
+        assertEquals("WARN - log replication has not progressed", exception.getMessage());
+        assertEquals(AeronException.Category.WARN, exception.category());
+        verify(aeronArchive).tryStopReplication(REPLICATION_ID);
+    }
+
+    @Test
+    void shouldRefreshProgressDeadlineWhenSyncSignalPositionMatchesRecordingCounter()
+    {
+        final long archiveId = 19;
+        final long t0 = 20L;
+        final long stopPosition = 64;
+        final CountersManager countersManager = Tests.newCountersManager(2 * COUNTER_LENGTH);
+        final Aeron aeron = aeronArchive.context().aeron();
+        when(aeron.countersReader()).thenReturn(countersManager);
+        when(aeron.addCounter(
+            anyInt(), any(DirectBuffer.class), anyInt(), anyInt(), any(DirectBuffer.class), anyInt(), anyInt()))
+            .thenAnswer(Tests.addCounterAnswer(countersManager, () -> 1L));
+        when(aeronArchive.archiveId()).thenReturn(archiveId);
+        final Counter recordingPosition = RecordingPos.allocate(
+            aeron, new UnsafeBuffer(new byte[1024]), archiveId, DST_RECORDING_ID, 5, 6, REPLICATION_CHANNEL, ENDPOINT);
+
+        final RecordingReplication logReplication = newRecordingReplication(stopPosition, t0);
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, 0, RecordingSignal.EXTEND);
+        logReplication.poll(t0);
+
+        recordingPosition.set(32);
+        logReplication.poll(t0 + PROGRESS_CHECK_INTERVAL_NS);
+        assertEquals(32, logReplication.position());
+        final long counterDeadlineNs = t0 + PROGRESS_CHECK_INTERVAL_NS + PROGRESS_CHECK_TIMEOUT_NS;
+
+        recordingPosition.set(stopPosition);
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, stopPosition, RecordingSignal.SYNC);
+        logReplication.poll(t0 + (2 * PROGRESS_CHECK_INTERVAL_NS));
+        assertDoesNotThrow(() -> logReplication.poll(counterDeadlineNs));
+        assertEquals(stopPosition, logReplication.position());
+
+        logReplication.onSignal(REPLICATION_ID, DST_RECORDING_ID, NULL_POSITION, RecordingSignal.REPLICATE_END);
+        assertEquals(0, logReplication.poll(counterDeadlineNs + PROGRESS_CHECK_TIMEOUT_NS));
+        assertTrue(logReplication.hasReplicationEnded());
+        verify(aeronArchive, never()).tryStopReplication(anyLong());
+    }
+
+    private RecordingReplication newRecordingReplication(final long stopPosition, final long nowNs)
+    {
+        final ReplicationParams replicationParams = new ReplicationParams()
+            .dstRecordingId(DST_RECORDING_ID)
+            .stopPosition(stopPosition)
+            .replicationChannel(REPLICATION_CHANNEL)
+            .replicationSessionId(Aeron.NULL_VALUE);
+
+        return new RecordingReplication(
+            aeronArchive,
+            SRC_RECORDING_ID,
+            ENDPOINT,
+            SRC_STREAM_ID,
+            replicationParams,
+            PROGRESS_CHECK_TIMEOUT_NS,
+            PROGRESS_CHECK_INTERVAL_NS,
+            nowNs);
     }
 }
