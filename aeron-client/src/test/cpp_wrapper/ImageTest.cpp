@@ -24,6 +24,11 @@
 #include "ChannelUriStringBuilder.h"
 #include "TestUtil.h"
 
+extern "C"
+{
+#include "aeron_image.h"
+}
+
 using namespace aeron;
 using testing::MockFunction;
 using testing::Return;
@@ -308,6 +313,63 @@ TEST_P(ImageTest, shouldBlockPollImage)
     }
 
     invoker.invoke();
+}
+
+TEST_F(ImageTest, shouldHandleImageRefCounts)
+{
+    std::string channel = "aeron:ipc";
+    std::int32_t streamId = 4210812;
+    std::vector<std::unique_ptr<Image>> imageList {};
+
+    Context ctx;
+    ctx.useConductorAgentInvoker(true).idleSleepDuration(1);
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor>& invoker = aeron->conductorAgentInvoker();
+
+    std::int64_t subId = aeron->addSubscription(
+        channel,
+        streamId,
+        [&imageList] (Image& image)
+        {
+            auto imageFromCopyConstructor = std::unique_ptr<Image>{new Image(image)};
+            auto imageFromCopyAssignment = std::unique_ptr<Image>{new Image()};
+            *imageFromCopyAssignment = image;
+
+            imageList.push_back(std::move(imageFromCopyConstructor));
+            imageList.push_back(std::move(imageFromCopyAssignment));
+        },
+        [&imageList] (Image& image)
+        {
+            Image imageCopy {image};
+
+            auto imageFromMoveOperator = std::unique_ptr<Image>{new Image(std::move(image))};
+            auto imageFromMoveAssigment = std::unique_ptr<Image>{new Image()};
+            *imageFromMoveAssigment = std::move(imageCopy);
+
+            imageList.push_back(std::move(imageFromMoveOperator));
+            imageList.push_back(std::move(imageFromMoveAssigment));
+        });
+    POLL_FOR_NON_NULL(sub, aeron->findSubscription(subId), invoker);
+
+    {
+        std::int64_t pubId = aeron->addExclusivePublication(channel, streamId);
+        POLL_FOR_NON_NULL(pub, aeron->findExclusivePublication(pubId), invoker);
+        POLL_FOR(1 == sub->imageCount(), invoker);
+    }
+
+    aeron_image_t *image = aeron_subscription_image_at_index(sub->subscription(), 0);
+    aeron_subscription_image_release(sub->subscription(), image);
+    ASSERT_EQ(3, aeron_image_refcnt_acquire(image));
+
+    POLL_FOR(0 == sub->imageCount(), invoker);
+    ASSERT_EQ(5, aeron_image_refcnt_acquire(image));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    invoker.invoke();
+    ASSERT_EQ(4, aeron_image_refcnt_acquire(image));
+
+    imageList.clear();
+    ASSERT_EQ(0, aeron_image_refcnt_acquire(image));
 }
 
 TEST_F(ImageTest, shouldSafelyHandleNullSubscriptionAndImage)
