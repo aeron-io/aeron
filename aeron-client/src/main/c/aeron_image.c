@@ -193,6 +193,12 @@ bool aeron_image_is_end_of_stream(aeron_image_t *image)
 
 int64_t aeron_image_end_of_stream_position(aeron_image_t *image)
 {
+    if (NULL == image)
+    {
+        AERON_SET_ERR(EINVAL, "Parameters must not be null, image: %s", AERON_NULL_STR(image));
+        return -1;
+    }
+
     bool is_closed;
     AERON_GET_ACQUIRE(is_closed, image->is_closed);
     if (is_closed)
