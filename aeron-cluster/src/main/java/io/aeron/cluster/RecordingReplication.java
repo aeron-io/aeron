@@ -47,6 +47,7 @@ final class RecordingReplication implements AutoCloseable
     private boolean hasReplicationEnded = false;
     private boolean hasSynced = false;
     private boolean hasStopped = false;
+    private boolean hasSignalProgress = false;
 
     RecordingReplication(
         final AeronArchive archive,
@@ -84,6 +85,13 @@ final class RecordingReplication implements AutoCloseable
 
         try
         {
+            if (hasSignalProgress)
+            {
+                hasSignalProgress = false;
+                progressDeadlineNs = nowNs + progressCheckTimeoutNs;
+                workCount++;
+            }
+
             if (nowNs >= progressCheckDeadlineNs)
             {
                 progressCheckDeadlineNs = nowNs + progressCheckIntervalNs;
@@ -177,6 +185,11 @@ final class RecordingReplication implements AutoCloseable
     {
         if (correlationId == replicationId)
         {
+            if (NULL_POSITION != position && position > this.position)
+            {
+                hasSignalProgress = true;
+            }
+
             if (RecordingSignal.EXTEND == signal)
             {
                 final CountersReader counters = archive.context().aeron().countersReader();
@@ -257,6 +270,7 @@ final class RecordingReplication implements AutoCloseable
             ", hasReplicationEnded=" + hasReplicationEnded +
             ", hasSynced=" + hasSynced +
             ", hasStopped=" + hasStopped +
+            ", hasSignalProgress=" + hasSignalProgress +
             '}';
     }
 }
