@@ -2205,7 +2205,7 @@ bool aeron_image_is_end_of_stream(aeron_image_t *image);
  * INT64_MAX until the stream ends and EOS is set.
  *
  * @param image to check.
- * @return position the stream reached when EOS was received from the publisher.
+ * @return position the stream reached when EOS was received from the publisher. Or -1 for error.
  */
 int64_t aeron_image_end_of_stream_position(aeron_image_t *image);
 
