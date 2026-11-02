@@ -2519,7 +2519,10 @@ public final class TestCluster implements AutoCloseable
         final long logPosition,
         final SnapshotRecord snapshotRecord)
     {
-        final BackupQueryRunner backupQueryRunner = backQueryRunners.computeIfAbsent(leader, BackupQueryRunner::new);
+        final BackupQueryRunner backupQueryRunner = backQueryRunners.computeIfAbsent(
+            leader,
+            (node) -> new BackupQueryRunner(
+                client.context().aeron(), clusterConsensusEndpoints(node.memberId(), node.memberId() + 1)));
         backupQueryRunner.run(logPosition, snapshotRecord);
     }
 
@@ -2579,7 +2582,7 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
-    private class BackupQueryRunner implements AutoCloseable
+    private static final class BackupQueryRunner implements AutoCloseable
     {
         private final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer(128);
         private final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
@@ -2592,18 +2595,18 @@ public final class TestCluster implements AutoCloseable
         private final String responseChannel;
         private final Aeron aeron;
 
-        BackupQueryRunner(final TestNode node)
+        BackupQueryRunner(final Aeron aeron, final String consensusEndpoint)
         {
             final String channel = new ChannelUriStringBuilder()
                 .media("udp")
-                .endpoint(clusterConsensusEndpoints(node.memberId(), node.memberId() + 1))
+                .endpoint(consensusEndpoint)
                 .termLength(64 * 1024)
                 .build();
 
             final int streamId = ConsensusModule.Configuration.consensusStreamId();
             final int responseStreamId = 29876;
 
-            aeron = client.context().aeron();
+            this.aeron = aeron;
             subscription = aeron.addSubscription("aeron:udp?endpoint=localhost:0", responseStreamId);
             publication = aeron.addPublication(channel, streamId);
 
