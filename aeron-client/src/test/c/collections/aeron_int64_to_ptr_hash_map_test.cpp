@@ -269,7 +269,6 @@ TEST_F(Int64ToPtrHashMapTest, removeIfDoesNotSkipEntriesAfterCompaction)
     remove_if(
         [&](int64_t key, void *value_ptr)
         {
-            // std::cout << key << std::endl;
             called++;
             EXPECT_EQ(&value, value_ptr);
             return 0 == (key & 1);
