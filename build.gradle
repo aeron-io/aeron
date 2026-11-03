@@ -1,4 +1,8 @@
+import io.aeron.build.AeronVersionArgumentProvider
+import io.aeron.build.ExtractJavadocLinksTask
+import io.aeron.build.GitShaService
 import io.aeron.build.LoggingTest
+import io.aeron.build.TestExecutionLimitService
 
 /*
  * Copyright 2014-2025 Real Logic Limited.
@@ -50,6 +54,13 @@ def toolchainLauncher = javaToolchains.launcherFor {
 
 def aeronGroup = 'io.aeron'
 def aeronVersion = file('version.txt').text.trim()
+def gitSha = GitShaService.gitSha(project)
+
+// Run one test task at a time across the whole build, as Gradle did before tasks ran in parallel: the tests start media
+// drivers and share Aeron directories and ports. Raise maxParallelUsages only once tests are known to be safe together.
+def testExecutionLimit = gradle.sharedServices.registerIfAbsent('aeronTestExecutionLimit', TestExecutionLimitService) {
+    maxParallelUsages = 1
+}
 
 def getConfigProperty(final String projectPropertyName, final String envVarName) {
     String value = project.findProperty(projectPropertyName)
@@ -196,9 +207,18 @@ subprojects {
         sourceCompatibility = JavaVersion.VERSION_17
     }
 
+    // Sign only release versions, and only when this project's `publish` task will run. That is decided once the task
+    // graph is ready, during configuration, because the configuration cache doesn't allow `onlyIf` to reach `gradle`
+    // or `tasks` when the task runs.
+    def publishTaskPath = "${it.path}:publish"
+    def publishRequested = false
+    gradle.taskGraph.whenReady { graph ->
+        publishRequested = graph.hasTask(publishTaskPath)
+    }
+
     tasks.withType(Sign).configureEach {
         onlyIf {
-            isReleaseVersion && gradle.taskGraph.hasTask(tasks.publish)
+            isReleaseVersion && publishRequested
         }
     }
 
@@ -208,15 +228,11 @@ subprojects {
     }
 
     tasks.withType(JavaCompile).configureEach {
-        doFirst { t ->
-            t.options.encoding = 'UTF-8'
-            t.options.deprecation = true
-            t.options.compilerArgs.add('--release')
-            t.options.compilerArgs.add(java.sourceCompatibility.majorVersion)
-            t.options.compilerArgs.addAll(['-Xlint:all,-processing', '-Werror', '-parameters']) // Enable all warnings and treat them as errors
-            t.options.compilerArgs.add("-Aio.aeron.version=${aeronVersion}")
-            t.options.compilerArgs.add("-Aio.aeron.gitsha=${io.aeron.build.GithubUtil.currentGitHash("${projectDir}")}")
-        }
+        options.encoding = 'UTF-8'
+        options.deprecation = true
+        options.release = java.sourceCompatibility.majorVersion.toInteger()
+        options.compilerArgs.addAll(['-Xlint:all,-processing', '-Werror', '-parameters']) // Enable all warnings and treat them as errors
+        options.compilerArgumentProviders.add(new AeronVersionArgumentProvider(providers.provider { aeronVersion }, gitSha))
     }
 
     def mockitoAgent = configurations.create('mockitoAgent') { transitive = false }
@@ -227,6 +243,16 @@ subprojects {
     def testSuiteClasspath = testing.suites.test.sources.runtimeClasspath
 
     tasks.withType(Test).configureEach { test ->
+        usesService(testExecutionLimit)
+
+        // With a native media driver or ATS binary set, tests run against that binary, but only its path is an input.
+        // A rebuilt binary at the same path would get a cached result, so don't cache those runs.
+        def externalBinaryPaths = [
+            System.getProperty('aeron.test.system.aeronmd.path'),
+            System.getProperty('aeron.test.system.ats.path')]
+        outputs.doNotCacheIf('tests run against an external native binary that is not tracked as an input') {
+            externalBinaryPaths.any { it != null }
+        }
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
         if (buildJavaVersion >= 21) {
@@ -352,22 +378,21 @@ subprojects {
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
     }
 
-    javadoc {
+    // Package lists of the libraries in `javadocLinks`, so the Javadoc can link to their documentation without
+    // fetching it.
+    def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLinksTask) {
+        javadocJars.from(configurations.javadocLinks)
+        artifacts.set(configurations.javadocLinks.incoming.artifacts.resolvedArtifacts)
+        outputDir = layout.buildDirectory.dir('javadoc-links')
+    }
 
-        doFirst {
-            configurations.javadocLinks.resolvedConfiguration.resolvedArtifacts.each { artifact ->
-                def id = artifact.moduleVersion.id
-                def destDir = layout.buildDirectory.dir("javadoc-links/${id.name}").get().asFile
-                copy {
-                    from zipTree(artifact.file)
-                    into destDir
-                    include 'element-list', 'package-list'
-                }
-                options.linksOffline(
-                    "https://www.javadoc.io/static/${id.group}/${id.name}/${id.version}/",
-                    destDir.absolutePath
-                )
-            }
+    javadoc {
+        inputs.files(extractJavadocLinks).withPathSensitivity(PathSensitivity.RELATIVE)
+        configurations.javadocLinks.dependencies.each { library ->
+            options.linksOffline(
+                "https://www.javadoc.io/static/${library.group}/${library.name}/${library.version}/",
+                layout.buildDirectory.dir("javadoc-links/${library.name}").get().asFile.absolutePath
+            )
         }
 
         failOnError = true
