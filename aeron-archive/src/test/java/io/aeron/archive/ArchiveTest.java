@@ -57,6 +57,11 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
 import org.agrona.IoUtil;
+import org.agrona.collections.MutableBoolean;
+import org.agrona.collections.MutableInteger;
+import org.agrona.collections.MutableLong;
+import org.agrona.concurrent.Agent;
+import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
@@ -67,13 +72,16 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
@@ -95,8 +103,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntConsumer;
+import java.util.stream.Stream;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static io.aeron.AeronCounters.ARCHIVE_RECORDING_SESSION_COUNT_TYPE_ID;
 import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
 import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
@@ -1590,6 +1600,200 @@ class ArchiveTest
                     break;
                 }
                 Tests.yield();
+            }
+        }
+    }
+
+    private record InvokerAndShouldInvoke(AgentInvoker invoker, MutableBoolean shouldInvoke)
+    {
+    }
+
+    private static final class InvokerAndShouldInvokeDelegatingAgent implements Agent
+    {
+        private final InvokerAndShouldInvoke[] invokerAndShouldInvokes;
+
+        private InvokerAndShouldInvokeDelegatingAgent(final InvokerAndShouldInvoke... invokerAndShouldInvoke)
+        {
+            this.invokerAndShouldInvokes = invokerAndShouldInvoke;
+        }
+
+        @Override
+        public int doWork()
+        {
+            int workCount = 0;
+            for (final InvokerAndShouldInvoke invokerAndShouldInvoke : invokerAndShouldInvokes)
+            {
+                final AgentInvoker invoker = invokerAndShouldInvoke.invoker;
+                final MutableBoolean shouldInvoke = invokerAndShouldInvoke.shouldInvoke;
+                if (shouldInvoke.get())
+                {
+                    workCount += invoker.invoke();
+                }
+            }
+            return workCount;
+        }
+
+        @Override
+        public String roleName()
+        {
+            return getClass().getSimpleName();
+        }
+    }
+
+    private static AgentInvoker createInvokerAndShouldInvokeDelegatingAgentInvoker(
+        final InvokerAndShouldInvoke... invokerAndShouldInvoke)
+    {
+        final Agent agent = new InvokerAndShouldInvokeDelegatingAgent(invokerAndShouldInvoke);
+        final AgentInvoker agentInvoker = new AgentInvoker((e) -> {}, null, agent);
+        agentInvoker.start();
+        return agentInvoker;
+    }
+
+    private static Stream<Arguments> consumerPositionChannels()
+    {
+        return Stream.of(
+            Arguments.arguments(
+                "aeron:ipc", "aeron:ipc"),
+            Arguments.arguments(
+                "aeron:udp?endpoint=127.0.0.1:47219|ssc=true", "aeron-spy:aeron:udp?endpoint=127.0.0.1:47219")
+        );
+    }
+
+    @Disabled
+    @SuppressWarnings("methodLength")
+    @MethodSource("consumerPositionChannels")
+    @ParameterizedTest
+    @InterruptAfter(10)
+    void shouldExtendAStoppedRecordingAtCorrectJoinPositionWhenArchiveIsOnlySubscriber(
+        final String publishingChannel, final String subscribingChannel, @TempDir final Path temp)
+    {
+        final int stream = 10004;
+
+        final MutableBoolean shouldInvokeDriver = new MutableBoolean(true);
+        final MutableBoolean shouldInvokeArchive = new MutableBoolean(true);
+
+        final MediaDriver.Context driverCtx = new MediaDriver.Context()
+            .dirDeleteOnStart(true)
+            .threadingMode(ThreadingMode.INVOKER);
+
+        try (MediaDriver driver = MediaDriver.launch(driverCtx))
+        {
+            final InvokerAndShouldInvoke driverInvokerAndShouldInvoke = new InvokerAndShouldInvoke(
+                driver.sharedAgentInvoker(), shouldInvokeDriver);
+            final AgentInvoker driverDelegatingInvoker = createInvokerAndShouldInvokeDelegatingAgentInvoker(
+                driverInvokerAndShouldInvoke);
+            final Archive.Context archiveCtx = TestContexts.localhostArchive()
+                .deleteArchiveOnStart(true)
+                .threadingMode(ArchiveThreadingMode.INVOKER)
+                .mediaDriverAgentInvoker(driverDelegatingInvoker)
+                .archiveDir(temp.resolve("archive").toFile());
+
+            try (Archive archive = Archive.launch(archiveCtx))
+            {
+                final InvokerAndShouldInvoke archiveInvokerAndShouldInvoke = new InvokerAndShouldInvoke(
+                    archive.invoker(), shouldInvokeArchive);
+                final AgentInvoker archiveDelegatingInvoker = createInvokerAndShouldInvokeDelegatingAgentInvoker(
+                    driverInvokerAndShouldInvoke, archiveInvokerAndShouldInvoke);
+
+                final Aeron.Context aeronCtx = new Aeron.Context()
+                    .aeronDirectoryName(driver.aeronDirectoryName())
+                    .useConductorAgentInvoker(true)
+                    .driverAgentInvoker(archiveDelegatingInvoker);
+                try (Aeron aeron = Aeron.connect(aeronCtx);
+                     AeronArchive aeronArchive = AeronArchive.connect(TestContexts.ipcAeronArchive()
+                         .agentInvoker(archiveDelegatingInvoker)
+                         .aeron(aeron)))
+                {
+                    final CountersReader counters = aeron.countersReader();
+
+                    final long recordingSubscriptionId = aeronArchive.startRecording(subscribingChannel, stream, LOCAL);
+                    final ExclusivePublication publication = aeron.addExclusivePublication(publishingChannel, stream);
+
+                    int recordingCounterId = NULL_VALUE;
+                    while (NULL_VALUE == recordingCounterId)
+                    {
+                        recordingCounterId = RecordingPos.findCounterIdBySession(
+                            counters, publication.sessionId(), archiveCtx.archiveId());
+
+                        driver.sharedAgentInvoker().invoke();
+                        archive.invoker().invoke();
+                        aeron.conductorAgentInvoker().invoke();
+                        aeronArchive.pollForErrorResponse();
+                        Tests.yield();
+                    }
+
+                    final MutableInteger recordingSessions = new MutableInteger(NULL_VALUE);
+                    counters.forEach((counterId, typeId, key, buffer) ->
+                    {
+                        if (ARCHIVE_RECORDING_SESSION_COUNT_TYPE_ID == typeId)
+                        {
+                            recordingSessions.set(counterId);
+                        }
+                    });
+                    assertEquals(1, counters.getCounterValue(recordingSessions.get()));
+
+                    shouldInvokeDriver.set(false);
+
+                    final UnsafeBuffer unsafeBuffer = new UnsafeBuffer(new byte[128]);
+                    for (int i = 0; i < 5; ++i)
+                    {
+                        while (0 > publication.offer(unsafeBuffer))
+                        {
+                            archive.invoker().invoke();
+                            aeron.conductorAgentInvoker().invoke();
+                            Tests.yield();
+                        }
+                    }
+
+                    while (counters.getCounterValue(recordingCounterId) < publication.position())
+                    {
+                        archive.invoker().invoke();
+                        Tests.yield();
+                    }
+
+                    aeronArchive.stopRecording(recordingSubscriptionId);
+
+                    Tests.await(() -> counters.getCounterValue(recordingSessions.get()) == 0);
+
+                    shouldInvokeDriver.set(true);
+
+                    final MutableLong stoppedRecordingId = new MutableLong(NULL_VALUE);
+                    final MutableLong stoppedRecordingPosition = new MutableLong(NULL_VALUE);
+                    assertEquals(1, aeronArchive.listRecordings(0, 1,
+                        (controlSessionId,
+                         correlationId,
+                         recordingId,
+                         startTimestamp,
+                         stopTimestamp,
+                         startPosition,
+                         stopPosition,
+                         initialTermId,
+                         segmentFileLength,
+                         termBufferLength,
+                         mtuLength,
+                         sessionId,
+                         streamId,
+                         strippedChannel,
+                         originalChannel,
+                         sourceIdentity) ->
+                        {
+                            stoppedRecordingId.set(recordingId);
+                            stoppedRecordingPosition.set(stopPosition);
+                        }));
+                    assertEquals(publication.position(), stoppedRecordingPosition.get());
+
+                    aeronArchive.extendRecording(stoppedRecordingId.get(), subscribingChannel, stream, LOCAL);
+
+                    Tests.await(() ->
+                    {
+                        driver.sharedAgentInvoker().invoke();
+                        archive.invoker().invoke();
+                        aeron.conductorAgentInvoker().invoke();
+                        aeronArchive.pollForErrorResponse();
+
+                        return counters.getCounterValue(recordingSessions.get()) == 1;
+                    });
+                }
             }
         }
     }
