@@ -1321,6 +1321,11 @@ public final class NetworkPublication
 
     private void removeSpyPosition(final ReadablePosition position)
     {
+        final long spyPos = position.getAcquire();
+        if ((long)MAX_SPY_POSITION_MH.get(this) < spyPos)
+        {
+            MAX_SPY_POSITION_MH.setRelease(this, spyPos);
+        }
         spyPositions = ArrayUtil.remove(spyPositions, position);
         hasSpies = 0 != spyPositions.length;
     }
