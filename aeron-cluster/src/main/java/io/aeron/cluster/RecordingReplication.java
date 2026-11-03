@@ -44,6 +44,8 @@ final class RecordingReplication implements AutoCloseable
     private final AeronArchive archive;
     private RecordingSignal lastRecordingSignal = RecordingSignal.NULL_VAL;
 
+    private boolean isClosed = false;
+    private boolean hasReceivedExtend = false;
     private boolean hasReplicationEnded = false;
     private boolean hasSynced = false;
     private boolean hasStopped = false;
@@ -77,7 +79,7 @@ final class RecordingReplication implements AutoCloseable
     {
         int workCount = 0;
 
-        if (hasReplicationEnded)
+        if (isClosed || (hasReplicationEnded && hasStopped) || hasEndedInSyncWithoutRecording())
         {
             return workCount;
         }
@@ -138,16 +140,43 @@ final class RecordingReplication implements AutoCloseable
         return recordingId;
     }
 
+    /**
+     * An "in sync" replication signals SYNC then REPLICATE_END without EXTEND, so no STOP will follow. Calling
+     * {@link #close()} after SYNC and without EXTEND also makes this true, even if REPLICATE_END never arrived.
+     *
+     * @return true if {@link #hasReplicationEnded()} is set and SYNC has arrived but EXTEND has not.
+     */
+    boolean hasEndedInSyncWithoutRecording()
+    {
+        return hasReplicationEnded && hasSynced && !hasReceivedExtend;
+    }
+
+    /**
+     * Set by the REPLICATE_END signal and also by {@link #close()}, so true does not prove REPLICATE_END arrived.
+     *
+     * @return true if REPLICATE_END has arrived or this replication has been closed.
+     */
     boolean hasReplicationEnded()
     {
         return hasReplicationEnded;
     }
 
+    /**
+     * Set by a SYNC signal carrying this replication's correlation id.
+     *
+     * @return true if SYNC has arrived.
+     */
     boolean hasSynced()
     {
         return hasSynced;
     }
 
+    /**
+     * Set by a STOP signal carrying this replication's correlation id; the recording id is not checked. Unlike
+     * {@link #hasReplicationEnded()}, this is not set by {@link #close()}.
+     *
+     * @return true if STOP has arrived.
+     */
     boolean hasStopped()
     {
         return hasStopped;
@@ -159,6 +188,7 @@ final class RecordingReplication implements AutoCloseable
     @Override
     public void close()
     {
+        isClosed = true;
         if (!hasReplicationEnded)
         {
             try
@@ -179,6 +209,7 @@ final class RecordingReplication implements AutoCloseable
         {
             if (RecordingSignal.EXTEND == signal)
             {
+                hasReceivedExtend = true;
                 final CountersReader counters = archive.context().aeron().countersReader();
                 recordingPositionCounterId =
                     RecordingPos.findCounterIdByRecording(counters, recordingId, archive.archiveId());
@@ -254,6 +285,8 @@ final class RecordingReplication implements AutoCloseable
             ", progressDeadlineNs=" + progressDeadlineNs +
             ", progressCheckDeadlineNs=" + progressCheckDeadlineNs +
             ", lastRecordingSignal=" + lastRecordingSignal +
+            ", isClosed=" + isClosed +
+            ", hasReceivedExtend=" + hasReceivedExtend +
             ", hasReplicationEnded=" + hasReplicationEnded +
             ", hasSynced=" + hasSynced +
             ", hasStopped=" + hasStopped +

@@ -115,7 +115,11 @@ final class MultipleRecordingReplication implements AutoCloseable
         }
         else
         {
-            recordingReplication.poll(nowNs);
+            if (!recordingReplication.hasReplicationEnded())
+            {
+                recordingReplication.poll(nowNs);
+            }
+
             if (recordingReplication.hasReplicationEnded())
             {
                 final RecordingInfo pending = recordingsPending.get(recordingCursor);
