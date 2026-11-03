@@ -20,18 +20,25 @@ import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.client.ReplicationParams;
+import io.aeron.archive.codecs.RecordingSignal;
+import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterMarkFile;
+import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestClusterClock;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -68,6 +75,7 @@ import static org.mockito.Mockito.when;
 class ElectionTest
 {
     private static final long RECORDING_ID = 600L;
+    private static final long REPLICATION_ID = 9L;
     private static final int LOG_SESSION_ID = 777;
     private static final int VERSION = ConsensusModule.Configuration.PROTOCOL_SEMANTIC_VERSION;
     private final Aeron aeron = mock(Aeron.class);
@@ -926,6 +934,216 @@ class ElectionTest
 
         clock.increment(ctx.leaderHeartbeatTimeoutNs());
         assertThrows(TimeoutException.class, () -> election.doWork(clock.nanoTime()));
+    }
+
+    @ParameterizedTest
+    @EnumSource(SignalTiming.class)
+    void followerShouldLeaveLogReplicationWhenReplicationEndsWithoutDataBelowStopPosition(final SignalTiming timing)
+    {
+        final long term1Id = 1;
+        final long term2Id = 2;
+        final long term1BaseLogPosition = 60;
+        final long term2BaseLogPosition = 120;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        final AeronArchive archive = mockReplicationArchive();
+        final long progressDeadlineNs = clock.nanoTime() + ctx.leaderHeartbeatTimeoutNs();
+        final RecordingReplication logReplication = newLogReplication(archive, term2BaseLogPosition);
+        final Election election = followerInLogReplication(
+            term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, clusterMembers, thisMember, liveLeader,
+            logReplication);
+        final Runnable leaderHeartbeat = () -> refreshReplicationDeadline(
+            election, term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, liveLeader);
+
+        awaitSignalTime(election, timing, progressDeadlineNs, leaderHeartbeat);
+        signalReplicationEndedWithoutRecording(election, RECORDING_ID, term1BaseLogPosition);
+
+        final ClusterException ex = assertThrows(ClusterException.class, () -> election.doWork(clock.nanoTime()));
+        assertEquals(AeronException.Category.WARN, ex.category());
+        assertEquals("WARN - log replication ended without data, position=60 stopPosition=120", ex.getMessage());
+
+        when(commitPositionCounter.getPlain()).thenReturn(term1BaseLogPosition);
+        election.handleError(clock.nanoTime(), ex);
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.INIT.code());
+
+        election.doWork(clock.increment(1));
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
+        verify(archive, never()).tryStopReplication(anyLong());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "BEFORE_PROGRESS_DEADLINE,0",
+        "AT_PROGRESS_DEADLINE,0",
+        "AFTER_PROGRESS_DEADLINE,0",
+        "BEFORE_PROGRESS_DEADLINE,64",
+        "AT_PROGRESS_DEADLINE,64",
+        "AFTER_PROGRESS_DEADLINE,64" })
+    void followerShouldCompleteLogReplicationWhenReplicationEndsWithoutDataAtOrAboveStopPosition(
+        final SignalTiming timing, final long positionAboveStopPosition)
+    {
+        final long term1Id = 1;
+        final long term2Id = 2;
+        final long term1BaseLogPosition = 60;
+        final long term2BaseLogPosition = 120;
+        final long syncPosition = term2BaseLogPosition + positionAboveStopPosition;
+        final long dstRecordingId = 842;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        trackLogRecordingId();
+        final AeronArchive archive = mockReplicationArchive();
+        final long progressDeadlineNs = clock.nanoTime() + ctx.leaderHeartbeatTimeoutNs();
+        final RecordingReplication logReplication = newLogReplication(archive, term2BaseLogPosition);
+        final Election election = followerInLogReplication(
+            term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, clusterMembers, thisMember, liveLeader,
+            logReplication);
+        final Runnable leaderHeartbeat = () -> refreshReplicationDeadline(
+            election, term1Id, term2Id, syncPosition, term2BaseLogPosition, liveLeader);
+
+        awaitSignalTime(election, timing, progressDeadlineNs, leaderHeartbeat);
+        signalReplicationEndedWithoutRecording(election, dstRecordingId, syncPosition);
+        election.doWork(clock.nanoTime());
+
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
+        verify(electionStateCounter, times(1)).setRelease(ElectionState.INIT.code());
+        verify(recordingLog).ensureCoherent(
+            eq(dstRecordingId), anyLong(), anyLong(), eq(term1Id), anyLong(), eq(term2BaseLogPosition), anyLong(),
+            anyLong(), anyInt());
+        verify(archive, never()).tryStopReplication(anyLong());
+    }
+
+    @Test
+    void followerShouldNotTimeoutLogReplicationThatEndedWithoutDataWhileAwaitingCommitPosition()
+    {
+        final long term1Id = 1;
+        final long term2Id = 2;
+        final long term1BaseLogPosition = 60;
+        final long term2BaseLogPosition = 120;
+        final long dstRecordingId = 842;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        trackLogRecordingId();
+        when(consensusPublisher.appendPosition(any(), anyLong(), anyLong(), anyInt(), anyShort())).thenReturn(true);
+        final AeronArchive archive = mockReplicationArchive();
+        final long progressDeadlineNs = clock.nanoTime() + ctx.leaderHeartbeatTimeoutNs();
+        final RecordingReplication logReplication = newLogReplication(archive, term2BaseLogPosition);
+        final Election election = followerInLogReplication(
+            term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, clusterMembers, thisMember, liveLeader,
+            logReplication);
+        final Runnable leaderHeartbeat = () -> refreshReplicationDeadline(
+            election, term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, liveLeader);
+
+        signalReplicationEndedWithoutRecording(election, dstRecordingId, term2BaseLogPosition);
+        election.doWork(clock.increment(1));
+
+        advanceClockWithLeaderHeartbeats(
+            election, progressDeadlineNs + ctx.leaderHeartbeatTimeoutNs(), leaderHeartbeat);
+        election.doWork(clock.nanoTime());
+        verify(electionStateCounter, times(1)).setRelease(ElectionState.CANVASS.code());
+
+        election.onCommitPosition(term2Id, term2BaseLogPosition, liveLeader.id());
+        election.doWork(clock.increment(1));
+
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
+        verify(electionStateCounter, times(1)).setRelease(ElectionState.INIT.code());
+        verify(recordingLog).ensureCoherent(
+            eq(dstRecordingId), anyLong(), anyLong(), eq(term1Id), anyLong(), eq(term2BaseLogPosition), anyLong(),
+            anyLong(), anyInt());
+        verify(archive, never()).tryStopReplication(anyLong());
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "true,true", "false,true", "false,false" })
+    void followerShouldWaitForStopAfterReplicationEnds(final boolean hasSynced, final boolean hasReceivedExtend)
+    {
+        final long term1Id = 1;
+        final long term2Id = 2;
+        final long term1BaseLogPosition = 60;
+        final long term2BaseLogPosition = 120;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        final AeronArchive archive = mockReplicationArchive();
+        final long progressDeadlineNs = clock.nanoTime() + ctx.leaderHeartbeatTimeoutNs();
+        final RecordingReplication logReplication = newLogReplication(archive, term2BaseLogPosition);
+        final Election election = followerInLogReplication(
+            term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, clusterMembers, thisMember, liveLeader,
+            logReplication);
+        final Runnable leaderHeartbeat = () -> refreshReplicationDeadline(
+            election, term1Id, term2Id, term2BaseLogPosition, term2BaseLogPosition, liveLeader);
+
+        if (hasReceivedExtend)
+        {
+            election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, term1BaseLogPosition, RecordingSignal.EXTEND);
+        }
+        if (hasSynced)
+        {
+            election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, term2BaseLogPosition, RecordingSignal.SYNC);
+        }
+        election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, NULL_POSITION, RecordingSignal.REPLICATE_END);
+
+        advanceClockWithLeaderHeartbeats(election, progressDeadlineNs - 1, leaderHeartbeat);
+        election.doWork(clock.nanoTime());
+        verify(electionStateCounter, times(1)).setRelease(ElectionState.CANVASS.code());
+
+        election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, term2BaseLogPosition, RecordingSignal.STOP);
+        election.doWork(clock.nanoTime());
+
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
+        verify(electionStateCounter, times(1)).setRelease(ElectionState.INIT.code());
+        verify(recordingLog).ensureCoherent(
+            eq(RECORDING_ID), anyLong(), anyLong(), eq(term1Id), anyLong(), eq(term2BaseLogPosition), anyLong(),
+            anyLong(), anyInt());
+        verify(archive, never()).tryStopReplication(anyLong());
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "false,WARN - log replication has not progressed", "true,ERROR - log replication failed to stop" })
+    void followerShouldTimeoutLogReplicationThatEndsWithoutStopEvenWhenLeaderKeepsRefreshingDeadline(
+        final boolean hasSynced, final String expectedMessage)
+    {
+        final long term1Id = 1;
+        final long term2Id = 2;
+        final long term1BaseLogPosition = 60;
+        final long term2BaseLogPosition = 120;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        final AeronArchive archive = mockReplicationArchive();
+        final long progressDeadlineNs = clock.nanoTime() + ctx.leaderHeartbeatTimeoutNs();
+        final RecordingReplication logReplication = newLogReplication(archive, term2BaseLogPosition);
+        final Election election = followerInLogReplication(
+            term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, clusterMembers, thisMember, liveLeader,
+            logReplication);
+        final Runnable leaderHeartbeat = () -> refreshReplicationDeadline(
+            election, term1Id, term2Id, term1BaseLogPosition, term2BaseLogPosition, liveLeader);
+
+        election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, term1BaseLogPosition, RecordingSignal.EXTEND);
+        if (hasSynced)
+        {
+            election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, term2BaseLogPosition, RecordingSignal.SYNC);
+        }
+        election.onRecordingSignal(REPLICATION_ID, RECORDING_ID, NULL_POSITION, RecordingSignal.REPLICATE_END);
+
+        advanceClockWithLeaderHeartbeats(election, progressDeadlineNs - 1, leaderHeartbeat);
+        election.doWork(clock.nanoTime());
+        verify(electionStateCounter, times(1)).setRelease(ElectionState.CANVASS.code());
+
+        clock.increment(1);
+        leaderHeartbeat.run();
+        final ClusterException ex = assertThrows(ClusterException.class, () -> election.doWork(clock.nanoTime()));
+        assertEquals(expectedMessage, ex.getMessage());
+
+        when(commitPositionCounter.getPlain()).thenReturn(term1BaseLogPosition);
+        election.handleError(clock.nanoTime(), ex);
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.INIT.code());
+
+        election.doWork(clock.increment(1));
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
+        verify(archive, never()).tryStopReplication(anyLong());
     }
 
     @Test
@@ -1973,6 +2191,171 @@ class ElectionTest
             consensusPublisher,
             ctx,
             consensusModuleAgent);
+    }
+
+    private void refreshReplicationDeadline(
+        final Election election,
+        final long term1Id,
+        final long term2Id,
+        final long commitPosition,
+        final long term2BaseLogPosition,
+        final ClusterMember liveLeader)
+    {
+        election.onCommitPosition(term2Id, commitPosition, liveLeader.id());
+        election.onNewLeadershipTerm(
+            term1Id,
+            term2Id,
+            term2BaseLogPosition,
+            term2BaseLogPosition,
+            term2Id,
+            term2BaseLogPosition,
+            term2BaseLogPosition,
+            NULL_POSITION,
+            RECORDING_ID,
+            clock.nanoTime(),
+            liveLeader.id(),
+            0,
+            false);
+    }
+
+    private Election followerInLogReplication(
+        final long term1Id,
+        final long term2Id,
+        final long term1BaseLogPosition,
+        final long term2BaseLogPosition,
+        final ClusterMember[] clusterMembers,
+        final ClusterMember thisMember,
+        final ClusterMember liveLeader,
+        final RecordingReplication logReplication)
+    {
+        when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
+        when(consensusModuleAgent.prepareForNewLeadership(anyLong(), anyLong())).thenReturn(term1BaseLogPosition);
+        when(consensusModuleAgent.newLogReplication(any(), any(), anyLong(), anyLong(), anyLong()))
+            .thenReturn(logReplication);
+
+        final Election election = newElection(term1Id, term1BaseLogPosition, clusterMembers, thisMember);
+
+        election.doWork(clock.increment(1));
+        verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
+
+        election.onRequestVote(term1Id, term2BaseLogPosition, term2Id, liveLeader.id(), VERSION);
+        election.onNewLeadershipTerm(
+            term1Id,
+            term2Id,
+            term2BaseLogPosition,
+            term2BaseLogPosition,
+            term2Id,
+            term2BaseLogPosition,
+            term2BaseLogPosition,
+            NULL_POSITION,
+            RECORDING_ID,
+            clock.nanoTime(),
+            liveLeader.id(),
+            0,
+            true);
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
+
+        election.doWork(clock.increment(1));
+        verify(consensusModuleAgent).newLogReplication(
+            liveLeader.archiveEndpoint(),
+            liveLeader.archiveResponseEndpoint(),
+            RECORDING_ID,
+            term2BaseLogPosition,
+            clock.nanoTime());
+
+        return election;
+    }
+
+    private AeronArchive mockReplicationArchive()
+    {
+        final AeronArchive archive = mock(AeronArchive.class);
+        final AeronArchive.Context archiveCtx = mock(AeronArchive.Context.class);
+        when(archive.context()).thenReturn(archiveCtx);
+        when(archiveCtx.aeron()).thenReturn(aeron);
+        when(aeron.countersReader()).thenReturn(mock(CountersReader.class));
+        when(archive.replicate(anyLong(), anyInt(), any(), any())).thenReturn(REPLICATION_ID);
+
+        return archive;
+    }
+
+    private RecordingReplication newLogReplication(final AeronArchive archive, final long stopPosition)
+    {
+        return new RecordingReplication(
+            archive,
+            RECORDING_ID,
+            "aeron:udp?endpoint=localhost:8010",
+            10,
+            new ReplicationParams().stopPosition(stopPosition),
+            ctx.leaderHeartbeatTimeoutNs(),
+            ctx.leaderHeartbeatIntervalNs(),
+            clock.nanoTime());
+    }
+
+    private void trackLogRecordingId()
+    {
+        final MutableLong logRecordingId = new MutableLong(RECORDING_ID);
+        doAnswer(
+            (invocation) ->
+            {
+                final long recordingId = invocation.getArgument(0);
+                if (NULL_VALUE != recordingId)
+                {
+                    logRecordingId.set(recordingId);
+                }
+                return null;
+            }).when(consensusModuleAgent).logRecordingId(anyLong());
+        when(consensusModuleAgent.logRecordingId()).thenAnswer((invocation) -> logRecordingId.get());
+    }
+
+    private static void signalReplicationEndedWithoutRecording(
+        final Election election, final long recordingId, final long syncPosition)
+    {
+        election.onRecordingSignal(REPLICATION_ID, recordingId, syncPosition, RecordingSignal.SYNC);
+        election.onRecordingSignal(REPLICATION_ID, recordingId, NULL_POSITION, RecordingSignal.REPLICATE_END);
+    }
+
+    private void awaitSignalTime(
+        final Election election,
+        final SignalTiming timing,
+        final long progressDeadlineNs,
+        final Runnable leaderHeartbeat)
+    {
+        if (SignalTiming.BEFORE_PROGRESS_DEADLINE == timing)
+        {
+            clock.increment(1);
+            leaderHeartbeat.run();
+            return;
+        }
+
+        advanceClockWithLeaderHeartbeats(election, progressDeadlineNs - 1, leaderHeartbeat);
+        election.doWork(clock.nanoTime());
+
+        final long signalTimeNs = SignalTiming.AT_PROGRESS_DEADLINE == timing ?
+            progressDeadlineNs : progressDeadlineNs + ctx.leaderHeartbeatIntervalNs();
+        clock.increment(signalTimeNs - clock.nanoTime());
+        leaderHeartbeat.run();
+    }
+
+    private void advanceClockWithLeaderHeartbeats(
+        final Election election, final long untilNs, final Runnable leaderHeartbeat)
+    {
+        final long stepNs = ctx.leaderHeartbeatTimeoutNs() / 4;
+        while (clock.nanoTime() + stepNs < untilNs)
+        {
+            clock.increment(stepNs);
+            leaderHeartbeat.run();
+            election.doWork(clock.nanoTime());
+        }
+
+        clock.increment(untilNs - clock.nanoTime());
+        leaderHeartbeat.run();
+    }
+
+    enum SignalTiming
+    {
+        BEFORE_PROGRESS_DEADLINE,
+        AT_PROGRESS_DEADLINE,
+        AFTER_PROGRESS_DEADLINE
     }
 
     private static ClusterMember[] prepareClusterMembers()
