@@ -5,6 +5,8 @@
 
 === Changelog
 
+* **[Driver]** Update consumer/spyPosition when the local subscriber (IPC)/spy (UDP) is removed from the publication,
+i.e. ensure that the `joinPosition` will be up to date when a new subscriber is added. (https://github.com/aeron-io/aeron/issues/2225[#2225])
 * **[Java]** Improve Gradle build performance. (https://github.com/aeron-io/aeron/pull/2215[#2215])
 * **[Driver/Java]** On Media Driver startup, save error log in aeron directory's parent rather than aeron directory
 (that is immediately deleted).
@@ -18,18 +20,28 @@ image rather than true with an aeron error code.
 callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
-arrive.  (https://github.com/aeron-io/aeron/issues/2224[#2224])
+arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
 
 == 1.54.1 (unreleased)
 
+* **[Driver]** Update consumer/spyPosition when the local subscriber (IPC)/spy (UDP) is removed from the publication,
+i.e. ensure that the `joinPosition` will be up to date when a new subscriber is added. (https://github.com/aeron-io/aeron/issues/2225[#2225])
+* **[Driver/Java]** On Media Driver startup, save error log in aeron directory's parent rather than aeron directory
+(that is immediately deleted).
+* **[Client/C{plus}{plus} Wrapper]** Add copy and move constructor and assignment for Image for the correct
+`aeron_image_t` refcounts.
+* **[Client/C{plus}{plus} Wrapper]** Throw exceptions for Image wrapper methods that encounter c errors.
+* **[Client/C]** For `aeron_image_end_of_stream_position` return `-1` if `null` image.
+* **[Client/C]** For `aeron_image_is_end_of_stream` and `aeron_image_is_publication_revoked` return `false` if `null`
+image rather than true with an aeron error code.
 * **[Client/C]** Allow unavailable image to be retained and released for safe execution of the `on_unavailable_image`
 callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
-arrive.  (https://github.com/aeron-io/aeron/issues/2224[#2224])
+arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.0 (2026-10-27)
 
