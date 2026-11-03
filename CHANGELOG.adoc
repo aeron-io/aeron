@@ -21,6 +21,7 @@ encounters an unrecoverable error, i.e. prevent infinite polling loops while wai
 arrive.  (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
+* **[Java]** Upgrade to `ASM` 9.11.1.
 
 == 1.54.1 (unreleased)
 
