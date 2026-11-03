@@ -173,4 +173,13 @@ public final class DriverConductorProxy
             throw new IllegalStateException("offer failed");
         }
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String toString()
+    {
+        return "DriverConductorProxy{}";
+    }
 }
