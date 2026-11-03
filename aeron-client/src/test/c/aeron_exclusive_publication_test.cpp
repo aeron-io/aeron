@@ -504,27 +504,28 @@ TEST_F(ExclusivePublicationTest, offerClosed)
     EXPECT_EQ(AERON_HDR_TYPE_PAD, header->frame_header.type);
 }
 
-// TEST_F(ExclusivePublicationTest, offerAdminActionIfTermCountDoesNotMatch)
-// {
-//     const char *payload = "Aeron is awesome!";
-//     const size_t length = strlen(payload);
-//     const int32_t term_offset = 4096;
-//     const int32_t term_count = 16;
-//     createPublication(term_count, term_offset);
-//
-//     const int64_t position = aeron_exclusive_publication_offer(
-//         m_publication,
-//         reinterpret_cast<const uint8_t *>(payload),
-//         length,
-//         reserved_value_supplier,
-//         nullptr);
-//
-//     ASSERT_EQ(AERON_PUBLICATION_ADMIN_ACTION, position);
-//     const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[0];
-//     auto *header = (aeron_data_header_t *)(term_buffer->addr + term_offset);
-//     EXPECT_EQ(0, header->frame_header.frame_length);
-//     EXPECT_EQ(AERON_HDR_TYPE_PAD, header->frame_header.type);
-// }
+TEST_F(ExclusivePublicationTest, offerAdminActionIfMessageDoesNotFitIntoCurrentTerm)
+{
+    char payload[64];
+    memset(payload, 'x', sizeof(payload));
+    const size_t length = sizeof(payload);
+    const int32_t term_offset = TERM_LENGTH - 32;
+    const int32_t term_count = 16;
+    createPublication(term_count, term_offset);
+
+    const int64_t position = aeron_exclusive_publication_offer(
+        m_publication,
+        reinterpret_cast<const uint8_t *>(payload),
+        length,
+        reserved_value_supplier,
+        nullptr);
+
+    ASSERT_EQ(AERON_PUBLICATION_ADMIN_ACTION, position);
+    const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[0];
+    auto *header = (aeron_data_header_t *)(term_buffer->addr + term_offset);
+    EXPECT_EQ(0, header->frame_header.frame_length);
+    EXPECT_EQ(AERON_HDR_TYPE_PAD, header->frame_header.type);
+}
 
 TEST_F(ExclusivePublicationTest, offerBackPressureIfPublicationLimitReached)
 {
