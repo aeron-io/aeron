@@ -168,7 +168,6 @@ class ExtendRecordingTest
     @ValueSource(booleans = { true, false })
     void shouldExtendRecordingAndReplay(final boolean exclusive)
     {
-        final long controlSessionId = aeronArchive.controlSessionId();
         final int messageCount = 10;
         final long subscriptionIdOne;
         final long subscriptionIdTwo;

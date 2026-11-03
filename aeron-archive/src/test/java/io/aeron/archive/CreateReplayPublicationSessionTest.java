@@ -251,7 +251,6 @@ class CreateReplayPublicationSessionTest
         final int streamId = 3333;
         final String replayChannel = "aeron:udp?endpoint=localhost:1717";
         final int replayStreamId = -765;
-        final long registrationId = 42;
 
         final CreateReplayPublicationSession session = new CreateReplayPublicationSession(
             correlationId,

@@ -875,7 +875,7 @@ abstract class PersistentSubscriptionTest
         final Archive.Context localArchiveCtxTpl = archiveCtxTpl.clone()
             .archiveDir(archiveDir)
             .deleteArchiveOnStart(false);
-        final Archive archive = addCloseable(Archive.launch(localArchiveCtxTpl.clone()));
+        final Archive localArchive = addCloseable(Archive.launch(localArchiveCtxTpl.clone()));
 
         final AeronArchive aeronArchive = addCloseable(AeronArchive.connect(aeronArchiveCtxTpl.clone()));
         assert aeronArchive != null;
@@ -885,7 +885,7 @@ abstract class PersistentSubscriptionTest
         final List<byte[]> payloads = generateRandomPayloads(1);
         persistentPublication.persist(payloads);
 
-        archive.close();
+        localArchive.close();
 
         persistentSubscriptionCtx
             .recordingId(persistentPublication.recordingId())
@@ -3415,14 +3415,14 @@ abstract class PersistentSubscriptionTest
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
         persistentPublication.persist(generateRandomPayloads(2));
 
-        final PersistentSubscription.Context persistentSubscriptionCtx = this.persistentSubscriptionCtx.clone()
+        final PersistentSubscription.Context context = persistentSubscriptionCtx.clone()
             .aeron(aeron)
             .recordingId(persistentPublication.recordingId)
             .startPosition(FROM_START)
             .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
             .aeronArchiveContext(aeronArchiveCtxTpl.clone().aeron(aeron));
 
-        final PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
+        final PersistentSubscription persistentSubscription = PersistentSubscription.create(context);
         executeUntil(
             persistentSubscription::isLive,
             () -> poll(persistentSubscription, fragmentHandler, 10));
