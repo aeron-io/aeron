@@ -445,7 +445,9 @@ class Election
         {
             if (logLeadershipTermId == this.logLeadershipTermId)
             {
-                if (NULL_POSITION != nextTermBaseLogPosition && nextTermBaseLogPosition < appendPosition)
+                if (nextLeadershipTermId > logLeadershipTermId &&
+                    NULL_POSITION != nextTermBaseLogPosition &&
+                    nextTermBaseLogPosition < appendPosition)
                 {
                     onTruncateLogEntry(
                         thisMember.id(),

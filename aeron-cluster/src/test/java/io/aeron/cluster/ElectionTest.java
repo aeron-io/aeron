@@ -20,6 +20,7 @@ import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Subscription;
+import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.exceptions.TimeoutException;
@@ -1232,6 +1233,46 @@ class ElectionTest
 
         verify(consensusModuleAgent, never()).truncateLogEntry(anyLong(), anyLong());
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
+    }
+
+    @Test
+    void followerShouldTruncateUncommittedLogOnNewLeadershipTermFromNextTerm()
+    {
+        final long logLeadershipTermId = 1;
+        final long leadershipTermId = 2;
+        final long commitPosition = 2048;
+        final long nextTermBaseLogPosition = 3072;
+        final long appendPosition = 4096;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember leader = clusterMembers[0];
+
+        when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
+        when(consensusModuleAgent.prepareForNewLeadership(anyLong(), anyLong())).thenReturn(appendPosition);
+        when(commitPositionCounter.getPlain()).thenReturn(commitPosition);
+
+        final Election election = newElection(false, logLeadershipTermId, commitPosition, clusterMembers, thisMember);
+
+        final long t1 = 1;
+        election.doWork(t1);
+        verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
+
+        assertThrows(ClusterEvent.class, () -> election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            leadershipTermId,
+            nextTermBaseLogPosition,
+            NULL_POSITION,
+            leadershipTermId,
+            nextTermBaseLogPosition,
+            nextTermBaseLogPosition,
+            commitPosition,
+            RECORDING_ID,
+            t1,
+            leader.id(),
+            LOG_SESSION_ID,
+            false));
+
+        verify(consensusModuleAgent).truncateLogEntry(logLeadershipTermId, nextTermBaseLogPosition);
     }
 
     @Test
