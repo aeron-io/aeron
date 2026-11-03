@@ -89,8 +89,6 @@ typedef struct aeron_driver_name_resolver_stct
     }
     bootstrap_neighbor_counters;
 
-    // aeron_bit_set_t *bootstrap_neighbor_connected;
-
     aeron_udp_channel_transport_bindings_t *transport_bindings;
     size_t mtu_length;
     aeron_name_resolver_t bootstrap_resolver;
