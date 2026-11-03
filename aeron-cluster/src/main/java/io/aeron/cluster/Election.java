@@ -922,12 +922,24 @@ class Election
         {
             workCount += consensusModuleAgent.pollArchiveEvents();
             logReplication.poll(nowNs);
-            final boolean replicationDone = logReplication.hasReplicationEnded() && logReplication.hasStopped();
+            boolean isLogReplicationComplete = logReplication.hasReplicationEnded() && logReplication.hasStopped();
+            if (!isLogReplicationComplete && logReplication.hasEndedInSyncWithoutRecording())
+            {
+                final long position = logReplication.position();
+                if (position < replicationStopPosition)
+                {
+                    throw new ClusterException(
+                        "log replication ended without data, position=" + position +
+                        " stopPosition=" + replicationStopPosition,
+                        AeronException.Category.WARN);
+                }
+                isLogReplicationComplete = true;
+            }
             // Log replication runs concurrently, calling this after the check for completion ensures that the
             // last position at the end of the leadership is published as an appendPosition event.
             workCount += publishFollowerReplicationPosition(nowNs);
 
-            if (replicationDone)
+            if (isLogReplicationComplete)
             {
                 if (notifiedCommitPosition >= appendPosition)
                 {
