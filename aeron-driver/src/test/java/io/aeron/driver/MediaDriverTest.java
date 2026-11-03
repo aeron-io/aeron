@@ -35,7 +35,9 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED;
 import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_MAX_CYCLE_TIME;
@@ -45,6 +47,7 @@ import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_CYCLE_TIME
 import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_MAX_CYCLE_TIME;
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_THRESHOLD_EXCEEDED;
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
+import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
@@ -54,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith(InterruptingTestCallback.class)
 class MediaDriverTest
@@ -213,6 +217,41 @@ class MediaDriverTest
                 assertNull(aeron.getExclusivePublication(pubId1));
                 assertNotNull(aeron.getExclusivePublication(pubId2));
             }
+        }
+    }
+
+    @Test
+    void shouldSaveErrorLogAtSameLevelAsAeronDirectory(@TempDir final Path tempDir) throws IOException
+    {
+        assumeTrue(shouldRunJavaMediaDriver());
+
+        final Path driverPath = tempDir.resolve("aeron-driver");
+
+        final MediaDriver.Context context = new MediaDriver.Context()
+            .dirDeleteOnStart(false)
+            .aeronDirectoryName(driverPath.toString());
+
+        try (TestMediaDriver mediaDriver = TestMediaDriver.launch(context, systemTestWatcher))
+        {
+            Objects.requireNonNull(mediaDriver);
+            assertTrue(context.errorLog().record(new RuntimeException("error")));
+        }
+
+        final MediaDriver.Context context2 = new MediaDriver.Context()
+            .dirDeleteOnStart(false)
+            .aeronDirectoryName(driverPath.toString());
+
+        try (TestMediaDriver mediaDriver = TestMediaDriver.launch(context2, systemTestWatcher);
+             Stream<Path> filesInAeronDirectoryParent = Files.list(tempDir))
+        {
+            Objects.requireNonNull(mediaDriver);
+            assertEquals(1, filesInAeronDirectoryParent
+                .filter(path ->
+                {
+                    final String fileName = path.getFileName().toString();
+                    return fileName.startsWith("aeron-driver-") && fileName.endsWith("-error.log");
+                })
+                .count());
         }
     }
 

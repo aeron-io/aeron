@@ -520,11 +520,13 @@ public final class MediaDriver implements AutoCloseable
                         throw new ActiveDriverException("Active media driver detected: " + cncFile);
                     }
 
+                    final File fakeMarkFileToCaptureErrorLogInAeronDirectoryParent =
+                        new File(ctx.aeronDirectory().getParent(), CncFileDescriptor.CNC_FILE);
                     CommonContext.saveExistingErrors(
-                        cncFile,
+                        fakeMarkFileToCaptureErrorLogInAeronDirectoryParent,
                         CommonContext.errorLogBuffer(cncByteBuffer),
                         CommonContext.fallbackLogger(),
-                        "driver");
+                        ctx.aeronDirectory().getName());
                 }
             }
 

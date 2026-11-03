@@ -2,6 +2,7 @@
 
 == 1.55.0 (unreleased)
 
+* **[Driver/Java]** On Media Driver startup, save error log in aeron directory's parent rather than aeron directory (that is immediately deleted)
 * **[Client/C{plus}{plus} Wrapper]** Add copy and move constructor and assignment for Image for the correct aeron_image_t refcounts
 * **[Client/C{plus}{plus} Wrapper]** Throw exceptions for Image wrapper methods that encounter c errors
 * **[Client/C]** For aeron_image_end_of_stream_position return -1 if null image
