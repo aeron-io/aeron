@@ -1179,6 +1179,62 @@ class ElectionTest
     }
 
     @Test
+    void followerShouldNotTruncateLogOnStaleNewLeadershipTermFromSameTerm()
+    {
+        final long leadershipTermId = 1;
+        final long termBaseLogPosition = 1024;
+        final long commitPosition = 2048;
+        final long appendPosition = 4096;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember leader = clusterMembers[0];
+
+        when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
+        when(consensusModuleAgent.prepareForNewLeadership(anyLong(), anyLong())).thenReturn(appendPosition);
+        when(commitPositionCounter.getPlain()).thenReturn(commitPosition);
+
+        final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap = new Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(clusterMembers, clusterMemberByIdMap);
+
+        final Election election = new Election(
+            false,
+            NULL_VALUE,
+            leadershipTermId,
+            termBaseLogPosition,
+            commitPosition,
+            appendPosition,
+            clusterMembers,
+            clusterMemberByIdMap,
+            thisMember,
+            consensusPublisher,
+            ctx,
+            consensusModuleAgent);
+
+        long t1 = 0;
+        election.doWork(++t1);
+        verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
+
+        // Published by the leader of this term from LEADER_READY, when the term started, and delivered late.
+        election.onNewLeadershipTerm(
+            leadershipTermId,
+            leadershipTermId,
+            termBaseLogPosition,
+            NULL_POSITION,
+            leadershipTermId,
+            termBaseLogPosition,
+            termBaseLogPosition,
+            termBaseLogPosition,
+            RECORDING_ID,
+            t1,
+            leader.id(),
+            LOG_SESSION_ID,
+            false);
+
+        verify(consensusModuleAgent, never()).truncateLogEntry(anyLong(), anyLong());
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
+    }
+
+    @Test
     void followerShouldReplicateReplayAndCatchupWhenLateJoiningClusterInLaterTerm()
     {
         final long leadershipTermId = 1;
