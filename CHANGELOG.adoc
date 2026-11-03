@@ -5,6 +5,7 @@
 
 === Changelog
 
+* **[Java]** Improve Gradle build performance. (https://github.com/aeron-io/aeron/pull/2215[#2215])
 * **[Driver/Java]** On Media Driver startup, save error log in aeron directory's parent rather than aeron directory
 (that is immediately deleted).
 * **[Client/C{plus}{plus} Wrapper]** Add copy and move constructor and assignment for Image for the correct
@@ -93,7 +94,7 @@ TIP: Aeron error codes have a positive range but are reported via `AERON_SET_ERR
 * **[Archive]** Fix SIGSEGV when closing sessions after the archive's Aeron client times out. (#2204)
 * **[Driver/C]** Prevent an untethered subscription in `LINGER` state from keeping an image, network publication (spy)
 or an IPC publication stuck in `DRAINING` state forever.
-* **[C]** Remove linking to `wsock32`. (https://github.com/aeron-io/aeron/pull/2206[#2206]).
+* **[C]** Remove linking to `wsock32`. (https://github.com/aeron-io/aeron/pull/[#2206]).
 * **[Cluster]** Move taking a zero service consensus module snapshot from `slowTickWork` to `consensusWork`.
 * **[Driver/C]** Validate that `network_publication_max_messages_per_send` does not exceed `sender_io_vector_capacity`.
 * **[Samples/C]** Fix `streaming_exclusive_publisher` message size parsing with `-L` option.
