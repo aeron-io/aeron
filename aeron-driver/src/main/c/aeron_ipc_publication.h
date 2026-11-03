@@ -136,6 +136,11 @@ inline void aeron_ipc_publication_add_subscriber_hook(void *clientd, volatile in
 inline void aeron_ipc_publication_remove_subscriber_hook(void *clientd, volatile int64_t *value_addr)
 {
     aeron_ipc_publication_t *publication = (aeron_ipc_publication_t *)clientd;
+    int64_t sub_pos = aeron_counter_get_acquire(value_addr);
+    if (sub_pos > publication->conductor_fields.consumer_position)
+    {
+        publication->conductor_fields.consumer_position = sub_pos;
+    }
 
     if (1 == aeron_driver_subscribable_working_position_count(&publication->conductor_fields.subscribable))
     {

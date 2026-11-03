@@ -1385,6 +1385,11 @@ void aeron_network_publication_add_subscriber_hook(void *clientd, volatile int64
 void aeron_network_publication_remove_subscriber_hook(void *clientd, volatile int64_t *value_addr)
 {
     aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
+    int64_t consumer_position = aeron_counter_get_acquire(value_addr);
+    if (consumer_position > publication->conductor_fields.max_spy_position)
+    {
+        AERON_SET_RELEASE(publication->conductor_fields.max_spy_position, consumer_position);
+    }
 
     if (1 == aeron_driver_subscribable_working_position_count(&publication->conductor_fields.subscribable))
     {
