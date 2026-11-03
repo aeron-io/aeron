@@ -481,6 +481,22 @@ public final class Archive implements AutoCloseable
         public static final int MAX_CONCURRENT_REPLAYS_DEFAULT = 20;
 
         /**
+         * Number of archive conductor duty cycles between invocations of the Aeron client conductor
+         * {@link AgentInvoker} when the Aeron client is run with {@link Aeron.Context#useConductorAgentInvoker(boolean)}.
+         * Must be a power of two.
+         */
+        @Config
+        public static final String AERON_CLIENT_INVOKE_DUTY_CYCLES_PROP_NAME =
+            "aeron.archive.aeron.client.invoke.duty.cycles";
+
+        /**
+         * Default number of archive conductor duty cycles between invocations of the Aeron client conductor
+         * {@link AgentInvoker}.
+         */
+        @Config
+        public static final int AERON_CLIENT_INVOKE_DUTY_CYCLES_DEFAULT = 16;
+
+        /**
          * Maximum number of entries for the archive {@link Catalog}. Increasing this limit will require use of the
          * {@link CatalogTool}. The number of entries can be reduced by extending existing recordings rather than
          * creating new ones.
@@ -891,6 +907,19 @@ public final class Archive implements AutoCloseable
         }
 
         /**
+         * Number of archive conductor duty cycles between invocations of the Aeron client conductor
+         * {@link AgentInvoker}.
+         *
+         * @return number of archive conductor duty cycles between invocations of the Aeron client conductor.
+         * @see #AERON_CLIENT_INVOKE_DUTY_CYCLES_PROP_NAME
+         */
+        public static int aeronClientInvokeDutyCycles()
+        {
+            return Integer.getInteger(
+                AERON_CLIENT_INVOKE_DUTY_CYCLES_PROP_NAME, AERON_CLIENT_INVOKE_DUTY_CYCLES_DEFAULT);
+        }
+
+        /**
          * The maximum number of replays that can operate concurrently after which new requests will be rejected.
          *
          * @return the maximum number of replays that can operate concurrently.
@@ -1185,6 +1214,7 @@ public final class Archive implements AutoCloseable
         private int catalogFileSyncLevel = Configuration.catalogFileSyncLevel();
         private int maxConcurrentRecordings = Configuration.maxConcurrentRecordings();
         private int maxConcurrentReplays = Configuration.maxConcurrentReplays();
+        private int aeronClientInvokeDutyCycles = Configuration.aeronClientInvokeDutyCycles();
         private int fileIoMaxLength = Configuration.fileIoMaxLength();
         private long archiveId = Configuration.archiveId();
         private ArchiveThreadingMode threadingMode = Configuration.threadingMode();
@@ -1274,6 +1304,12 @@ public final class Archive implements AutoCloseable
             if (fileIoMaxLength < TERM_MIN_LENGTH || !BitUtil.isPowerOfTwo(fileIoMaxLength))
             {
                 throw new ConfigurationException("invalid fileIoMaxLength=" + fileIoMaxLength);
+            }
+
+            if (!isPowerOfTwo(aeronClientInvokeDutyCycles))
+            {
+                throw new ConfigurationException(
+                    "invalid aeronClientInvokeDutyCycles=" + aeronClientInvokeDutyCycles + ", must be a power of two");
             }
 
             io.aeron.driver.Configuration.validateMtuLength(controlMtuLength);
@@ -3301,6 +3337,34 @@ public final class Archive implements AutoCloseable
         }
 
         /**
+         * Get the number of archive conductor duty cycles between invocations of the Aeron client conductor
+         * {@link AgentInvoker}.
+         *
+         * @return number of archive conductor duty cycles between invocations of the Aeron client conductor.
+         * @see Configuration#AERON_CLIENT_INVOKE_DUTY_CYCLES_PROP_NAME
+         */
+        @Config
+        public int aeronClientInvokeDutyCycles()
+        {
+            return aeronClientInvokeDutyCycles;
+        }
+
+        /**
+         * Set the number of archive conductor duty cycles between invocations of the Aeron client conductor
+         * {@link AgentInvoker}. Only applies when the Aeron client is run with
+         * {@link Aeron.Context#useConductorAgentInvoker(boolean)}. Must be a power of two.
+         *
+         * @param aeronClientInvokeDutyCycles number of archive conductor duty cycles between invocations.
+         * @return this for a fluent API.
+         * @see Configuration#AERON_CLIENT_INVOKE_DUTY_CYCLES_PROP_NAME
+         */
+        public Context aeronClientInvokeDutyCycles(final int aeronClientInvokeDutyCycles)
+        {
+            this.aeronClientInvokeDutyCycles = aeronClientInvokeDutyCycles;
+            return this;
+        }
+
+        /**
          * Get the max length of a file IO operation.
          *
          * @return the max length of a file IO operation.
@@ -4041,6 +4105,7 @@ public final class Archive implements AutoCloseable
                 "\n    catalogFileSyncLevel=" + catalogFileSyncLevel +
                 "\n    maxConcurrentRecordings=" + maxConcurrentRecordings +
                 "\n    maxConcurrentReplays=" + maxConcurrentReplays +
+                "\n    aeronClientInvokeDutyCycles=" + aeronClientInvokeDutyCycles +
                 "\n    fileIoMaxLength=" + fileIoMaxLength +
                 "\n    threadingMode=" + threadingMode +
                 "\n    conductorCpuAffinity=" + conductorCpuAffinity +

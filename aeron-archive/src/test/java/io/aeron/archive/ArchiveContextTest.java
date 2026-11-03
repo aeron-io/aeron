@@ -648,6 +648,17 @@ class ArchiveContextTest
     }
 
     @ParameterizedTest
+    @ValueSource(ints = { Integer.MIN_VALUE, -16, 0, 3, 17, Integer.MAX_VALUE })
+    void shouldValidateAeronClientInvokeDutyCyclesIsPowerOfTwo(final int aeronClientInvokeDutyCycles)
+    {
+        context.aeronClientInvokeDutyCycles(aeronClientInvokeDutyCycles);
+
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertTrue(exception.getMessage().contains("aeronClientInvokeDutyCycles=" + aeronClientInvokeDutyCycles));
+    }
+
+    @ParameterizedTest
     @ValueSource(ints = { -3, ERROR_BUFFER_LENGTH_DEFAULT - 1, Integer.MAX_VALUE })
     void shouldValidateErrorBufferLengthSetExplicitly(final int errorBufferLength)
     {

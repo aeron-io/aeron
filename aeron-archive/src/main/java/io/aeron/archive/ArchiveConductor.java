@@ -133,6 +133,8 @@ abstract class ArchiveConductor
     private final long unavailableCounterHandlerRegistrationId;
     private final long connectTimeoutMs;
     private final long sessionLivenessCheckIntervalMs;
+    private final int aeronClientInvokeMask;
+    private int dutyCycleCount;
     private long nextSessionId = ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
     private long markFileUpdateDeadlineMs = 0;
     private int replayId = 1;
@@ -198,6 +200,7 @@ abstract class ArchiveConductor
         archiveDir = ctx.archiveDir();
         connectTimeoutMs = TimeUnit.NANOSECONDS.toMillis(ctx.connectTimeoutNs());
         sessionLivenessCheckIntervalMs = TimeUnit.NANOSECONDS.toMillis(ctx.sessionLivenessCheckIntervalNs());
+        aeronClientInvokeMask = ctx.aeronClientInvokeDutyCycles() - 1;
         catalog = ctx.catalog();
         markFile = ctx.archiveMarkFile();
         dutyCycleTracker = ctx.conductorDutyCycleTracker();
@@ -372,11 +375,15 @@ abstract class ArchiveConductor
 
         dutyCycleTracker.measureAndUpdate(nowNs);
 
+        if (0 == (++dutyCycleCount & aeronClientInvokeMask))
+        {
+            workCount += invokeAeronInvoker();
+        }
+
         final long nowMs = epochClock.time();
         if (cachedEpochClock.time() != nowMs)
         {
             cachedEpochClock.update(nowMs);
-            workCount += invokeAeronInvoker();
 
             if (nowMs >= markFileUpdateDeadlineMs)
             {
