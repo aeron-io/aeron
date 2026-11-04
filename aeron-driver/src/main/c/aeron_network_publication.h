@@ -262,6 +262,9 @@ inline void aeron_network_publication_trigger_send_setup_frame(
 
         if (publication->is_response)
         {
+            // A response publication has no endpoint address until it learns one here
+            const bool is_first_address = AF_UNSPEC == publication->endpoint_address.ss_family;
+
             if (AF_INET == addr->ss_family)
             {
                 memcpy(&publication->endpoint_address, addr, sizeof(struct sockaddr_in));
@@ -269,6 +272,12 @@ inline void aeron_network_publication_trigger_send_setup_frame(
             else if (AF_INET6 == addr->ss_family)
             {
                 memcpy(&publication->endpoint_address, addr, sizeof(struct sockaddr_in6));
+            }
+
+            // Every SETUP before this went nowhere; send the next one now, not after the setup timeout
+            if (is_first_address && AF_UNSPEC != publication->endpoint_address.ss_family)
+            {
+                publication->time_of_last_setup_ns = (time_ns - AERON_NETWORK_PUBLICATION_SETUP_TIMEOUT_NS) - 1;
             }
         }
     }

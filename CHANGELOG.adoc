@@ -24,6 +24,8 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
+* **[Driver]** Send the setup message of a response publication as soon as it learns the response subscription's
+address, instead of up to 100ms later when the setup timeout expires.
 
 == 1.54.1 (unreleased)
 
