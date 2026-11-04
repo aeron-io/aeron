@@ -139,7 +139,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 5a | Stop resolving from `mavenLocal()`. Changes behaviour for anyone testing against locally published Agrona or SBE, so it needs a team decision. | ☐ |
 | 5b | Declare repositories in `settings.gradle` (`dependencyResolutionManagement`, `FAIL_ON_PROJECT_REPOS`) instead of `allprojects`. | ☐ |
 | 5c | Replace `failOnVersionConflict()` plus seven `force` entries with dependency constraints or `strictly` versions; compare resolved dependency trees. | ☐ |
-| 5d | Test task tidy-up: `slowTest`, `bindingsTest` and `topologyTest` as JVM Test Suites; deduplicate the event-log system properties repeated in 5 places; drop the `testClassesDirs`/`classpath` overrides; stop choosing `excludeTags 'any()'` by matching test task names in `aeron.java-conventions`. Task names and CI commands must stay the same. | ☐ |
+| 5d | Test task tidy-up: `slowTest`, `bindingsTest` and `topologyTest` as JVM Test Suites; deduplicate the event-log system properties repeated in 5 places; drop the `testClassesDirs`/`classpath` overrides; stop choosing `excludeTags 'any()'` by matching test task names in `aeron.test-conventions`. Task names and CI commands must stay the same. | ☐ |
 | 5e | Publishing credentials through `credentials(PasswordCredentials)`, so Sonatype uploads also use the configuration cache. Needs the release workflows to pass secrets as `ORG_GRADLE_PROJECT_…` (question 8). | ☐ |
 | 5f | ~~Kotlin DSL for the build scripts and convention plugins.~~ Not doing: staying with Groovy (see the decisions). | ✗ |
 | 5g | `copyTestLogs`: `include '/var/coredump/core*'` probably never matches; fix or remove after checking what CI produces. | ☐ |
@@ -156,7 +156,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 5r | Empty the root script: `group` and `version` into the conventions and, with 5b, no `allprojects`/`subprojects` left. Then check whether the root still needs `java-library` and `jar.enabled = false`. Moves towards Isolated Projects. | ☐ |
 | 5s | Set `rootProject.name = 'aeron'` in `settings.gradle`; today the root project is named after its directory (e.g. `aeron-ci-cache` in a worktree). | ☐ |
 | 5t | Replace `TestResultsVariant` and the root `testReport` wiring with Gradle's `test-report-aggregation` plugin. It aggregates the `test` suite only, as the root report does today, but the task name and output path change, so check CI first. | ☐ |
-| 5u | Replace the remaining `layout.buildDirectory.get()` interpolations with `layout.buildDirectory.dir(...)`: `generatedSrcDir` in archive and cluster, the root `testReport`, samples' `removeWikiDirectory`, and the GC/heap-dump log paths in `aeron.java-conventions`. | ☐ |
+| 5u | Replace the remaining `layout.buildDirectory.get()` interpolations with `layout.buildDirectory.dir(...)`: `generatedSrcDir` in archive and cluster, the root `testReport`, samples' `removeWikiDirectory`, the GC/heap-dump log paths in `aeron.test-conventions`, and the offline link directories in `aeron.javadoc-conventions`. | ☐ |
 | 5v | Small duplicates: `aeron-driver` sets `systemProperty 'aeron.event.log', 'all'` twice; `aeron-all`'s `sourcesJar` sets `duplicatesStrategy` twice; JUnit coordinates are strings rather than version catalog entries. | ☐ |
 | 5w | `defaultTasks 'clean', 'build'`: a bare `./gradlew` always cleans, throwing away up-to-date checks (cached outputs still restore). Needs a team decision (question 10). | ☐ |
 | 5x | Low priority: `buildSrc` → an included `build-logic` build. Since Gradle 8 the gain is small and the churn large. | ☐ |
@@ -209,12 +209,12 @@ question that per-step comparisons left open.
 
 ### The pull requests
 
-| PR | Branch | Contents | Status (October 2026) |
+| PR | Branch | Contents | Status (November 2026) |
 |---|---|---|---|
 | 1. Bug fixes | `build-bug-fixes` (deleted after merge) | 3 commits, 9 lines of `build.gradle`: the cluster node-state schema as a `generateCodecs` input; `generateConfigDoc`/`validate*Expectations` depending on `compileJava` (via `files(...).builtBy(...)`); the test jar classifier using the property's value (`test-<module>`) | **Merged** as #2216, squash-merged into `b77aff82b4` |
-| 2. Faster builds | `build-performance` | 8 commits: compiler arguments as inputs and a shared git SHA service; build cache on; Javadoc links task; `TutorialPublishTask`; signing decided during configuration; one test task at a time; configuration cache on; no caching of native-binary test runs | **Open** as #2215, all CI green. To be rebased onto `master`. |
-| 3. Restructure | `build-restructure` | 5 commits on PR 2: `aeron.publishing`; typed `SbeGenerateTask`; `aeron.config-info`; a build file per module; `aeron.java-conventions` applied per module | Pushed; PR to be opened after PR 2 merges |
-| 4. Wiring tidy-up | `build-wiring` | 5 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants | Pushed; on top of PR 3 |
+| 2. Faster builds | `build-performance` | 8 commits: compiler arguments as inputs and a shared git SHA service; build cache on; Javadoc links task; `TutorialPublishTask`; signing decided during configuration; one test task at a time; configuration cache on; no caching of native-binary test runs | **Merged** as #2215 on 3 November, squash-merged into `c4c95b1a7f` |
+| 3. Restructure | `build-restructure` (reworked as `build-restructure-2`) | 7 commits on `master`: `aeron.publishing`; typed `GenerateSbeCodecs`; config doc and C validation plugins; a build file per module; `aeron.java-conventions` as a straight move; split into Java, test and Javadoc conventions; tidy-ups. See "Reworking PR 3" | Reworked and verified; to replace `build-restructure`, then the PR is opened |
+| 4. Wiring tidy-up | `build-wiring` | 5 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants | Pushed, but still on the old PR 3; to be rebuilt on the reworked one |
 
 PR 1 started as part of PR 2's branch, then was rebased onto `master` so it could be reviewed and merged on its own.
 The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be enabled correctly without it.
@@ -250,6 +250,81 @@ The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be 
   wrapping, and a duplicated `duplicatesStrategy` line in `aeron-all`'s `sourcesJar` (left for step 5).
 - **No speculative CI runs.** The full matrix is 44 jobs per push. CI is run by hand only when a branch is final,
   because each rebase makes a run obsolete.
+
+### Reworking PR 3 (November 2026)
+
+After PR 2 merged, PR 3 was rebased onto `master` (`7ecfd1a1ed`), then reviewed commit by commit for readability and
+rebuilt on `build-restructure-2`. Each commit was checked before the next was added.
+
+**Rebase after the squash merge.** PR 2's squash commit `c4c95b1a7f` was first confirmed identical to the combined diff
+of its 8 commits, then those commits were dropped with `git rebase --onto origin/master <last PR 2 commit>`.
+
+**Changes from the original PR 3:**
+
+| # | Commit | Change from the original |
+|---|---|---|
+| 1 | `aeron.publishing` convention plugin | None |
+| 2 | Typed SBE task | Class renamed `SbeGenerateTask` → `GenerateSbeCodecs`: verb first, then noun, like Gradle's own `GenerateModuleMetadata`; no `Task` suffix, like `Copy` or `JavaCompile`; "Sbe" so it isn't confused with other codecs. The 10 task names (`generateCodecs`, `generateTestCodecsV6`, …) are kept, because they exist on `master` |
+| 3 | Config doc and C validation | Reworked; see below |
+| 4 | A build file per module | New plugin and class names only |
+| 5 | `aeron.java-conventions` | None. Kept as a straight move of `master`'s `subprojects {}` block, so the history is easy to follow |
+| 6 | Split `aeron.java-conventions` | New: `aeron.test-conventions` (~200 lines) and `aeron.javadoc-conventions` (~75 lines) taken out of it, lines moved unchanged |
+| 7 | Tidy the Java and Javadoc conventions | New: `tasks.named('javadoc')` instead of the eager `javadoc {}` block, in the conventions and in every module; no `enabled = true` on jar tasks (the default); no explicit `base` plugin (`java-library` applies it) |
+
+**Config doc and C validation (commit 3).** The original used one `aeron.config-info` plugin that registered
+`generateConfigDoc`, plus an `aeronConfigInfo` extension whose methods registered the validation tasks, and a
+`FilePathArgumentProvider` to pass file paths lazily. Now:
+
+- typed `GenerateConfigDoc` (`@CacheableTask`) and `ValidateCExpectations` (`@DisableCachingByDefault`: no outputs)
+  tasks, whose annotated properties are both the inputs and the arguments;
+- `aeron.annotation-tools`, a base plugin putting aeron-annotations on those tasks' classpath;
+- `aeron.config-doc`, `aeron.config-expectations` and `aeron.counter-expectations`, each registering one task. Modules
+  opt in by applying a plugin, so a module's `plugins {}` block lists what it gets.
+
+A plain `JavaExec` version without the task classes was considered, to cut the line count. It was dropped because it
+needs `get()` on a provider during configuration, which Gradle's
+[task best practices](https://docs.gradle.org/current/userguide/best_practices_tasks.html) advise against. Most of the
+extra length is licence headers and Javadoc: the real code is about 60 lines, against about 75 in `master`'s copies. The
+rule agreed: Java for task types, `.gradle` scripts for wiring. The `.dat` inputs use `PathSensitivity.NONE`, as the same
+guide recommends for files. Validation output now shows absolute C source paths instead of `src/main/c/…`; otherwise
+the generated docs and validation results match `master`.
+
+**Why the test and Javadoc plugins apply `aeron.java-conventions` (commit 6).** The Javadoc configuration reads
+`java.sourceCompatibility` (for `--release 17`) while it is configured. If `aeron.java-conventions` applied the other
+two from its `plugins {}` block, they would run before `sourceCompatibility` was set, and Javadoc would silently get the
+toolchain's version. So each module applies all three.
+
+**Verification:**
+
+- Every commit: configuration dump and task list identical to the commit before; a full build with `--rerun-tasks
+  --no-build-cache`.
+- Commit 3: `out.md` byte-identical to `master` for all 4 modules; validation output identical apart from the path
+  prefix.
+- Commits 6 and 7: the `javadoc.options` files Gradle passes to Javadoc identical for all 7 modules.
+- `aeron-all` Javadoc has 530 source files.
+- Published artifacts identical to `master` (41 files).
+
+Two lessons about the tools:
+
+- **Compare dumps under the same build state.** A dump taken after compiling had 50 differing `inputFiles` facts: those
+  count files present on disk. Re-dumping both commits with the same build state showed no differences.
+- **The configuration dump doesn't cover Javadoc's string options** such as `--release`. Check
+  `build/tmp/javadoc/javadoc.options` when Javadoc configuration moves.
+
+**Performance** against `master` (`7ecfd1a1ed`, which includes PR 2). Fresh clones, back to back, median of 3, seconds:
+
+| Scenario | `master` | Reworked PR 3 |
+|---|---|---|
+| Configuration only (`help`) | 0.65 | 0.61 |
+| Clean `assemble`, no build cache | 3.96 | 3.88 |
+| Clean `assemble`, build cache | 1.78 | 1.70 |
+| No-op `assemble` | 0.91 | 0.88 |
+| Client class edit, `assemble` | 0.96 | 0.91 |
+| Clean `javadoc`, no build cache | 7.90 | 7.75 |
+| Change to compiled code in `buildSrc`, then `help` | 2.06 | **1.40** |
+
+Measured at commit 5, before the split. Everything is within noise except recompiling build logic, as in October. PR 3's
+case is maintainability.
 
 ### Keeping the stacked branches up to date
 
