@@ -17,7 +17,7 @@ import io.aeron.build.BuildJavaVersion
 import io.aeron.build.TestExecutionLimitService
 
 // Shared test configuration for every Aeron module: JUnit, the test JVM and its system properties, the slowTest,
-// bindingsTest and topologyTest tasks, and the test jar.
+// bindingsTest and topologyTest tasks.
 plugins {
     id 'aeron.java-conventions'
 }
@@ -184,18 +184,4 @@ tasks.register('topologyTest', Test) {
     systemProperty 'aeron.event.log', 'admin'
     systemProperty 'aeron.debug.timeout', '3600s'
     systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
-}
-
-tasks.register('testJar', Jar) {
-    dependsOn 'testClasses'
-    archiveClassifier.set(base.archivesName.map { "test-${it}" })
-    from sourceSets.test.output
-}
-
-configurations {
-    tests
-}
-
-artifacts {
-    tests testJar
 }
