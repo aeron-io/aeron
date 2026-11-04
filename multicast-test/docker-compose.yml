@@ -1,0 +1,81 @@
+services:
+  driver-1:
+    build:
+      context: ../
+      dockerfile: /Dockerfile
+      target: media-driver
+    networks:
+      macvlan-network:
+        ipv4_address: 192.168.0.2
+    volumes:
+      - volume-1:/dev/shm/
+
+  driver-2:
+    build:
+      context: ../
+      dockerfile: /Dockerfile
+      target: media-driver
+    networks:
+      macvlan-network:
+        ipv4_address: 192.168.0.3
+    volumes:
+      - volume-2:/dev/shm/
+
+  publisher-1:
+    build:
+      context: ../
+      dockerfile: /Dockerfile
+      target: basic-publisher
+      args:
+        CHANNEL: "aeron:udp?endpoint=239.193.32.91:20131|interface=192.168.0.0/24"
+    depends_on: [driver-1]
+    volumes:
+      - volume-1:/dev/shm/
+
+  subscriber-2:
+    build:
+      context: ../
+      dockerfile: /Dockerfile
+      target: basic-subscriber
+      args:
+        CHANNEL: "aeron:udp?endpoint=239.193.32.91:20131|interface=192.168.0.0/24"
+    depends_on: [driver-2]
+    volumes:
+      - volume-2:/dev/shm/
+
+  publisher-2:
+    build:
+      context: ../
+      dockerfile: /Dockerfile
+      target: basic-publisher
+      args:
+        CHANNEL: "aeron:udp?endpoint=239.193.32.93:20131|interface=192.168.0.0/24"
+    depends_on: [driver-1]
+    volumes:
+      - volume-2:/dev/shm/
+
+  subscriber-1:
+    build:
+      context: ../
+      dockerfile: /Dockerfile
+      target: basic-subscriber
+      args:
+        CHANNEL: "aeron:udp?endpoint=239.193.32.93:20131|interface=192.168.0.0/24"
+    depends_on: [driver-2]
+    volumes:
+      - volume-1:/dev/shm/
+
+networks:
+  macvlan-network:
+    driver: macvlan
+    driver_opts:
+      parent: 'wlp2s0'
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.0.0/24
+#        - gateway: 192.168.0.1
+
+volumes:
+  volume-1:
+  volume-2:
