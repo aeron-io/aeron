@@ -20,7 +20,6 @@ import io.aeron.build.GitShaService
 // Shared Java compilation, jar and Checkstyle configuration for every Aeron module. Tests and Javadoc are configured by
 // aeron.test-conventions and aeron.javadoc-conventions, which apply this plugin.
 plugins {
-    id 'base'
     id 'java-library'
     id 'checkstyle'
 }
@@ -40,7 +39,6 @@ java {
 }
 
 tasks.withType(Jar).configureEach {
-    enabled = true
     includeEmptyDirs = false
 }
 

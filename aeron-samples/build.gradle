@@ -45,7 +45,7 @@ publishing {
     }
 }
 
-javadoc {
+tasks.named('javadoc') {
     source += project(':aeron-annotations').sourceSets.main.allJava
     source += project(':aeron-client').sourceSets.main.allJava
     source += project(':aeron-driver').sourceSets.main.allJava

@@ -41,7 +41,7 @@ def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLi
     outputDir = layout.buildDirectory.dir('javadoc-links')
 }
 
-javadoc {
+tasks.named('javadoc') {
     inputs.files(extractJavadocLinks).withPathSensitivity(PathSensitivity.RELATIVE)
     configurations.javadocLinks.dependencies.each { library ->
         options.linksOffline(

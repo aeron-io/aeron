@@ -48,7 +48,7 @@ java {
     withJavadocJar()
 }
 
-javadoc {
+tasks.named('javadoc') {
     source += project(':aeron-annotations').sourceSets.main.allJava
 }
 
