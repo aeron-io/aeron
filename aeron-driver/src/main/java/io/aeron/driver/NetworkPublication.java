@@ -397,7 +397,16 @@ public final class NetworkPublication
 
             if (isResponse)
             {
+                // A response publication has no endpoint address until it learns one here
+                final boolean isFirstAddress = null == endpointAddress;
+
                 this.endpointAddress = srcAddress;
+
+                // Every SETUP before this went nowhere; send the next one now, not after the setup timeout
+                if (isFirstAddress && null != srcAddress)
+                {
+                    timeOfLastSetupNs = (timeOfLastStatusMessageNs - PUBLICATION_SETUP_TIMEOUT_NS) - 1;
+                }
             }
         }
     }
