@@ -23,15 +23,13 @@ plugins {
     id 'aeron.counter-expectations'
 }
 
-// Reads these projects' source sets, which only exist once their own build files have applied the java plugin.
-evaluationDependsOn(':aeron-annotations')
-
 dependencies {
     api libs.agrona
     implementation project(':aeron-annotations')
     annotationProcessor project(':aeron-annotations')
     testImplementation project(':aeron-test-support')
     testImplementation libs.jackson.cbor
+    javadocSource project(':aeron-annotations')
 }
 
 jar {
@@ -46,10 +44,6 @@ jar {
 java {
     withSourcesJar()
     withJavadocJar()
-}
-
-tasks.named('javadoc') {
-    source += project(':aeron-annotations').sourceSets.main.allJava
 }
 
 publishing {
