@@ -769,29 +769,6 @@ TEST_F(ExclusivePublicationTest, vectorOfferClosed)
     EXPECT_EQ(AERON_HDR_TYPE_PAD, header->frame_header.type);
 }
 
-// TEST_F(ExclusivePublicationTest, vectorOfferAdminActionIfTermCountDoesNotMatch)
-// {
-//     const char *payload = "Aeron is awesome squared!";
-//     aeron_iovec_t iov[1];
-//     iov[0].iov_base = const_cast<uint8_t *>(reinterpret_cast<const uint8_t *>(payload));
-//     iov[0].iov_len = strlen(payload);
-//     const int32_t term_offset = 4096;
-//     m_publication->log_meta_data->active_term_count = 5;
-//
-//     const int64_t position = aeron_exclusive_publication_offerv(
-//         m_publication,
-//         iov,
-//         1,
-//         reserved_value_supplier,
-//         nullptr);
-//
-//     ASSERT_EQ(AERON_PUBLICATION_ADMIN_ACTION, position);
-//     const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[0];
-//     auto *header = (aeron_data_header_t *)(term_buffer->addr + term_offset);
-//     EXPECT_EQ(0, header->frame_header.frame_length);
-//     EXPECT_EQ(AERON_HDR_TYPE_PAD, header->frame_header.type);
-// }
-
 TEST_F(ExclusivePublicationTest, vectorOfferBackPressureIfPublicationLimitReached)
 {
     const char *payload = "Aeron is awesome squared!";
