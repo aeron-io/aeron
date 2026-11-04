@@ -49,3 +49,9 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(['-Xlint:all,-processing', '-Werror', '-parameters']) // Enable all warnings and treat them as errors
     options.compilerArgumentProviders.add(new AeronVersionArgumentProvider(aeronVersion, gitSha))
 }
+
+// Gradle's mainSourceElements variant lists main's source directories but not the tasks that generate them (e.g.
+// generateCodecs), so other projects aggregating these sources would read generated directories before they exist.
+configurations.named('mainSourceElements') {
+    outgoing.artifacts.configureEach { it.builtBy(sourceSets.main.allSource.sourceDirectories) }
+}
