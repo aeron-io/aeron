@@ -18,6 +18,8 @@ import io.aeron.build.GenerateSbeCodecs
  */
 plugins {
     id 'aeron.java-conventions'
+    id 'aeron.test-conventions'
+    id 'aeron.javadoc-conventions'
     id 'aeron.publishing'
     id 'aeron.config-doc'
 }
