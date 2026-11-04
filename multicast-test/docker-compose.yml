@@ -2,7 +2,7 @@ services:
   driver-1:
     build:
       context: ../
-      dockerfile: /Dockerfile
+      dockerfile: ./multicast-test/Dockerfile
       target: media-driver
     networks:
       macvlan-network:
@@ -13,7 +13,7 @@ services:
   driver-2:
     build:
       context: ../
-      dockerfile: /Dockerfile
+      dockerfile: ./multicast-test/Dockerfile
       target: media-driver
     networks:
       macvlan-network:
@@ -24,7 +24,7 @@ services:
   publisher-1:
     build:
       context: ../
-      dockerfile: /Dockerfile
+      dockerfile: ./multicast-test/Dockerfile
       target: basic-publisher
       args:
         CHANNEL: "aeron:udp?endpoint=239.193.32.91:20131|interface=192.168.0.0/24"
@@ -35,7 +35,7 @@ services:
   subscriber-2:
     build:
       context: ../
-      dockerfile: /Dockerfile
+      dockerfile: ./multicast-test/Dockerfile
       target: basic-subscriber
       args:
         CHANNEL: "aeron:udp?endpoint=239.193.32.91:20131|interface=192.168.0.0/24"
@@ -46,7 +46,7 @@ services:
   publisher-2:
     build:
       context: ../
-      dockerfile: /Dockerfile
+      dockerfile: ./multicast-test/Dockerfile
       target: basic-publisher
       args:
         CHANNEL: "aeron:udp?endpoint=239.193.32.93:20131|interface=192.168.0.0/24"
@@ -57,7 +57,7 @@ services:
   subscriber-1:
     build:
       context: ../
-      dockerfile: /Dockerfile
+      dockerfile: ./multicast-test/Dockerfile
       target: basic-subscriber
       args:
         CHANNEL: "aeron:udp?endpoint=239.193.32.93:20131|interface=192.168.0.0/24"
