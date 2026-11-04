@@ -65,7 +65,7 @@ LoggingTest.configureLoggingTests(
     project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
     'TEXT_DATA,CMD_IN_ADD_PUBLICATION')
 
-javadoc {
+tasks.named('javadoc') {
     source += project(':aeron-annotations').sourceSets.main.allJava
     source += project(':aeron-client').sourceSets.main.allJava
 }

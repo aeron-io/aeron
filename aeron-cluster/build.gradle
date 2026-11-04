@@ -134,7 +134,7 @@ tasks.register('sourcesJar', Jar) {
     from sourceSets.generated.allSource
 }
 
-javadoc {
+tasks.named('javadoc') {
     source += sourceSets.generated.allJava
     source += project(':aeron-annotations').sourceSets.main.allJava
     source += project(':aeron-client').sourceSets.main.allJava

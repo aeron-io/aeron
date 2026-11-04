@@ -77,7 +77,7 @@ tasks.register('sourcesJar', Jar) {
         aeronSamplesProject.sourceSets.main.allSource)
 }
 
-javadoc {
+tasks.named('javadoc') {
     source += project(':aeron-annotations').sourceSets.main.allJava
     source += aeronClientProject.sourceSets.main.allJava
     source += aeronDriverProject.sourceSets.main.allJava
