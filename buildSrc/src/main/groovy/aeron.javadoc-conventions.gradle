@@ -15,6 +15,7 @@
  */
 import io.aeron.build.BuildJavaVersion
 import io.aeron.build.ExtractJavadocLinksTask
+import io.aeron.build.MainSourcesVariant
 
 // Shared Javadoc configuration for every Aeron module, linking offline to the JDK and Agrona Javadoc.
 plugins {
@@ -33,6 +34,13 @@ dependencies {
     javadocLinks("org.agrona:agrona:${libs.findVersion('agrona').get().requiredVersion}:javadoc@jar")
 }
 
+// Projects whose main sources are also documented in this module's Javadoc, declared with `javadocSource project(...)`.
+def javadocSource = configurations.dependencyScope('javadocSource')
+def javadocSourcePath = configurations.resolvable('javadocSourcePath') {
+    extendsFrom(javadocSource.get())
+    MainSourcesVariant.request(it, objects)
+}
+
 // Package lists of the libraries in `javadocLinks`, so the Javadoc can link to their documentation without
 // fetching it.
 def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLinksTask) {
@@ -42,6 +50,8 @@ def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLi
 }
 
 tasks.named('javadoc') {
+    source(javadocSourcePath.get().incoming.files.asFileTree.matching { include '**/*.java' })
+
     inputs.files(extractJavadocLinks).withPathSensitivity(PathSensitivity.RELATIVE)
     configurations.javadocLinks.dependencies.each { library ->
         options.linksOffline(
