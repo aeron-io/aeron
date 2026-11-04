@@ -45,10 +45,10 @@ int aeron_udp_transport_poller_init(
     poller->transports.array = NULL;
     poller->transports.length = 0;
     poller->transports.capacity = 0;
-    poller->is_epoll_registered = 0;
 
     poller->iteration_threshold = context->udp_channel_transport_poller_iteration_threshold;
     poller->socket_poll_limit = context->udp_channel_transport_poller_socket_poll_limit;
+    poller->total_transport_count = 0;
 
 #if defined(HAVE_EPOLL)
     if ((poller->fd = epoll_create1(0)) < 0)
@@ -97,32 +97,13 @@ int aeron_udp_transport_poller_add(aeron_udp_transport_poller_t *poller, aeron_u
         }
     }
 
-    /*
-     * Registration waits until the transport count actually crosses
-     * `poller->iteration_threshold`, because below it
-     * `aeron_udp_transport_poller_poll` reads every transport directly and
-     * never calls `epoll_wait` -- `poller->fd` would sit there unused.
-     *
-     * "Unused" is not the same as "free": a socket that is in an epoll set has
-     * a waiter on its sleep queue, so *every* datagram delivered to it pays the
-     * wake-up path (`sock_def_readable` -> `__wake_up_common` ->
-     * `ep_poll_callback`, plus two IRQ-disabling spinlocks). On loopback that
-     * delivery runs in the sending thread's softirq, so a driver that sends a
-     * datagram pays it for its own send. Measured at 501K messages/s: 6.09% of
-     * the sender thread's kernel instructions, and zero once the sockets are
-     * out of the set.
-     *
-     * `index + 1` is the count this transport brings the poller to, since
-     * `transports.length` is not incremented until after this block.
-     */
-    struct epoll_event event;
-
-    event.events = EPOLLIN;
-
-    if (index + 1 > poller->iteration_threshold)
+    if (poller->total_transport_count > poller->iteration_threshold || index + 1 > poller->iteration_threshold)
     {
+        struct epoll_event event;
+        event.events = EPOLLIN;
+
         /* Crossing the threshold registers everything, not just this one. */
-        const size_t first = poller->is_epoll_registered ? index : 0;
+        const size_t first = poller->total_transport_count > poller->iteration_threshold ? index : 0;
 
         for (size_t i = first; i <= index; i++)
         {
@@ -136,8 +117,6 @@ int aeron_udp_transport_poller_add(aeron_udp_transport_poller_t *poller, aeron_u
                 return -1;
             }
         }
-
-        poller->is_epoll_registered = 1;
     }
 
 #elif defined(HAVE_POLL) || defined(HAVE_WSAPOLL)
@@ -159,6 +138,7 @@ int aeron_udp_transport_poller_add(aeron_udp_transport_poller_t *poller, aeron_u
 #endif
 
     poller->transports.length++;
+    poller->total_transport_count++;
 
     return 0;
 }
@@ -192,15 +172,7 @@ int aeron_udp_transport_poller_remove(aeron_udp_transport_poller_t *poller, aero
             (size_t)index,
             (size_t)last_index);
 
-        /*
-         * The set is empty at or below the threshold, so there is usually
-         * nothing to delete -- and deleting a descriptor that was never added
-         * fails with ENOENT, which would be a spurious error. Dropping back
-         * below the threshold empties the set again, so that the "registered"
-         * flag always means "all of them are in, and the poller is waiting on
-         * epoll".
-         */
-        if (poller->is_epoll_registered)
+        if (poller->total_transport_count > poller->iteration_threshold)
         {
             struct epoll_event event;
 
@@ -211,24 +183,6 @@ int aeron_udp_transport_poller_remove(aeron_udp_transport_poller_t *poller, aero
             {
                 AERON_SET_ERR(errno, "%s", "epoll_ctl(EPOLL_CTL_DEL)");
                 return -1;
-            }
-
-            if (poller->transports.length <= poller->iteration_threshold)
-            {
-                for (size_t i = 0, length = poller->transports.length; i < length; i++)
-                {
-                    aeron_udp_channel_transport_t *entry = poller->transports.array[i].transport;
-
-                    event.data.fd = entry->recv_fd;
-                    event.data.ptr = entry;
-                    if (epoll_ctl(poller->fd, EPOLL_CTL_DEL, entry->recv_fd, &event) < 0)
-                    {
-                        AERON_SET_ERR(errno, "%s", "epoll_ctl(EPOLL_CTL_DEL)");
-                        return -1;
-                    }
-                }
-
-                poller->is_epoll_registered = 0;
             }
         }
 
