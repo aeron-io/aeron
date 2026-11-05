@@ -26,6 +26,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
+* **[C]** Upgrade to `CMake` 4.4.5.
 
 == 1.54.1 (unreleased)
 
