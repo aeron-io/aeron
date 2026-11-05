@@ -53,13 +53,4 @@ abstract class CommandProxy
     {
         return commandQueue.remainingCapacity() < 1;
     }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String toString()
-    {
-        return getClass().getSimpleName() + "{}";
-    }
 }

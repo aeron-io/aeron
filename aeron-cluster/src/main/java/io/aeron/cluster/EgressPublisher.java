@@ -328,13 +328,4 @@ class EgressPublisher
 
         return false;
     }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String toString()
-    {
-        return "EgressPublisher{}";
-    }
 }
