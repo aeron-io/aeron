@@ -215,8 +215,8 @@ question that per-step comparisons left open.
 |---|---|---|---|
 | 1. Bug fixes | `build-bug-fixes` (deleted after merge) | 3 commits, 9 lines of `build.gradle`: the cluster node-state schema as a `generateCodecs` input; `generateConfigDoc`/`validate*Expectations` depending on `compileJava` (via `files(...).builtBy(...)`); the test jar classifier using the property's value (`test-<module>`) | **Merged** as #2216, squash-merged into `b77aff82b4` |
 | 2. Faster builds | `build-performance` | 8 commits: compiler arguments as inputs and a shared git SHA service; build cache on; Javadoc links task; `TutorialPublishTask`; signing decided during configuration; one test task at a time; configuration cache on; no caching of native-binary test runs | **Merged** as #2215 on 3 November, squash-merged into `c4c95b1a7f` |
-| 3. Restructure | `build-restructure` (reworked as `build-restructure-2`) | 7 commits on `master`: `aeron.publishing`; typed `GenerateSbeCodecs`; config doc and C validation plugins; a build file per module; `aeron.java-conventions` as a straight move; split into Java, test and Javadoc conventions; tidy-ups. See "Reworking PR 3" | Reworked and verified; to replace `build-restructure`, then the PR is opened |
-| 4. Wiring tidy-up | `build-wiring` (rebuilt as `build-wiring-2`) | 6 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants; a tidy-up. See "Rebuilding PR 4" | Rebuilt on the reworked PR 3 and verified; to replace `build-wiring` |
+| 3. Restructure | `build-restructure` | 7 commits on `master`: `aeron.publishing`; typed `GenerateSbeCodecs`; config doc and C validation plugins; a build file per module; `aeron.java-conventions` as a straight move; split into Java, test and Javadoc conventions; tidy-ups. See "Reworking PR 3" | Reworked and verified (`bb6fc6f625`); PR to be opened |
+| 4. Wiring tidy-up | `build-wiring` | 6 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants; a tidy-up. See "Rebuilding PR 4" | Rebuilt on the reworked PR 3 and verified (`41fe966729`); on top of PR 3 |
 
 PR 1 started as part of PR 2's branch, then was rebased onto `master` so it could be reviewed and merged on its own.
 The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be enabled correctly without it.
@@ -256,7 +256,9 @@ The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be 
 ### Reworking PR 3 (November 2026)
 
 After PR 2 merged, PR 3 was rebased onto `master` (`7ecfd1a1ed`), then reviewed commit by commit for readability and
-rebuilt on `build-restructure-2`. Each commit was checked before the next was added.
+rebuilt on a new branch, which then replaced `build-restructure` (5 November). Each commit was checked before the
+next was added. The previous versions are kept locally as tags `backup/build-restructure-2026-11-04` and
+`backup/build-wiring-2026-11-04`.
 
 **Rebase after the squash merge.** PR 2's squash commit `c4c95b1a7f` was first confirmed identical to the combined diff
 of its 8 commits, then those commits were dropped with `git rebase --onto origin/master <last PR 2 commit>`.
@@ -287,8 +289,8 @@ A plain `JavaExec` version without the task classes was considered, to cut the l
 needs `get()` on a provider during configuration, which Gradle's
 [task best practices](https://docs.gradle.org/current/userguide/best_practices_tasks.html) advise against. Most of the
 extra length is licence headers and Javadoc: the real code is about 60 lines, against about 75 in `master`'s copies. The
-rule agreed: Java for task types, `.gradle` scripts for wiring. The `.dat` inputs use `PathSensitivity.NONE`, as the same
-guide recommends for files. Validation output now shows absolute C source paths instead of `src/main/c/…`; otherwise
+rule agreed: Java for task types, `.gradle` scripts for wiring. The `.dat` inputs use `PathSensitivity.NONE`, as the
+same guide recommends for files. Validation output now shows absolute C source paths instead of `src/main/c/…`; otherwise
 the generated docs and validation results match `master`.
 
 **Why the test and Javadoc plugins apply `aeron.java-conventions` (commit 6).** The Javadoc configuration reads
@@ -330,8 +332,9 @@ case is maintainability.
 
 ### Rebuilding PR 4 (November 2026)
 
-PR 4's five commits were cherry-picked onto the reworked PR 3 (`build-wiring-2`), one at a time, then a tidy-up was
-added. Each commit keeps its original message and makes the same line changes as before, adapted as follows:
+PR 4's five commits were cherry-picked one at a time onto the reworked PR 3, on a new branch that then replaced
+`build-wiring`, and a tidy-up was added. Each commit keeps its original message and makes the same line changes as
+before, adapted as follows:
 
 | Commit | Adapted for the reworked PR 3 |
 |---|---|
