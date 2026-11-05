@@ -100,7 +100,6 @@ dependencies {
 
 tasks.register('testReport', TestReport) {
     destinationDirectory = file("${layout.buildDirectory.get()}/reports/allTests")
-    // Include the results from the `test` task in all sub-projects
     testResults.setFrom(configurations.subprojectTestResultsPath.incoming.files)
 }
 
