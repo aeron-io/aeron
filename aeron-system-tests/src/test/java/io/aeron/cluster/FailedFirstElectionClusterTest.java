@@ -82,8 +82,6 @@ class FailedFirstElectionClusterTest
         final int numTerms = 3;
 
         final TestCluster cluster = aCluster().withStaticNodes(numNodes).start(2);
-        cluster.awaitLeader();
-        cluster.connectClient();
 
         systemTestWatcher.cluster(cluster);
         systemTestWatcher.ignoreErrorsMatching((s) -> s.contains("Forced failure"));
@@ -94,6 +92,7 @@ class FailedFirstElectionClusterTest
         {
             final TestNode oldLeader = cluster.awaitLeader();
 
+            cluster.connectClient();
             cluster.sendMessages(messageCount);
             totalMessages += messageCount;
             cluster.awaitResponseMessageCount(totalMessages);
@@ -105,6 +104,7 @@ class FailedFirstElectionClusterTest
 
         awaitElectionClosed(cluster.startStaticNode(2, true));
 
+        cluster.connectClient();
         cluster.sendMessages(messageCount);
         totalMessages += messageCount;
 
