@@ -160,7 +160,7 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
 {
     if (aeron_nano_clock() > async->deadline_ns)
     {
-        AERON_SET_ERR(-1, "%s", "connect timeout");
+        AERON_SET_ERR(ETIMEDOUT, "%s", "archive connect timeout");
         goto cleanup;
     }
 
