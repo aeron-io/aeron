@@ -5,8 +5,6 @@
 
 === Changelog
 
-* **[Driver/C]** On Linux, delay registering sockets with the poller's epoll set until the number of socket do not breach
-the iteration threshold (`aeron.udp.channel.transport.poller.iteration.threshold`). (https://github.com/aeron-io/aeron/pull/2209[#2209])
 * **[Driver]** Send the setup message of a response publication as soon as it learns the response subscription's
 address, instead of up to 100ms later when the setup timeout expires. (https://github.com/aeron-io/aeron/pull/2233[#2233])
 * **[Driver]** Update consumer/spyPosition when the local subscriber (IPC)/spy (UDP) is removed from the publication,
@@ -31,8 +29,6 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.1 (unreleased)
 
-* **[Driver/C]** On Linux, delay registering sockets with the poller's epoll set until the number of socket do not breach
-the iteration threshold (`aeron.udp.channel.transport.poller.iteration.threshold`). (https://github.com/aeron-io/aeron/pull/2209[#2209])
 * **[Driver]** Send the setup message of a response publication as soon as it learns the response subscription's
 address, instead of up to 100ms later when the setup timeout expires. (https://github.com/aeron-io/aeron/pull/2233[#2233])
 * **[Driver]** Update consumer/spyPosition when the local subscriber (IPC)/spy (UDP) is removed from the publication,
