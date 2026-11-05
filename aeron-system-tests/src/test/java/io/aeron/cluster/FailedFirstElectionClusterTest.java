@@ -31,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
+import static io.aeron.test.cluster.TestCluster.awaitElectionClosed;
 
 @SlowTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -81,6 +82,8 @@ class FailedFirstElectionClusterTest
         final int numTerms = 3;
 
         final TestCluster cluster = aCluster().withStaticNodes(numNodes).start(2);
+        cluster.awaitLeader();
+        cluster.connectClient();
 
         systemTestWatcher.cluster(cluster);
         systemTestWatcher.ignoreErrorsMatching((s) -> s.contains("Forced failure"));
@@ -91,20 +94,17 @@ class FailedFirstElectionClusterTest
         {
             final TestNode oldLeader = cluster.awaitLeader();
 
-            cluster.connectClient();
             cluster.sendMessages(messageCount);
             totalMessages += messageCount;
             cluster.awaitResponseMessageCount(totalMessages);
 
             cluster.stopNode(oldLeader);
             cluster.startStaticNode(oldLeader.index(), false);
-            cluster.awaitLeader();
+            cluster.awaitLeader(oldLeader.index());
         }
 
-        cluster.startStaticNode(2, true);
-        cluster.awaitLeader();
+        awaitElectionClosed(cluster.startStaticNode(2, true));
 
-        cluster.connectClient();
         cluster.sendMessages(messageCount);
         totalMessages += messageCount;
 

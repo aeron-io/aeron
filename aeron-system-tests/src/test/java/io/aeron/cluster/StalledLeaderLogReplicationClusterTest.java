@@ -87,19 +87,14 @@ class StalledLeaderLogReplicationClusterTest
 
         cluster.stopNode(leader0);
         final TestNode leader1 = cluster.awaitLeader(leader0.index());
-        cluster.connectClient();
-        cluster.startStaticNode(leader0.index(), false);
-        awaitElectionClosed(cluster.node(leader0.index()));
+        awaitElectionClosed(cluster.startStaticNode(leader0.index(), false));
 
-        cluster.connectClient();
         cluster.sendAndAwaitMessages(messageCount, messageCount * 2);
 
         cluster.stopNode(leader1);
         cluster.awaitLeader(leader1.index());
-        cluster.startStaticNode(leader1.index(), false);
-        awaitElectionClosed(cluster.node(leader1.index()));
+        awaitElectionClosed(cluster.startStaticNode(leader1.index(), false));
 
-        cluster.connectClient();
         cluster.sendAndAwaitMessages(messageCount, messageCount * 3);
     }
 }
