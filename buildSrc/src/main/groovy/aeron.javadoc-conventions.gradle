@@ -35,9 +35,9 @@ dependencies {
 }
 
 // Projects whose main sources are also documented in this module's Javadoc, declared with `javadocSource project(...)`.
-def javadocSource = configurations.dependencyScope('javadocSource')
-def javadocSourcePath = configurations.resolvable('javadocSourcePath') {
-    extendsFrom(javadocSource.get())
+configurations.dependencyScope('javadocSource')
+configurations.resolvable('javadocSourcePath') {
+    extendsFrom(configurations.javadocSource)
     MainSourcesVariant.request(it, objects)
 }
 
@@ -50,7 +50,7 @@ def extractJavadocLinks = tasks.register('extractJavadocLinks', ExtractJavadocLi
 }
 
 tasks.named('javadoc') {
-    source(javadocSourcePath.get().incoming.files.asFileTree.matching { include '**/*.java' })
+    source(configurations.javadocSourcePath.incoming.files.asFileTree.matching { include '**/*.java' })
 
     inputs.files(extractJavadocLinks).withPathSensitivity(PathSensitivity.RELATIVE)
     configurations.javadocLinks.dependencies.each { library ->
