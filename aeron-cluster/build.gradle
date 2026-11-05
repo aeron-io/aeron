@@ -41,8 +41,6 @@ dependencies {
     javadocSource project(':aeron-archive')
 }
 
-def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
-
 tasks.withType(Test).configureEach {
     systemProperty 'aeron.event.cluster.log', 'all'
     systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
@@ -60,7 +58,7 @@ tasks.register('generateCodecs', GenerateSbeCodecs) {
     classpath = configurations.codecGeneration
     schemas.from(codecsFile, markCodecsFile, nodeStateCodecsFile)
     validationXsd = file(sbeFile)
-    outputDir = generatedSrcDir
+    outputDir = layout.buildDirectory.dir('generated-src')
     targetLanguage = 'Java'
 }
 
@@ -114,6 +112,7 @@ configurations.named('mainSourceElements') {
         type = 'directory'
     }
 }
+
 // The versioned test codecs are compiled with the module's tests.
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsMarkFileV0'))
 sourceSets.test.java.srcDir(tasks.named('generateTestCodecsV5'))
