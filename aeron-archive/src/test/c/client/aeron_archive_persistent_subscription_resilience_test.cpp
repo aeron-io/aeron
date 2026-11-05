@@ -5355,7 +5355,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAhe
     // Still exactly the one initial deadline-breach error — PS refreshed once, went to
     // REPLAY then LIVE, and has stayed there. No additional AWAIT_LIVE entries means no
     // additional breaches.
-    ASSERT_EQ(1, listener.error_count);
+    ASSERT_EQ(1, listener.error_count) << listener.last_error_message;
     // The filter is a safety net for the race where publisher B's first SETUP carries
     // its initial term_offset (causing PS's image to attach at stop_0 and skip refresh).
     // It may or may not fire depending on how fast publisher B's snd_pos advances
