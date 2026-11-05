@@ -231,8 +231,7 @@ private:
         listener->last_errcode = errcode;
         listener->last_error_message = message;
         listener->error_count++;
-        std::cerr << "errcode=" << std::to_string(errcode) << " error_message=" << message << std::endl;
-        std::cerr.flush();
+        std::cout << "errcode=" << std::to_string(errcode) << " error_message=" << message << std::endl;
     }
 };
 
@@ -5205,9 +5204,6 @@ static void installSetupAtPositionLossGenerator(
 // refresh path.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume)
 {
-    std::cerr << "In shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume..." << std::endl;
-    std::cerr.flush();
-
     aeron_setup_at_position_loss_config_t loss_config;
     aeron_setup_at_position_loss_config_init(&loss_config);
     // The archive's recording subscription URI carries `init-term-id=` (set by
