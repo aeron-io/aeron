@@ -231,7 +231,6 @@ private:
         listener->last_errcode = errcode;
         listener->last_error_message = message;
         listener->error_count++;
-        std::cout << "errcode=" << std::to_string(errcode) << " error_message=" << message << std::endl;
     }
 };
 
