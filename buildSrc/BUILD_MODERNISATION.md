@@ -162,6 +162,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 5x | Low priority: `buildSrc` → an included `build-logic` build. Since Gradle 8 the gain is small and the churn large. | ☐ |
 | 5y | Low priority: typesafe project accessors (`projects.aeronClient`). Check whether they are still a feature preview first. | ☐ |
 | 5z | Low priority: `libs` and `buildJavaVersion` are defined in each of `aeron.java-conventions`, `aeron.test-conventions` and `aeron.javadoc-conventions`, because script plugins can't share variables. Acceptable at three; revisit if more plugins need them. | ☐ |
+| 5aa | Javadoc: archive and cluster add `sourceSets.generated.allJava`, and the codec directories reach other modules' Javadoc through `mainSourceElements`, but every generated package is under `io/aeron/*/codecs/**`, which `aeron.javadoc-conventions` excludes. The two `source +=` lines can go (Javadoc then no longer waits for `generateCodecs`); the variant artifact stays, as `aeron-all`'s sources jar needs it. Check with the `javadoc.options` files. | ☐ |
 | 6 | CI and test speed: ideas, not started. Each is independent; see "Step 6: CI and test speed" below. | ☐ |
 | 6a | Measure first: per-job durations and failure history from the GitHub API, and the slowest test classes from the JUnit XML results, to decide what to change. | ☐ |
 | 6b | Run `ci-low-cadence.yml` only on its schedule and on `master`, not on every pull request (17 jobs per push). Needs the team to accept catching slow-test failures after merge. | ☐ |
@@ -215,7 +216,7 @@ question that per-step comparisons left open.
 | 1. Bug fixes | `build-bug-fixes` (deleted after merge) | 3 commits, 9 lines of `build.gradle`: the cluster node-state schema as a `generateCodecs` input; `generateConfigDoc`/`validate*Expectations` depending on `compileJava` (via `files(...).builtBy(...)`); the test jar classifier using the property's value (`test-<module>`) | **Merged** as #2216, squash-merged into `b77aff82b4` |
 | 2. Faster builds | `build-performance` | 8 commits: compiler arguments as inputs and a shared git SHA service; build cache on; Javadoc links task; `TutorialPublishTask`; signing decided during configuration; one test task at a time; configuration cache on; no caching of native-binary test runs | **Merged** as #2215 on 3 November, squash-merged into `c4c95b1a7f` |
 | 3. Restructure | `build-restructure` (reworked as `build-restructure-2`) | 7 commits on `master`: `aeron.publishing`; typed `GenerateSbeCodecs`; config doc and C validation plugins; a build file per module; `aeron.java-conventions` as a straight move; split into Java, test and Javadoc conventions; tidy-ups. See "Reworking PR 3" | Reworked and verified; to replace `build-restructure`, then the PR is opened |
-| 4. Wiring tidy-up | `build-wiring` | 5 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants | Pushed, but still on the old PR 3; to be rebuilt on the reworked one |
+| 4. Wiring tidy-up | `build-wiring` (rebuilt as `build-wiring-2`) | 6 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants; a tidy-up. See "Rebuilding PR 4" | Rebuilt on the reworked PR 3 and verified; to replace `build-wiring` |
 
 PR 1 started as part of PR 2's branch, then was rebased onto `master` so it could be reviewed and merged on its own.
 The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be enabled correctly without it.
@@ -326,6 +327,42 @@ Two lessons about the tools:
 
 Measured at commit 5, before the split. Everything is within noise except recompiling build logic, as in October. PR 3's
 case is maintainability.
+
+### Rebuilding PR 4 (November 2026)
+
+PR 4's five commits were cherry-picked onto the reworked PR 3 (`build-wiring-2`), one at a time, then a tidy-up was
+added. Each commit keeps its original message and makes the same line changes as before, adapted as follows:
+
+| Commit | Adapted for the reworked PR 3 |
+|---|---|
+| Versioned SBE test codecs in the test source set | No change |
+| Generated codecs through the `generated` source set's outputs | Conflict with `tasks.named('javadoc')` from the PR 3 tidy-up; both kept |
+| Only archive shares a test jar | The test jar removal moved to `aeron.test-conventions`, whose header comment was updated |
+| Javadoc and `aeron-all` sources through dependency resolution | The `mainSourceElements` `builtBy` fix went into `aeron.java-conventions`, as `aeron-all`'s sources jar relies on it too; the `javadocSource` configurations and `source(...)` went into `aeron.javadoc-conventions`. Leftover `aeronConfigInfo` calls in the conflicts were dropped |
+| Root test report through test results variants | No change |
+| New: tidy the codec and source aggregation wiring | The main codec `outputDir` is lazy like the test codec ones (no `generatedSrcDir`); the Javadoc conventions refer to their configurations by name, like `aeron-all` and the root; a repeated comment on `testReport` removed |
+
+No build file reads another project's model any more: no `project(':x').…`, `subprojects*` or `evaluationDependsOn`.
+
+**Verification:**
+
+- Every commit: generated codecs (761 files, Java, C and C++) identical; configuration dump differences limited to the
+  intended ones; full build with `--rerun-tasks --no-build-cache`; published artifacts identical to `master`.
+- Test codecs: 140 dump differences, all in archive and cluster (the `generatedTest` source set and its classes
+  directory gone). The four test classes using versioned codecs pass.
+- Generated codecs: the only classpath change is the empty `build/resources/generated` directory, part of the source
+  set's output. From a clean build, `generateCodecs` runs before the sources jars, Javadoc and compilation without any
+  `dependsOn`, and a `--parallel` clean build passes.
+- Test jar: `testJar` gone from the 8 modules other than archive; system tests lose `aeron-client`'s test jar. The
+  system tests using archive's helpers (`ArchiveSystemTest`, `CatalogWithJumboRecordingsAndGapsTest`) pass.
+- Source aggregation: each module's `javadoc.options` lists the same source files, file for file (530 for
+  `aeron-all`), with the same other options; `aeron-all`'s sources jar has the same 927 entries.
+- Test report: the same 90-task graph, and identical report pages from the same results apart from the generation
+  time.
+- Tidy-up: configuration dump, task list and `javadoc.options` identical.
+
+**CI:** `master` itself was failing at the base, `7ecfd1a1ed`: all 15 C++ jobs, after the C driver `EPOLL` changes.
+The same C++ failures on these branches are inherited; the Java jobs are what show the build changes.
 
 ### Keeping the stacked branches up to date
 
