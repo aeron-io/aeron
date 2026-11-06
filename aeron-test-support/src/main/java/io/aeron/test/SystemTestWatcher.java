@@ -373,19 +373,7 @@ public class SystemTestWatcher implements
 
     private static void appendError(final StringBuilder errors, final Path path, final String encodedException)
     {
-        final String errorMessage;
-        final int lineFeedIndex = encodedException.indexOf('\n');
-        if (lineFeedIndex > 0)
-        {
-            final int endOfMessageIndex =
-                '\r' != encodedException.charAt(lineFeedIndex - 1) ? lineFeedIndex : lineFeedIndex - 1;
-            errorMessage = encodedException.substring(0, endOfMessageIndex);
-        }
-        else
-        {
-            errorMessage = encodedException;
-        }
-        errors.append(path).append(": ").append(errorMessage).append('\n');
+        errors.append(path).append(": ").append(encodedException).append('\n');
     }
 
     private static ClusterMarkFile openClusterMarkFile(final Path path)
