@@ -1423,11 +1423,7 @@ bool aeron_raw_log_free(aeron_mapped_raw_log_t *mapped_raw_log, const char *file
     return true;
 }
 
-#if defined(__clang__)
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wunused-function"
-#endif
-
+#if !defined(__linux__)
 inline static const char *tmp_dir(void)
 {
 #if defined(_MSC_VER)
@@ -1461,9 +1457,6 @@ inline static bool has_file_separator_at_end(const char *path)
     return path[strlen(path) - 1] == '/';
 #endif
 }
-
-#if defined(__clang__)
-#pragma clang diagnostic pop
 #endif
 
 inline static const char *username(void)
