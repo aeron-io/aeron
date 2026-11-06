@@ -5926,7 +5926,7 @@ int aeron_driver_conductor_on_add_receive_spy_destination(
 
     aeron_driver_conductor_schedule_client_command(conductor, (aeron_driver_conductor_client_command_t *)async_client_command);
 
-    async_client_command->async_parse.is_destination = true; // FIXME: Check Java side!!!!
+    async_client_command->async_parse.is_destination = true;
 
     async_client_command->base.correlated =
         &((aeron_destination_command_t *)async_client_command->original_command)->correlated;
