@@ -25,6 +25,8 @@ callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
