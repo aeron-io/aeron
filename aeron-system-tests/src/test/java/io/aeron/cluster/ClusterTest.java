@@ -3350,7 +3350,6 @@ class ClusterTest
 
         cluster.terminationsExpected(true);
         cluster.shutdownCluster(leader);
-        cluster.awaitNodeTerminations();
 
         for (int i = 0; i < cluster.memberCount(); i++)
         {
@@ -3392,7 +3391,6 @@ class ClusterTest
 
         cluster.terminationsExpected(true);
         cluster.takeSnapshot(leader);
-        cluster.awaitNodeTerminations();
 
         for (int i = 0; i < cluster.memberCount(); i++)
         {
