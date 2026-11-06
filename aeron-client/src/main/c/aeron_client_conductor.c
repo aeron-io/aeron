@@ -3802,7 +3802,7 @@ int aeron_client_conductor_async_resource_poll(
         case AERON_CLIENT_REGISTRATION_STATUS_ERRORED:
         {
             AERON_SET_ERR(
-                -async->error_code, // FIXME: Will mess up OS errors reported by MD!
+                -async->error_code,
                 "async_add_%s registration error\n%.*s",
                 aeron_client_conductor_managed_resource_type_to_string(resource_type),
                 (int)async->error_message_length,
