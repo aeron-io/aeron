@@ -303,6 +303,11 @@ class Election
         {
             consensusModuleAgent.updateMemberLogPosition(follower, logLeadershipTermId, logPosition);
 
+            if (leadershipTermId > this.leadershipTermId && Cluster.Role.LEADER == consensusModuleAgent.role())
+            {
+                throw new ClusterEvent("potential new election in progress");
+            }
+
             if (logLeadershipTermId < this.leadershipTermId)
             {
                 if (Cluster.Role.LEADER == consensusModuleAgent.role())
@@ -441,7 +446,7 @@ class Election
         }
 
         if (((FOLLOWER_BALLOT == state || CANDIDATE_BALLOT == state) && leadershipTermId == candidateTermId) ||
-            CANVASS == state)
+            (CANVASS == state && leadershipTermId >= candidateTermId))
         {
             if (logLeadershipTermId == this.logLeadershipTermId)
             {
@@ -1245,7 +1250,7 @@ class Election
                 }
 
                 consensusPublisher.canvassPosition(
-                    member.publication(), logLeadershipTermId, appendPosition, leadershipTermId, thisMember.id());
+                    member.publication(), logLeadershipTermId, appendPosition, candidateTermId, thisMember.id());
             }
         }
     }
