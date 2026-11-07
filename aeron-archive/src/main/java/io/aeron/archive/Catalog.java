@@ -1387,7 +1387,8 @@ final class Catalog implements AutoCloseable
 
             final int lastFragmentOffset = nextFragmentOffset - lastFragmentLength;
             if (fragmentStraddlesPageBoundary(lastFragmentOffset, lastFragmentLength) &&
-                !isValidFragment(buffer, bufferOffset - lastFragmentLength, lastFragmentLength, checksum) &&
+                !isValidFragment(
+                    buffer, bufferOffset - lastFragmentLength, lastFragmentOffset, lastFragmentLength, checksum) &&
                 truncateOnPageStraddle.test(file))
             {
                 final int singleByte = 1;
@@ -1432,7 +1433,11 @@ final class Catalog implements AutoCloseable
     }
 
     private static boolean isValidFragment(
-        final UnsafeBuffer buffer, final int fragmentOffset, final int alignedFragmentLength, final Checksum checksum)
+        final UnsafeBuffer buffer,
+        final int fragmentOffset,
+        final int fragmentFileOffset,
+        final int alignedFragmentLength,
+        final Checksum checksum)
     {
         if (fragmentOffset < 0 || alignedFragmentLength < HEADER_LENGTH ||
             alignedFragmentLength > buffer.capacity() - fragmentOffset)
@@ -1441,7 +1446,7 @@ final class Catalog implements AutoCloseable
         }
 
         return null != checksum && hasValidChecksum(buffer, fragmentOffset, alignedFragmentLength, checksum) ||
-            hasDataInAllPagesAfterStraddle(buffer, fragmentOffset, alignedFragmentLength);
+            hasDataInAllPagesAfterStraddle(buffer, fragmentOffset, fragmentFileOffset, alignedFragmentLength);
     }
 
     private static boolean hasValidChecksum(
@@ -1457,9 +1462,13 @@ final class Catalog implements AutoCloseable
     }
 
     private static boolean hasDataInAllPagesAfterStraddle(
-        final UnsafeBuffer buffer, final int fragmentOffset, final int alignedFragmentLength)
+        final UnsafeBuffer buffer,
+        final int fragmentOffset,
+        final int fragmentFileOffset,
+        final int alignedFragmentLength)
     {
-        int straddleOffset = (fragmentOffset / PAGE_SIZE + 1) * PAGE_SIZE;
+        // The buffer holds a read that starts at a frame, not at a page, so the pages are found from the file offset.
+        int straddleOffset = fragmentOffset + PAGE_SIZE - (fragmentFileOffset & (PAGE_SIZE - 1));
         final int endOffset = fragmentOffset + alignedFragmentLength;
         while (straddleOffset < endOffset)
         {
