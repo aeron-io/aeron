@@ -305,6 +305,7 @@ int aeron_dl_load_libs(aeron_dl_loaded_libs_state_t **state, const char *libs)
         const char *lib_name = lib_names[i];
         aeron_dl_loaded_lib_state_t *lib = &_state->libs[i];
 
+        // codeql[cpp/uncontrolled-process-operation]
         if (NULL == (lib->handle = aeron_dlopen(lib_name)))
         {
             AERON_SET_ERR(EINVAL, "failed to load dl_lib %s: %s", lib_name, aeron_dlerror());
