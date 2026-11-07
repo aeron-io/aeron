@@ -619,6 +619,99 @@ class CatalogTest
         assertThat(exception.getMessage(), containsString(segmentFile.getAbsolutePath()));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = { 2 * PAGE_SIZE, FILE_IO_MAX_LENGTH_DEFAULT })
+    void shouldDetectTornLastFragmentWhenRecoveryReadStartsInsideAPage(final int recoveryBufferLength)
+        throws Exception
+    {
+        final int termLength = 64 * 1024;
+        final long recordingId = newRecording(0L, termLength);
+        final File segmentFile = new File(archiveDir, segmentFileName(recordingId, 0));
+        try (FileChannel log = FileChannel.open(segmentFile.toPath(), READ, WRITE, CREATE))
+        {
+            // With an 8 KiB recovery buffer the frame at 8160 crosses the end of the first read, so the second
+            // read starts at 9184, 992 bytes into a page.
+            writeFrameHeader(log, 0, 8160);
+            writeFrameHeader(log, 8160, 1024);
+            writeFrameHeader(log, 9184, 3072);
+            // The last fragment, torn: its header written, nothing past the page boundary at 12288.
+            writeFrameHeader(log, 12256, 64);
+            setSegmentLength(log, termLength);
+        }
+
+        final UnsafeBuffer recoveryBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(recoveryBufferLength));
+        final ArchiveException exception = assertThrows(
+            ArchiveException.class,
+            () ->
+            {
+                final Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, null, recoveryBuffer);
+                catalog.close();
+            });
+
+        assertThat(exception.getMessage(), containsString(segmentFile.getAbsolutePath()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
+    void shouldDetectTornLastFragmentWhenRecordingStartsInsideAPage(final boolean withChecksum) throws Exception
+    {
+        final Checksum checksum = withChecksum ? crc32() : null;
+        final int termLength = 64 * 1024;
+        final long recordingId = newRecording(992L, termLength);
+        final File segmentFile = new File(archiveDir, segmentFileName(recordingId, 0));
+        try (FileChannel log = FileChannel.open(segmentFile.toPath(), READ, WRITE, CREATE))
+        {
+            writeFrameHeader(log, 992, 3072);
+            // The last fragment, torn: its header written, nothing past the page boundary at 4096.
+            writeFrameHeader(log, 4064, 64);
+            setSegmentLength(log, termLength);
+        }
+
+        final ArchiveException exception = assertThrows(
+            ArchiveException.class,
+            () ->
+            {
+                // No buffer given: the catalog recovers with a direct one of the default length, as checksums need.
+                final Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, checksum, null);
+                catalog.close();
+            });
+
+        assertThat(exception.getMessage(), containsString(segmentFile.getAbsolutePath()));
+    }
+
+    private long newRecording(final long startPosition, final int termLength)
+    {
+        try (Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, null, segmentFileBuffer))
+        {
+            return catalog.addNewRecording(
+                startPosition,
+                0L,
+                0,
+                termLength,
+                termLength,
+                MTU_LENGTH,
+                6,
+                1,
+                "channelG",
+                "channelG?tag=f",
+                "sourceA");
+        }
+    }
+
+    private static void writeFrameHeader(final FileChannel log, final int offset, final int frameLength)
+        throws IOException
+    {
+        final ByteBuffer bb = allocate(HEADER_LENGTH);
+        new DataHeaderFlyweight(bb).frameLength(frameLength);
+        log.write(bb, offset);
+    }
+
+    private static void setSegmentLength(final FileChannel log, final int segmentLength) throws IOException
+    {
+        final ByteBuffer bb = allocate(1);
+        log.write(bb, segmentLength - 1);
+    }
+
     private long newRecording()
     {
         try (Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, null, segmentFileBuffer))
