@@ -106,6 +106,7 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
         snprintf(buffer, sizeof(buffer), "%s-%s-error.log", aeron_dir, datestamp);
 
         FILE *error_file = NULL;
+        // codeql[cpp/path-injection]
         if (NULL != (error_file = fopen(buffer, "w")))
         {
             uint64_t observations = aeron_error_log_read(
@@ -183,6 +184,7 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 return -1;
             }
 
+            // codeql[cpp/path-injection]
             if (aeron_map_existing_file(&cnc_mmap, filename) < 0)
             {
                 if (ENOENT == aeron_errcode())
@@ -327,6 +329,7 @@ int aeron_driver_create_cnc_file(aeron_driver_t *driver)
         return -1;
     }
 
+    // codeql[cpp/path-injection]
     if (aeron_map_new_file(&driver->context->cnc_map, path, true, driver->context->file_page_size) < 0)
     {
         AERON_APPEND_ERR("CnC file: %s", path);
@@ -352,6 +355,7 @@ int aeron_driver_create_loss_report_file(aeron_driver_t *driver)
         return -1;
     }
 
+    // codeql[cpp/path-injection]
     if (aeron_map_new_file(&driver->context->loss_report, buffer, true, driver->context->file_page_size) < 0)
     {
         AERON_APPEND_ERR("could not map loss report file: %s", buffer);
