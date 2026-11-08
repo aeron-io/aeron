@@ -28,6 +28,7 @@ encounters an unrecoverable error, i.e. prevent infinite polling loops while wai
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
+* **[Java]** Upgrade to `Gradle` 9.9.0.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
@@ -56,6 +57,7 @@ encounters an unrecoverable error, i.e. prevent infinite polling loops while wai
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
+* **[Java]** Upgrade to `Gradle` 9.9.0.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
