@@ -2727,7 +2727,12 @@ final class ConsensusModuleAgent
 
     private boolean appendAction(final ClusterAction action, final long timestamp, final int flags)
     {
-        return logPublisher.appendClusterAction(leadershipTermId, timestamp, action, flags);
+        return logPublisher.appendClusterAction(
+            leadershipTermId,
+            termBaseLogPosition(),
+            timestamp,
+            action,
+            flags);
     }
 
     private void captureServiceAck(final long logPosition, final long ackId, final long relevantId, final int serviceId)
@@ -3170,6 +3175,7 @@ final class ConsensusModuleAgent
 
     private void takeSnapshot(final long timestamp, final long logPosition, final ServiceAck[] serviceAcks)
     {
+        final long termBaseLogPosition = termBaseLogPosition();
         final long recordingId;
         try (ExclusivePublication publication = aeron.addExclusivePublication(
             ctx.snapshotChannel(), ctx.snapshotStreamId()))
@@ -3180,8 +3186,7 @@ final class ConsensusModuleAgent
             final int counterId = awaitRecordingCounter(counters, publication.sessionId(), archive.archiveId());
             recordingId = RecordingPos.getRecordingId(counters, counterId);
 
-            snapshotState(publication, logPosition, leadershipTermId);
-
+            snapshotState(publication, leadershipTermId, termBaseLogPosition, logPosition);
             if (null != consensusModuleExtension)
             {
                 consensusModuleExtension.onTakeSnapshot(publication);
@@ -3189,8 +3194,6 @@ final class ConsensusModuleAgent
 
             awaitRecordingComplete(recordingId, publication.position(), counters, counterId);
         }
-
-        final long termBaseLogPosition = recordingLog.getTermEntry(leadershipTermId).termBaseLogPosition;
 
         for (int serviceId = serviceAcks.length - 1; serviceId >= 0; serviceId--)
         {
@@ -3206,6 +3209,12 @@ final class ConsensusModuleAgent
         recoveryPlan = recordingLog.createRecoveryPlan(archive, serviceCount, Aeron.NULL_VALUE);
         totalSnapshotDurationTracker.onSnapshotEnd(clusterClock.timeNanos());
         ctx.snapshotCounter().incrementRelease();
+    }
+
+    private long termBaseLogPosition()
+    {
+        final RecordingLog.Entry termEntry = recordingLog.findTermEntry(leadershipTermId);
+        return null != termEntry ? termEntry.termBaseLogPosition : recoveryPlan.lastTermBaseLogPosition();
     }
 
     private void awaitRecordingComplete(
@@ -3237,12 +3246,16 @@ final class ConsensusModuleAgent
     }
 
     private void snapshotState(
-        final ExclusivePublication publication, final long logPosition, final long leadershipTermId)
+        final ExclusivePublication publication,
+        final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition)
     {
         final ConsensusModuleSnapshotTaker snapshotTaker = new ConsensusModuleSnapshotTaker(
             publication, idleStrategy, aeronClientInvoker);
 
-        snapshotTaker.markBegin(SNAPSHOT_TYPE_ID, logPosition, leadershipTermId, 0, clusterTimeUnit, ctx.appVersion());
+        snapshotTaker.markBegin(
+            SNAPSHOT_TYPE_ID, leadershipTermId, termBaseLogPosition, logPosition, 0, clusterTimeUnit, ctx.appVersion());
 
         if (pendingServiceMessageTrackers.length > 0)
         {
@@ -3267,7 +3280,8 @@ final class ConsensusModuleAgent
             snapshotTaker.snapshot(tracker, ctx.countedErrorHandler());
         }
 
-        snapshotTaker.markEnd(SNAPSHOT_TYPE_ID, logPosition, leadershipTermId, 0, clusterTimeUnit, ctx.appVersion());
+        snapshotTaker.markEnd(
+            SNAPSHOT_TYPE_ID, leadershipTermId, termBaseLogPosition, logPosition, 0, clusterTimeUnit, ctx.appVersion());
     }
 
     private void onUnavailableIngressImage(final Image image)

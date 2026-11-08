@@ -20,6 +20,7 @@ import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
+import io.aeron.FragmentAssembler;
 import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.RethrowingErrorHandler;
@@ -41,6 +42,8 @@ import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
+import io.aeron.cluster.codecs.SnapshotMark;
+import io.aeron.cluster.codecs.SnapshotMarkerDecoder;
 import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterCounters;
@@ -107,6 +110,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
@@ -806,7 +810,6 @@ class ClusterTest
         cluster.awaitServiceMessageCount(followerA, messageCount);
         cluster.awaitServiceMessageCount(followerB, messageCount);
     }
-
 
 
     @Test
@@ -3559,7 +3562,7 @@ class ClusterTest
     void shouldTerminateNodeWithInvalidSnapshotAndRecoveryAfterInvalidation()
     {
         cluster = aCluster()
-            .withServiceSupplier((i) -> new TestNode.TestService[] { new ExceptionOnLoadService().index(i) })
+            .withServiceSupplier((i) -> new TestNode.TestService[]{ new ExceptionOnLoadService().index(i) })
             .start();
         systemTestWatcher.cluster(cluster);
         systemTestWatcher.ignoreErrorsMatching(
@@ -3678,6 +3681,169 @@ class ClusterTest
         cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(2));
     }
 
+    @SuppressWarnings("MethodLength")
+    @Test
+    @InterruptAfter(10)
+    void shouldCaptureTermBaseLogPositionInSnapshotMarker()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+        final RecordingLog.Entry firstCMSnapshot = leader.consensusModule().context().recordingLog()
+            .getLatestSnapshot(ConsensusModule.Configuration.SERVICE_ID);
+        assertNotNull(firstCMSnapshot);
+        assertEquals(0, firstCMSnapshot.termBaseLogPosition);
+        assertEquals(leader.commitPosition(), firstCMSnapshot.logPosition);
+
+        leader.gracefulClose();
+        final TestNode newLeader = cluster.awaitLeader(leader.index());
+        leader.close();
+        awaitElectionClosed(cluster.startStaticNode(leader.index(), false));
+
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10, 20);
+        cluster.takeSnapshot(newLeader);
+        cluster.awaitSnapshotCount(newLeader, 2);
+
+        final RecordingLog.Entry latestCMSnapshot = newLeader.consensusModule().context().recordingLog()
+            .getLatestSnapshot(ConsensusModule.Configuration.SERVICE_ID);
+        assertNotNull(latestCMSnapshot);
+        assertEquals(firstCMSnapshot.leadershipTermId + 1, latestCMSnapshot.leadershipTermId);
+        assertEquals(firstCMSnapshot.logPosition, latestCMSnapshot.termBaseLogPosition);
+        assertEquals(newLeader.commitPosition(), latestCMSnapshot.logPosition);
+
+        final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+        final SnapshotMarkerDecoder snapshotMarkerDecoder = new SnapshotMarkerDecoder();
+
+        readConsensusModuleSnapshot(newLeader, new ConsensusModuleSnapshotListener()
+        {
+            public void onLoadBeginSnapshot(
+                final int appVersion,
+                final TimeUnit timeUnit,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length)
+            {
+                messageHeaderDecoder.wrap(buffer, offset);
+                snapshotMarkerDecoder.wrapAndApplyHeader(buffer, offset, messageHeaderDecoder);
+
+                assertEquals(latestCMSnapshot.leadershipTermId, snapshotMarkerDecoder.leadershipTermId());
+                assertEquals(latestCMSnapshot.termBaseLogPosition, snapshotMarkerDecoder.termBaseLogPosition());
+                assertEquals(latestCMSnapshot.logPosition, snapshotMarkerDecoder.logPosition());
+            }
+
+            public void onLoadConsensusModuleState(
+                final long nextSessionId,
+                final long nextServiceSessionId,
+                final long logServiceSessionId,
+                final int pendingMessageCapacity,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length)
+            {
+            }
+
+            public void onLoadPendingMessage(
+                final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
+            {
+            }
+
+            public void onLoadClusterSession(
+                final long clusterSessionId,
+                final long correlationId,
+                final long openedLogPosition,
+                final long timeOfLastActivity,
+                final CloseReason closeReason,
+                final int responseStreamId,
+                final String responseChannel,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length)
+            {
+            }
+
+            public void onLoadTimer(
+                final long correlationId,
+                final long deadline,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length)
+            {
+            }
+
+            public void onLoadPendingMessageTracker(
+                final long nextServiceSessionId,
+                final long logServiceSessionId,
+                final int pendingMessageCapacity,
+                final int serviceId,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length)
+            {
+            }
+
+            public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
+            {
+                messageHeaderDecoder.wrap(buffer, offset);
+                snapshotMarkerDecoder.wrapAndApplyHeader(buffer, offset, messageHeaderDecoder);
+
+                assertEquals(latestCMSnapshot.leadershipTermId, snapshotMarkerDecoder.leadershipTermId());
+                assertEquals(latestCMSnapshot.termBaseLogPosition, snapshotMarkerDecoder.termBaseLogPosition());
+                assertEquals(latestCMSnapshot.logPosition, snapshotMarkerDecoder.logPosition());
+            }
+        });
+
+        readSnapshot(newLeader, 0, (image, aeronArchive) ->
+        {
+            final MutableBoolean done = new MutableBoolean(false);
+            final FragmentAssembler fragmentHandler = new FragmentAssembler((buffer, offset, length, header) ->
+            {
+                messageHeaderDecoder.wrap(buffer, offset);
+
+                if (SnapshotMarkerDecoder.TEMPLATE_ID == messageHeaderDecoder.templateId())
+                {
+                    snapshotMarkerDecoder.wrapAndApplyHeader(buffer, offset, messageHeaderDecoder);
+
+                    switch (snapshotMarkerDecoder.mark())
+                    {
+                        case BEGIN:
+                        case END:
+                            assertEquals(latestCMSnapshot.leadershipTermId, snapshotMarkerDecoder.leadershipTermId());
+                            assertEquals(
+                                latestCMSnapshot.termBaseLogPosition, snapshotMarkerDecoder.termBaseLogPosition());
+                            assertEquals(latestCMSnapshot.logPosition, snapshotMarkerDecoder.logPosition());
+
+                            if (SnapshotMark.END == snapshotMarkerDecoder.mark())
+                            {
+                                done.set(true);
+                            }
+                            break;
+                        default:
+                            fail("unknown snapshot section: " + snapshotMarkerDecoder.mark());
+                    }
+                }
+            });
+
+            while (!done.get())
+            {
+                if (0 == image.poll(fragmentHandler, 10))
+                {
+                    if (image.isClosed())
+                    {
+                        throw new ClusterException("snapshot ended unexpectedly: " + image);
+                    }
+                    aeronArchive.checkForErrorResponse();
+                    Thread.yield();
+                }
+            }
+        });
+    }
+
     private static final class ExceptionOnLoadService extends TestNode.TestService
     {
         public void onStart(final Cluster cluster, final Image snapshotImage)
@@ -3710,12 +3876,46 @@ class ClusterTest
 
     static long readSnapshot(final TestNode node)
     {
+        final MyConsensusModuleSnapshotListener listener = new MyConsensusModuleSnapshotListener();
+        readConsensusModuleSnapshot(node, listener);
+        return listener.nextSessionId;
+    }
+
+    private static void readConsensusModuleSnapshot(
+        final TestNode node, final ConsensusModuleSnapshotListener snapshotListener)
+    {
+        readSnapshot(node, ConsensusModule.Configuration.SERVICE_ID, ((image, aeronArchive) ->
+        {
+            final ConsensusModuleSnapshotAdapter adapter = new ConsensusModuleSnapshotAdapter(image, snapshotListener);
+
+            while (true)
+            {
+                final int fragments = adapter.poll();
+                if (adapter.isDone())
+                {
+                    break;
+                }
+                if (0 == fragments)
+                {
+                    if (image.isClosed())
+                    {
+                        throw new ClusterException("snapshot ended unexpectedly: " + image);
+                    }
+                    aeronArchive.checkForErrorResponse();
+                    Thread.yield();
+                }
+            }
+        }));
+    }
+
+    private static void readSnapshot(
+        final TestNode node, final int serviceId, final BiConsumer<Image, AeronArchive> snapshotReader)
+    {
         final long recordingId;
         try (RecordingLog recordingLog = new RecordingLog(node.consensusModule().context().clusterDir(),
             false))
         {
-            final RecordingLog.Entry snapshot = recordingLog.getLatestSnapshot(
-                ConsensusModule.Configuration.SERVICE_ID);
+            final RecordingLog.Entry snapshot = recordingLog.getLatestSnapshot(serviceId);
             assertNotNull(snapshot);
             recordingId = snapshot.recordingId;
         }
@@ -3732,29 +3932,7 @@ class ClusterTest
         {
             Tests.awaitConnected(subscription);
             final Image image = subscription.imageAtIndex(0);
-
-            final MyConsensusModuleSnapshotListener listener = new MyConsensusModuleSnapshotListener();
-            final ConsensusModuleSnapshotAdapter adapter = new ConsensusModuleSnapshotAdapter(image, listener);
-
-            while (true)
-            {
-                final int fragments = adapter.poll();
-                if (adapter.isDone())
-                {
-                    break;
-                }
-                if (0 == fragments)
-                {
-                    if (image.isClosed())
-                    {
-                        throw new ClusterException("snapshot ended unexpectedly: " + image);
-                    }
-                    archive.checkForErrorResponse();
-                    Thread.yield();
-                }
-            }
-
-            return listener.nextSessionId;
+            snapshotReader.accept(image, archive);
         }
     }
 

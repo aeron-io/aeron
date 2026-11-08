@@ -104,6 +104,7 @@ class ConsensusModuleAgentTest
     private static final int SCHEMA_ID = 17;
     private static final int UPDATE_INTERVAL_MS = 19;
 
+    private final RecordingLog recordingLog = mock(RecordingLog.class);
     private final EgressPublisher mockEgressPublisher = mock(EgressPublisher.class);
     private final LogPublisher mockLogPublisher = mock(LogPublisher.class);
     private final Aeron mockAeron = mock(Aeron.class);
@@ -138,7 +139,8 @@ class ConsensusModuleAgentTest
         .archiveContext(new AeronArchive.Context())
         .logPublisher(mockLogPublisher)
         .egressPublisher(mockEgressPublisher)
-        .dutyCycleTracker(new DutyCycleTracker());
+        .dutyCycleTracker(new DutyCycleTracker())
+        .recordingLog(recordingLog);
 
     private Counter newCounter(final String name, final int typeId)
     {
@@ -153,7 +155,7 @@ class ConsensusModuleAgentTest
         when(mockEgressPublisher.sendEvent(any(), anyLong(), anyInt(), any(), any())).thenReturn(TRUE);
         when(mockLogPublisher.appendSessionClose(anyInt(), any(), anyLong(), anyLong(), any())).thenReturn(TRUE);
         when(mockLogPublisher.appendSessionOpen(any(), anyLong(), anyLong())).thenReturn(128L);
-        when(mockLogPublisher.appendClusterAction(anyLong(), anyLong(), any(ClusterAction.class), anyInt()))
+        when(mockLogPublisher.appendClusterAction(anyLong(), anyLong(), anyLong(), any(ClusterAction.class), anyInt()))
             .thenReturn(TRUE);
         when(mockAeron.addPublication(anyString(), anyInt())).thenReturn(mockResponsePublication);
         when(mockAeron.getPublication(anyLong())).thenReturn(mockResponsePublication);
@@ -163,6 +165,9 @@ class ConsensusModuleAgentTest
             .thenReturn(mock(Subscription.class));
         when(mockResponsePublication.isConnected()).thenReturn(TRUE);
         when(mockResponsePublication.availableWindow()).thenReturn(Long.MAX_VALUE);
+
+        final RecordingLog.Entry termEntry = mock(RecordingLog.Entry.class);
+        when(recordingLog.findTermEntry(anyLong())).thenReturn(termEntry);
     }
 
     @Test
@@ -298,6 +303,19 @@ class ConsensusModuleAgentTest
     @Test
     void shouldSuspendThenResume()
     {
+        final RecordingLog.Entry termEntry = new RecordingLog.Entry(
+            42,
+            1,
+            1024,
+            4096,
+            5,
+            -1,
+            RecordingLog.ENTRY_TYPE_TERM,
+            null,
+            true,
+            0);
+        when(recordingLog.findTermEntry(anyLong())).thenReturn(termEntry);
+
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         final Counter stateCounter = newCounter("state counter", CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID);
         final Counter controlToggle = newCounter("control toggle", CLUSTER_CONTROL_TOGGLE_TYPE_ID);
@@ -333,8 +351,10 @@ class ConsensusModuleAgentTest
         assertEquals(NEUTRAL.code(), controlToggle.get());
 
         final InOrder inOrder = Mockito.inOrder(mockLogPublisher);
-        inOrder.verify(mockLogPublisher).appendClusterAction(anyLong(), anyLong(), eq(ClusterAction.SUSPEND), anyInt());
-        inOrder.verify(mockLogPublisher).appendClusterAction(anyLong(), anyLong(), eq(ClusterAction.RESUME), anyInt());
+        inOrder.verify(mockLogPublisher).appendClusterAction(
+                anyLong(), eq(termEntry.termBaseLogPosition), anyLong(), eq(ClusterAction.SUSPEND), anyInt());
+        inOrder.verify(mockLogPublisher).appendClusterAction(
+            anyLong(), eq(termEntry.termBaseLogPosition), anyLong(), eq(ClusterAction.RESUME), anyInt());
     }
 
     @Test
@@ -437,7 +457,7 @@ class ConsensusModuleAgentTest
 
         final InOrder inOrder = Mockito.inOrder(mockLogPublisher);
         inOrder.verify(mockLogPublisher).appendClusterAction(
-            anyLong(), anyLong(), eq(ClusterAction.SNAPSHOT), eq(CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT));
+            anyLong(), anyLong(), anyLong(), eq(ClusterAction.SNAPSHOT), eq(CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT));
 
         agent.onReplayClusterAction(-1, 2048, 0, ClusterAction.SNAPSHOT, CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT);
         assertEquals(ConsensusModule.State.ACTIVE.code(), stateCounter.get());

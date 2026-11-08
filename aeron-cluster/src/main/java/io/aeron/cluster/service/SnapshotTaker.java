@@ -17,6 +17,7 @@ package io.aeron.cluster.service;
 
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
+import io.aeron.api.InternalApi;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.SnapshotMark;
@@ -32,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Base class of common functions required to take a snapshot of cluster state.
  */
+@InternalApi
 public class SnapshotTaker
 {
     /**
@@ -77,62 +79,82 @@ public class SnapshotTaker
     /**
      * Mark the beginning of the encoded snapshot.
      *
-     * @param snapshotTypeId   type to identify snapshot within a cluster.
-     * @param logPosition      at which the snapshot was taken.
-     * @param leadershipTermId at which the snapshot was taken.
-     * @param snapshotIndex    so the snapshot can be sectioned.
-     * @param timeUnit         of the cluster timestamps stored in the snapshot.
-     * @param appVersion       associated with the snapshot from {@link ClusteredServiceContainer.Context#appVersion()}.
+     * @param snapshotTypeId      type to identify snapshot within a cluster.
+     * @param leadershipTermId    at which the snapshot was taken.
+     * @param termBaseLogPosition at which {@code leadershipTermId} started.
+     * @param logPosition         at which the snapshot was taken.
+     * @param snapshotIndex       so the snapshot can be sectioned.
+     * @param timeUnit            of the cluster timestamps stored in the snapshot.
+     * @param appVersion          associated with the snapshot from {@link ClusteredServiceContainer.Context#appVersion()}.
      */
     public void markBegin(
         final long snapshotTypeId,
-        final long logPosition,
         final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition,
         final int snapshotIndex,
         final TimeUnit timeUnit,
         final int appVersion)
     {
         markSnapshot(
-            snapshotTypeId, logPosition, leadershipTermId, snapshotIndex, SnapshotMark.BEGIN, timeUnit, appVersion);
+            snapshotTypeId,
+            leadershipTermId,
+            termBaseLogPosition,
+            logPosition,
+            snapshotIndex,
+            SnapshotMark.BEGIN,
+            timeUnit,
+            appVersion);
     }
 
     /**
      * Mark the end of the encoded snapshot.
      *
-     * @param snapshotTypeId   type to identify snapshot within a cluster.
-     * @param logPosition      at which the snapshot was taken.
-     * @param leadershipTermId at which the snapshot was taken.
-     * @param snapshotIndex    so the snapshot can be sectioned.
-     * @param timeUnit         of the cluster timestamps stored in the snapshot.
-     * @param appVersion       associated with the snapshot from {@link ClusteredServiceContainer.Context#appVersion()}.
+     * @param snapshotTypeId      type to identify snapshot within a cluster.
+     * @param leadershipTermId    at which the snapshot was taken.
+     * @param termBaseLogPosition at which {@code leadershipTermId} started.
+     * @param logPosition         at which the snapshot was taken.
+     * @param snapshotIndex       so the snapshot can be sectioned.
+     * @param timeUnit            of the cluster timestamps stored in the snapshot.
+     * @param appVersion          associated with the snapshot from {@link ClusteredServiceContainer.Context#appVersion()}.
      */
     public void markEnd(
         final long snapshotTypeId,
-        final long logPosition,
         final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition,
         final int snapshotIndex,
         final TimeUnit timeUnit,
         final int appVersion)
     {
         markSnapshot(
-            snapshotTypeId, logPosition, leadershipTermId, snapshotIndex, SnapshotMark.END, timeUnit, appVersion);
+            snapshotTypeId,
+            leadershipTermId,
+            termBaseLogPosition,
+            logPosition,
+            snapshotIndex,
+            SnapshotMark.END,
+            timeUnit,
+            appVersion);
     }
 
     /**
      * Generically {@link SnapshotMark} a snapshot.
      *
-     * @param snapshotTypeId   type to identify snapshot within a cluster.
-     * @param logPosition      at which the snapshot was taken.
-     * @param leadershipTermId at which the snapshot was taken.
-     * @param snapshotIndex    so the snapshot can be sectioned.
-     * @param snapshotMark     which specifies the type of snapshot mark.
-     * @param timeUnit         of the cluster timestamps stored in the snapshot.
-     * @param appVersion       associated with the snapshot from {@link ClusteredServiceContainer.Context#appVersion()}.
+     * @param snapshotTypeId      type to identify snapshot within a cluster.
+     * @param leadershipTermId    at which the snapshot was taken.
+     * @param termBaseLogPosition at which {@code leadershipTermId} started.
+     * @param logPosition         at which the snapshot was taken.
+     * @param snapshotIndex       so the snapshot can be sectioned.
+     * @param snapshotMark        which specifies the type of snapshot mark.
+     * @param timeUnit            of the cluster timestamps stored in the snapshot.
+     * @param appVersion          associated with the snapshot from {@link ClusteredServiceContainer.Context#appVersion()}.
      */
     public void markSnapshot(
         final long snapshotTypeId,
-        final long logPosition,
         final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition,
         final int snapshotIndex,
         final SnapshotMark snapshotMark,
         final TimeUnit timeUnit,
@@ -152,7 +174,8 @@ public class SnapshotTaker
                     .index(snapshotIndex)
                     .mark(snapshotMark)
                     .timeUnit(ClusterClock.map(timeUnit))
-                    .appVersion(appVersion);
+                    .appVersion(appVersion)
+                    .termBaseLogPosition(termBaseLogPosition);
 
                 bufferClaim.commit();
                 break;
