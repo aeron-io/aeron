@@ -15,15 +15,30 @@
  */
 package io.aeron.cluster.service;
 
+import io.aeron.Aeron;
 import io.aeron.BufferBuilder;
 import io.aeron.Image;
 import io.aeron.cluster.ConsensusModule;
-import io.aeron.cluster.client.*;
-import io.aeron.cluster.codecs.*;
-import io.aeron.logbuffer.*;
-import org.agrona.*;
+import io.aeron.cluster.client.AeronCluster;
+import io.aeron.cluster.client.ClusterException;
+import io.aeron.cluster.codecs.ClusterActionRequestDecoder;
+import io.aeron.cluster.codecs.MembershipChangeEventDecoder;
+import io.aeron.cluster.codecs.MessageHeaderDecoder;
+import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
+import io.aeron.cluster.codecs.SessionCloseEventDecoder;
+import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
+import io.aeron.cluster.codecs.SessionOpenEventDecoder;
+import io.aeron.cluster.codecs.TimerEventDecoder;
+import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.Header;
+import org.agrona.BitUtil;
+import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
 
-import static io.aeron.logbuffer.FrameDescriptor.*;
+import static io.aeron.logbuffer.FrameDescriptor.BEGIN_FRAG_FLAG;
+import static io.aeron.logbuffer.FrameDescriptor.END_FRAG_FLAG;
+import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
+import static io.aeron.logbuffer.FrameDescriptor.UNFRAGMENTED;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 
 /**
@@ -225,8 +240,12 @@ final class BoundedLogAdapter implements ControlledFragmentHandler, AutoCloseabl
                 final int flags = ClusterActionRequestDecoder.flagsNullValue() != actionRequestDecoder.flags() ?
                     actionRequestDecoder.flags() : ConsensusModule.CLUSTER_ACTION_FLAGS_DEFAULT;
 
+                final long termBaseLogPosition = ClusterActionRequestDecoder.termBaseLogPositionNullValue() !=
+                    actionRequestDecoder.termBaseLogPosition() ? actionRequestDecoder.termBaseLogPosition() :
+                    Aeron.NULL_VALUE;
                 agent.onServiceAction(
                     actionRequestDecoder.leadershipTermId(),
+                    termBaseLogPosition,
                     actionRequestDecoder.logPosition(),
                     actionRequestDecoder.timestamp(),
                     actionRequestDecoder.action(),

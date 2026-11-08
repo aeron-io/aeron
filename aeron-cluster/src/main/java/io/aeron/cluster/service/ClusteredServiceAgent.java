@@ -570,6 +570,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
     void onServiceAction(
         final long leadershipTermId,
+        final long termBaseLogPosition,
         final long logPosition,
         final long timestamp,
         final ClusterAction action,
@@ -577,7 +578,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
     {
         this.logPosition = logPosition;
         clusterTime = timestamp;
-        executeAction(action, logPosition, leadershipTermId, flags);
+        executeAction(action, leadershipTermId, termBaseLogPosition, logPosition, flags);
     }
 
     void onNewLeadershipTermEvent(
@@ -986,7 +987,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         timeUnit = snapshotLoader.timeUnit();
     }
 
-    private long onTakeSnapshot(final long logPosition, final long leadershipTermId)
+    private long onTakeSnapshot(final long leadershipTermId, final long termBaseLogPosition, final long logPosition)
     {
         try (AeronArchive archive = AeronArchive.connect(ctx.archiveContext().clone());
             ExclusivePublication publication = aeron.addExclusivePublication(
@@ -998,7 +999,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
             final int counterId = awaitRecordingCounter(publication.sessionId(), counters, archive);
             final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
-            snapshotState(publication, logPosition, leadershipTermId);
+            snapshotState(publication, leadershipTermId, termBaseLogPosition, logPosition);
             checkForClockTick(nanoClock.nanoTime());
             archive.checkForErrorResponse();
 
@@ -1040,25 +1041,31 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
     }
 
     private void snapshotState(
-        final ExclusivePublication publication, final long logPosition, final long leadershipTermId)
+        final ExclusivePublication publication,
+        final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition)
     {
         final ServiceSnapshotTaker snapshotTaker = new ServiceSnapshotTaker(
             publication, idleStrategy, aeronAgentInvoker);
 
-        snapshotTaker.markBegin(SNAPSHOT_TYPE_ID, logPosition, leadershipTermId, 0, timeUnit, ctx.appVersion());
+        snapshotTaker.markBegin(
+            SNAPSHOT_TYPE_ID, leadershipTermId, termBaseLogPosition, logPosition, 0, timeUnit, ctx.appVersion());
 
-        for (int i = 0, size = sessions.size(); i < size; i++)
+        for (final ContainerClientSession session : sessions)
         {
-            snapshotTaker.snapshotSession(sessions.get(i));
+            snapshotTaker.snapshotSession(session);
         }
 
-        snapshotTaker.markEnd(SNAPSHOT_TYPE_ID, logPosition, leadershipTermId, 0, timeUnit, ctx.appVersion());
+        snapshotTaker.markEnd(
+            SNAPSHOT_TYPE_ID, leadershipTermId, termBaseLogPosition, logPosition, 0, timeUnit, ctx.appVersion());
     }
 
     private void executeAction(
         final ClusterAction action,
-        final long logPosition,
         final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition,
         final int flags)
     {
         if (ClusterAction.SNAPSHOT == action && shouldSnapshot(flags))
@@ -1068,7 +1075,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
             snapshotDurationTracker.onSnapshotBegin(nanoClock.nanoTime());
             try
             {
-                recordingId = onTakeSnapshot(logPosition, leadershipTermId);
+                recordingId = onTakeSnapshot(leadershipTermId, termBaseLogPosition, logPosition);
             }
             catch (final Exception ex)
             {

@@ -2,7 +2,7 @@
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="io.aeron.cluster.codecs"
                    id="111"
-                   version="17"
+                   version="18"
                    semanticVersion="5.4"
                    description="Message Codecs for communicating with, and within, an Aeron Cluster."
                    byteOrder="littleEndian">
@@ -73,6 +73,8 @@
               presence="optional" nullValue="0" minValue="1" maxValue="16777215"/>
         <type name="capacity_t" primitiveType="int32" description="Capacity of a container."
               presence="optional" nullValue="0"/>
+        <type name="position_t" primitiveType="int64" description="Position within the stream."
+              presence="optional" nullValue="-1" minValue="0" sinceVersion="18"/>
     </types>
 
 <!--
@@ -247,6 +249,7 @@
         <field name="timestamp"                id="3" type="time_t"/>
         <field name="action"                   id="4" type="ClusterAction"/>
         <field name="flags"                    id="5" type="int32" sinceVersion="11" presence="optional"/>
+        <field name="termBaseLogPosition"      id="6" type="position_t" sinceVersion="18" presence="optional"/>
     </sbe:message>
 
     <sbe:message name="NewLeadershipTermEvent"
@@ -675,6 +678,7 @@
         <field name="mark"                     id="5" type="SnapshotMark"/>
         <field name="timeUnit"                 id="6" type="ClusterTimeUnit" sinceVersion="4" presence="optional"/>
         <field name="appVersion"               id="7" type="version_t" sinceVersion="4" presence="optional"/>
+        <field name="termBaseLogPosition"      id="8" type="position_t" sinceVersion="18" presence="optional"/>
     </sbe:message>
 
     <sbe:message name="ClientSession"

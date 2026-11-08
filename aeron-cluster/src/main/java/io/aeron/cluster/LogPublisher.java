@@ -240,18 +240,16 @@ final class LogPublisher
 
     boolean appendClusterAction(
         final long leadershipTermId,
+        final long termBaseLogPosition,
         final long timestamp,
         final ClusterAction action,
         final int flags)
     {
         final int length = MessageHeaderEncoder.ENCODED_LENGTH + ClusterActionRequestEncoder.BLOCK_LENGTH;
-        final int fragmentLength = DataHeaderFlyweight.HEADER_LENGTH + length;
-        final int alignedFragmentLength = align(fragmentLength, FRAME_ALIGNMENT);
 
         int attempts = SEND_ATTEMPTS;
         do
         {
-            final long logPosition = publication.position() + alignedFragmentLength;
             final long position = publication.tryClaim(length, bufferClaim);
 
             if (position > 0)
@@ -259,10 +257,11 @@ final class LogPublisher
                 clusterActionRequestEncoder.wrapAndApplyHeader(
                     bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
                     .leadershipTermId(leadershipTermId)
-                    .logPosition(logPosition)
+                    .logPosition(position) // snapshot starts after the `ClusterActionRequest` in the log
                     .timestamp(timestamp)
                     .action(action)
-                    .flags(flags);
+                    .flags(flags)
+                    .termBaseLogPosition(termBaseLogPosition);
 
                 bufferClaim.commit();
                 return true;
