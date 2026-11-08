@@ -523,8 +523,10 @@ class CounterTest
                 timeoutException.printStackTrace();
             }
 
+            Tests.await(
+                () -> CountersReader.RECORD_RECLAIMED == aeron.countersReader().getCounterState(counter2.id()));
+
             assertTrue(counter2.isClosed());
-            assertEquals(CountersReader.RECORD_RECLAIMED, aeron.countersReader().getCounterState(counter2.id()));
             verify(availableCounterHandler).onAvailableCounter(
                 any(CountersReader.class), eq(counter2.registrationId()), eq(counter2.id()));
             verify(unavailableCounterHandler).onUnavailableCounter(
