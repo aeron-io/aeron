@@ -6,6 +6,9 @@
 
 === Changelog
 
+* **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
+rebuild `recording.log` entries from the metadata alone.
+* **[Archive]** Find a torn last fragment's page boundary from its offset in the file. (https://github.com/aeron-io/aeron/pull/2238[#2238])
 * **[Driver/C]** On Linux, delay registering sockets with the poller's epoll set until the number of socket do not breach
 the iteration threshold (`aeron.udp.channel.transport.poller.iteration.threshold`). (https://github.com/aeron-io/aeron/pull/2209[#2209])
 * **[Driver]** Send the setup message of a response publication as soon as it learns the response subscription's
@@ -37,6 +40,9 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.1 (unreleased)
 
+* **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
+rebuild `recording.log` entries from the metadata alone.
+* **[Archive]** Find a torn last fragment's page boundary from its offset in the file. (https://github.com/aeron-io/aeron/pull/2238[#2238])
 * **[Driver/C]** On Linux, delay registering sockets with the poller's epoll set until the number of socket do not breach
 the iteration threshold (`aeron.udp.channel.transport.poller.iteration.threshold`). (https://github.com/aeron-io/aeron/pull/2209[#2209])
 * **[Driver]** Send the setup message of a response publication as soon as it learns the response subscription's
