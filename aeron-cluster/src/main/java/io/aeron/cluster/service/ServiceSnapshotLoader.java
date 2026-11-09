@@ -69,6 +69,7 @@ final class ServiceSnapshotLoader implements ControlledFragmentHandler
         return image.controlledPoll(fragmentAssembler, FRAGMENT_LIMIT);
     }
 
+    @Override
     public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
         messageHeaderDecoder.wrap(buffer, offset);

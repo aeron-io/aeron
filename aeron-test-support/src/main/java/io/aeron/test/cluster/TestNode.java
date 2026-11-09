@@ -280,6 +280,7 @@ public final class TestNode implements AutoCloseable
         return services;
     }
 
+    @Override
     public void close()
     {
         if (!isClosed)
@@ -543,6 +544,7 @@ public final class TestNode implements AutoCloseable
             return hasReceivedUnexpectedMessage;
         }
 
+        @Override
         public void onStart(final Cluster cluster, final Image snapshotImage)
         {
             super.onStart(cluster, snapshotImage);
@@ -583,6 +585,7 @@ public final class TestNode implements AutoCloseable
             }
         }
 
+        @Override
         public void onSessionMessage(
             final ClientSession session,
             final long timestamp,
@@ -689,11 +692,13 @@ public final class TestNode implements AutoCloseable
             }
         }
 
+        @Override
         public void onTimerEvent(final long correlationId, final long timestamp)
         {
             timerCount.incrementAndGet();
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
             if (failNextSnapshot)
@@ -718,18 +723,21 @@ public final class TestNode implements AutoCloseable
             wasSnapshotTaken = true;
         }
 
+        @Override
         public void onSessionOpen(final ClientSession session, final long timestamp)
         {
             super.onSessionOpen(session, timestamp);
             activeSessionCount.incrementAndGet();
         }
 
+        @Override
         public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
         {
             super.onSessionClose(session, timestamp, closeReason);
             activeSessionCount.decrementAndGet();
         }
 
+        @Override
         public void onRoleChange(final Cluster.Role newRole)
         {
             roleChangedTo = newRole;
@@ -805,6 +813,7 @@ public final class TestNode implements AutoCloseable
             this.failNextSnapshot = failNextSnapshot;
         }
 
+        @Override
         public String toString()
         {
             return "TestService{" +
@@ -833,6 +842,7 @@ public final class TestNode implements AutoCloseable
             return this;
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
             super.onTakeSnapshot(snapshotPublication);
@@ -855,6 +865,7 @@ public final class TestNode implements AutoCloseable
             return checksum;
         }
 
+        @Override
         public void onStart(final Cluster cluster, final Image snapshotImage)
         {
             checksum = 0;
@@ -881,6 +892,7 @@ public final class TestNode implements AutoCloseable
             }
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
             idleStrategy.reset();
@@ -897,6 +909,7 @@ public final class TestNode implements AutoCloseable
             wasSnapshotTaken = true;
         }
 
+        @Override
         public void onSessionMessage(
             final ClientSession session,
             final long timestamp,
@@ -929,35 +942,42 @@ public final class TestNode implements AutoCloseable
             return 0;
         }
 
+        @Override
         public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
         {
         }
 
+        @Override
         public int doWork(final long nowNs)
         {
             return 0;
         }
 
+        @Override
         public int slowTickWork(final long nowNs)
         {
             return 0;
         }
 
+        @Override
         public int consensusWork(final long nowNs)
         {
             return 0;
         }
 
+        @Override
         public void onElectionComplete(final ConsensusControlState consensusControlState)
         {
             onElectionConsensusControlState = consensusControlState;
         }
 
+        @Override
         public void onNewLeadershipTerm(final ConsensusControlState consensusControlState)
         {
             onNewLeadershipTermConsensusControlState = consensusControlState;
         }
 
+        @Override
         public ControlledFragmentHandler.Action onIngressExtensionMessage(
             final int actingBlockLength,
             final int templateId,
@@ -971,6 +991,7 @@ public final class TestNode implements AutoCloseable
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
+        @Override
         public ControlledFragmentHandler.Action onLogExtensionMessage(
             final int actingBlockLength,
             final int templateId,
@@ -984,26 +1005,31 @@ public final class TestNode implements AutoCloseable
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
+        @Override
         public void close()
         {
 
         }
 
+        @Override
         public void onSessionOpened(final long clusterSessionId)
         {
 
         }
 
+        @Override
         public void onSessionClosed(final long clusterSessionId, final CloseReason closeReason)
         {
 
         }
 
+        @Override
         public void onPrepareForNewLeadership()
         {
 
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
 
@@ -1075,6 +1101,7 @@ public final class TestNode implements AutoCloseable
             return copy(timers);
         }
 
+        @Override
         public void onStart(final Cluster cluster, final Image snapshotImage)
         {
             nextServiceMessageNumber = 1_000_000 * serviceId;
@@ -1143,6 +1170,7 @@ public final class TestNode implements AutoCloseable
             }
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
             wasSnapshotTaken = false;
@@ -1174,6 +1202,7 @@ public final class TestNode implements AutoCloseable
             wasSnapshotTaken = true;
         }
 
+        @Override
         public void onSessionMessage(
             final ClientSession session,
             final long timestamp,
@@ -1230,12 +1259,14 @@ public final class TestNode implements AutoCloseable
             messageCount.incrementAndGet(); // count all messages
         }
 
+        @Override
         public void onTimerEvent(final long correlationId, final long timestamp)
         {
             timers.add(correlationId);
             super.onTimerEvent(correlationId, timestamp);
         }
 
+        @Override
         public String toString()
         {
             return "MessageTrackingService{" +
@@ -1360,6 +1391,7 @@ public final class TestNode implements AutoCloseable
         }
     }
 
+    @Override
     public String toString()
     {
         return "TestNode{" +
@@ -1373,11 +1405,13 @@ public final class TestNode implements AutoCloseable
     {
         return new IntPredicate()
         {
+            @Override
             public boolean test(final int value)
             {
                 return count <= value;
             }
 
+            @Override
             public String toString()
             {
                 return "atLeast(" + count + ")";
@@ -1389,11 +1423,13 @@ public final class TestNode implements AutoCloseable
     {
         return new IntPredicate()
         {
+            @Override
             public boolean test(final int value)
             {
                 return value <= count;
             }
 
+            @Override
             public String toString()
             {
                 return "atMost(" + count + ")";

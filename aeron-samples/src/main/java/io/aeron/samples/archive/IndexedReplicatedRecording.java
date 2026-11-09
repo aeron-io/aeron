@@ -348,6 +348,7 @@ public class IndexedReplicatedRecording implements AutoCloseable
             buffer.setMemory(HEADER_LENGTH, MAX_MESSAGE_LENGTH, (byte)'X');
         }
 
+        @Override
         public void close()
         {
             CloseHelper.close(publication);
@@ -420,6 +421,7 @@ public class IndexedReplicatedRecording implements AutoCloseable
             this.sessionId = sessionId;
         }
 
+        @Override
         public void close()
         {
             CloseHelper.close(subscription);
@@ -463,6 +465,7 @@ public class IndexedReplicatedRecording implements AutoCloseable
             return timestampPositions;
         }
 
+        @Override
         public void run()
         {
             while (!subscription.isConnected() || !publication.isConnected())
@@ -503,6 +506,7 @@ public class IndexedReplicatedRecording implements AutoCloseable
             }
         }
 
+        @Override
         public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             final long currentPosition = lastMessagePosition;

@@ -50,26 +50,31 @@ final class ContainerClientSession implements ClientSession
     }
 
 
+    @Override
     public long id()
     {
         return id;
     }
 
+    @Override
     public int responseStreamId()
     {
         return responseStreamId;
     }
 
+    @Override
     public String responseChannel()
     {
         return responseChannel;
     }
 
+    @Override
     public byte[] encodedPrincipal()
     {
         return encodedPrincipal;
     }
 
+    @Override
     public void close()
     {
         if (null != clusteredServiceAgent.getClientSession(id))
@@ -78,21 +83,25 @@ final class ContainerClientSession implements ClientSession
         }
     }
 
+    @Override
     public boolean isClosing()
     {
         return isClosing;
     }
 
+    @Override
     public long offer(final DirectBuffer buffer, final int offset, final int length)
     {
         return clusteredServiceAgent.offer(id, responsePublication, buffer, offset, length);
     }
 
+    @Override
     public long offer(final DirectBufferVector[] vectors)
     {
         return clusteredServiceAgent.offer(id, responsePublication, vectors);
     }
 
+    @Override
     public long tryClaim(final int length, final BufferClaim bufferClaim)
     {
         return clusteredServiceAgent.tryClaim(id, responsePublication, length, bufferClaim);

@@ -288,6 +288,7 @@ public final class NetworkUtil
             this.isLoopback = isLoopback;
         }
 
+        @Override
         public int compareTo(final FilterResult other)
         {
             if (isLoopback == other.isLoopback)
@@ -302,11 +303,13 @@ public final class NetworkUtil
             }
         }
 
+        @Override
         public boolean equals(final Object o)
         {
             return o instanceof FilterResult && compareTo((FilterResult)o) == 0;
         }
 
+        @Override
         public int hashCode()
         {
             return Objects.hash(interfaceAddress, networkInterface, isLoopback);

@@ -56,6 +56,7 @@ public final class StreamIdFrameDataLossGenerator implements LossGenerator
         ENABLED_VH.setRelease(this, false);
     }
 
+    @Override
     public boolean shouldDropFrame(
         final InetSocketAddress address,
         final UnsafeBuffer buffer,
@@ -74,6 +75,7 @@ public final class StreamIdFrameDataLossGenerator implements LossGenerator
         return false;
     }
 
+    @Override
     public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
     {
         return false;

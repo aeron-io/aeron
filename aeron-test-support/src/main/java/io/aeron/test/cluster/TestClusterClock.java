@@ -37,36 +37,43 @@ public class TestClusterClock implements ClusterClock, NanoClock
         this.timeUnit = timeUnit;
     }
 
+    @Override
     public TimeUnit timeUnit()
     {
         return timeUnit;
     }
 
+    @Override
     public long time()
     {
         return tick.get();
     }
 
+    @Override
     public long nanoTime()
     {
         return timeUnit.toNanos(tick.get());
     }
 
+    @Override
     public long timeMillis()
     {
         return timeUnit.toMillis(tick.get());
     }
 
+    @Override
     public long timeMicros()
     {
         return timeUnit.toMicros(tick.get());
     }
 
+    @Override
     public long timeNanos()
     {
         return timeUnit.toNanos(tick.get());
     }
 
+    @Override
     public long convertToNanos(final long time)
     {
         return timeUnit.toNanos(time);

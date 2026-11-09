@@ -287,6 +287,7 @@ public final class AeronCluster implements AutoCloseable
     /**
      * Close session and release associated resources.
      */
+    @Override
     public void close()
     {
         if (State.CLOSED == state)
@@ -1453,6 +1454,7 @@ public final class AeronCluster implements AutoCloseable
          *
          * @return a shallow copy of the object.
          */
+        @Override
         public Context clone()
         {
             try
@@ -2207,6 +2209,7 @@ public final class AeronCluster implements AutoCloseable
         /**
          * Close allocated resources. Must be called on error. On success this is a no op.
          */
+        @Override
         public void close()
         {
             if (State.DONE != state)
@@ -2646,6 +2649,7 @@ public final class AeronCluster implements AutoCloseable
             }
         }
 
+        @Override
         public void close()
         {
             if (null != publication)
@@ -2660,6 +2664,7 @@ public final class AeronCluster implements AutoCloseable
             publication = null;
         }
 
+        @Override
         public String toString()
         {
             return "MemberIngress{" +

@@ -41,6 +41,7 @@ public class DebugSendChannelEndpointSupplier implements SendChannelEndpointSupp
      * @param context         for the configuration of the driver.
      * @return a new instance of a {@link DebugSendChannelEndpoint} for testing loss.
      */
+    @Override
     public SendChannelEndpoint newInstance(
         final UdpChannel udpChannel, final AtomicCounter statusIndicator, final MediaDriver.Context context)
     {

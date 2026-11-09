@@ -44,6 +44,7 @@ public class InterruptingTestCallback implements BeforeEachCallback, AfterEachCa
 
     private ScheduledFuture<?> timer = null;
 
+    @Override
     public void afterEach(final ExtensionContext context)
     {
         if (null != timer)
@@ -64,6 +65,7 @@ public class InterruptingTestCallback implements BeforeEachCallback, AfterEachCa
         }
     }
 
+    @Override
     public void beforeEach(final ExtensionContext context)
     {
         timer = null;

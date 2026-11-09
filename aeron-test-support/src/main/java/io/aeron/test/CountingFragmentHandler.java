@@ -36,11 +36,13 @@ public final class CountingFragmentHandler implements FragmentHandler
         return targetValue != received;
     }
 
+    @Override
     public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
         received++;
     }
 
+    @Override
     public String toString()
     {
         return "CountingFragmentHandler{" +

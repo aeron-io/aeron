@@ -1011,6 +1011,7 @@ public class ResponseChannelsTest
 
     private static final class EchoHandler implements ResponseServer.ResponseHandler
     {
+        @Override
         public boolean onMessage(
             final DirectBuffer buffer,
             final int offset,

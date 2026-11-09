@@ -35,6 +35,7 @@ public final class RecordingSignalCollector implements RecordingSignalConsumer
 
     private final List<CollectedSignal> collectedSignals = new ArrayList<>();
 
+    @Override
     public void onSignal(
         final long controlSessionId,
         final long correlationId,
@@ -52,6 +53,7 @@ public final class RecordingSignalCollector implements RecordingSignalConsumer
         return collectedSignals;
     }
 
+    @Override
     public String toString()
     {
         return "RecordingSignalCollector{" +

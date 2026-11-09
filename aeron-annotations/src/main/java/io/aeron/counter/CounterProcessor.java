@@ -47,16 +47,19 @@ public class CounterProcessor extends Processor
     {
     }
 
+    @Override
     protected String getEnabledPropertyName()
     {
         return "aeron.build.counterProcessor.enabled";
     }
 
+    @Override
     protected String getPrintNotesPropertyName()
     {
         return "aeron.build.counterProcessor.printNotes";
     }
 
+    @Override
     protected String getFailOnErrorPropertyName()
     {
         return "aeron.build.counterProcessor.failOnError";

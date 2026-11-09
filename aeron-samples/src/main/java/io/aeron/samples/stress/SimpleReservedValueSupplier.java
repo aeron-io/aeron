@@ -21,6 +21,7 @@ import org.agrona.DirectBuffer;
 class SimpleReservedValueSupplier implements ReservedValueSupplier
 {
     private long value;
+    @Override
     public long get(final DirectBuffer termBuffer, final int termOffset, final int frameLength)
     {
         return value;

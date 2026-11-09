@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 
 class WheelTimerServiceClusterTimeTest extends ClusterTimerTest
 {
+    @Override
     TimerServiceSupplier timerServiceSupplier()
     {
         return new WheelTimerServiceSupplier(TimeUnit.MILLISECONDS, 0, 8, 128);

@@ -833,6 +833,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          *
          * @return a shallow copy of the object.
          */
+        @Override
         public Context clone()
         {
             try

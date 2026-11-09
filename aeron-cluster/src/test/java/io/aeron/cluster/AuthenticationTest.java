@@ -92,11 +92,13 @@ class AuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 fail();
@@ -106,23 +108,27 @@ class AuthenticationTest
 
         final Authenticator authenticator = spy(new Authenticator()
         {
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 fail();
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.authenticate(null);
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 fail();
@@ -154,11 +160,13 @@ class AuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return encodedCredentials;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 fail();
@@ -168,23 +176,27 @@ class AuthenticationTest
 
         final Authenticator authenticator = spy(new Authenticator()
         {
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(CREDENTIALS_STRING, new String(encodedCredentials));
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 fail();
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.authenticate(PRINCIPAL_STRING.getBytes());
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 fail();
@@ -216,11 +228,13 @@ class AuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 assertEquals(CHALLENGE_STRING, new String(encodedChallenge));
@@ -232,12 +246,14 @@ class AuthenticationTest
         {
             boolean challengeSuccessful = false;
 
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 assertEquals(sessionId, authenticatorSessionId.value);
@@ -245,12 +261,14 @@ class AuthenticationTest
                 challengeSuccessful = true;
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.challenge(encodedChallenge);
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 if (challengeSuccessful)
@@ -286,11 +304,13 @@ class AuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 assertEquals(CHALLENGE_STRING, new String(encodedChallenge));
@@ -300,23 +320,27 @@ class AuthenticationTest
 
         final Authenticator authenticator = spy(new Authenticator()
         {
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 fail();
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.reject();
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 fail();
@@ -352,11 +376,13 @@ class AuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 assertEquals(CHALLENGE_STRING, new String(encodedChallenge));
@@ -368,12 +394,14 @@ class AuthenticationTest
         {
             boolean challengeRespondedTo = false;
 
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 assertEquals(sessionId, authenticatorSessionId.value);
@@ -381,12 +409,14 @@ class AuthenticationTest
                 challengeRespondedTo = true;
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.challenge(encodedChallenge);
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 if (challengeRespondedTo)
@@ -432,12 +462,14 @@ class AuthenticationTest
         {
             private int counterValue = 0;
 
+            @Override
             public void onSessionOpen(final ClientSession session, final long timestamp)
             {
                 sessionId.value = session.id();
                 encodedPrincipal.set(session.encodedPrincipal());
             }
 
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,

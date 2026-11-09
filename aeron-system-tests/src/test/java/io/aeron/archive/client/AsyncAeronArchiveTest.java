@@ -375,16 +375,19 @@ class AsyncAeronArchiveTest
         private int onConnectedCount;
         private int onDisconnectedCount;
 
+        @Override
         public void onConnected()
         {
             onConnectedCount++;
         }
 
+        @Override
         public void onDisconnected()
         {
             onDisconnectedCount++;
         }
 
+        @Override
         public void onControlResponse(
             final long correlationId,
             final long relevantId,
@@ -394,11 +397,13 @@ class AsyncAeronArchiveTest
             controlResponses.add(new ControlResponse(correlationId, relevantId, code, errorMessage));
         }
 
+        @Override
         public void onError(final Exception error)
         {
             errors.add(error);
         }
 
+        @Override
         public void onRecordingDescriptor(
             final long controlSessionId,
             final long correlationId,

@@ -106,31 +106,37 @@ final class ClusterSession implements ClusterClientSession
         state(State.CLOSED, reason);
     }
 
+    @Override
     public long id()
     {
         return id;
     }
 
+    @Override
     public byte[] encodedPrincipal()
     {
         return encodedPrincipal;
     }
 
+    @Override
     public boolean isOpen()
     {
         return State.OPEN == state;
     }
 
+    @Override
     public Publication responsePublication()
     {
         return responsePublication;
     }
 
+    @Override
     public long timeOfLastActivityNs()
     {
         return timeOfLastActivityNs;
     }
 
+    @Override
     public void timeOfLastActivityNs(final long timeNs)
     {
         timeOfLastActivityNs = timeNs;
@@ -544,6 +550,7 @@ final class ClusterSession implements ClusterClientSession
         }
     }
 
+    @Override
     public String toString()
     {
         return "ClusterSession{" +

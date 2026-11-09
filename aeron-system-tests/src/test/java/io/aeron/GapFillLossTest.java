@@ -124,6 +124,7 @@ class GapFillLossTest
             this.subscription = subscription;
         }
 
+        @Override
         public void run()
         {
             Tests.awaitConnected(subscription);
@@ -144,6 +145,7 @@ class GapFillLossTest
             }
         }
 
+        @Override
         public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             messageCount++;

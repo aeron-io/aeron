@@ -31,20 +31,24 @@ class EchoService implements ClusteredService
     protected Cluster cluster;
     protected IdleStrategy idleStrategy;
 
+    @Override
     public void onStart(final Cluster cluster, final Image snapshotImage)
     {
         this.cluster = cluster;
         this.idleStrategy = cluster.idleStrategy();
     }
 
+    @Override
     public void onSessionOpen(final ClientSession session, final long timestamp)
     {
     }
 
+    @Override
     public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
     {
     }
 
+    @Override
     public void onSessionMessage(
         final ClientSession session,
         final long timestamp,
@@ -67,18 +71,22 @@ class EchoService implements ClusteredService
         while (--attempts > 0);
     }
 
+    @Override
     public void onTimerEvent(final long correlationId, final long timestamp)
     {
     }
 
+    @Override
     public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
     {
     }
 
+    @Override
     public void onRoleChange(final Cluster.Role newRole)
     {
     }
 
+    @Override
     public void onTerminate(final Cluster cluster)
     {
     }

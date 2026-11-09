@@ -56,6 +56,7 @@ final class ClusterControlAdapter implements AutoCloseable
         this.listener = listener;
     }
 
+    @Override
     public void close()
     {
         CloseHelper.close(subscription);

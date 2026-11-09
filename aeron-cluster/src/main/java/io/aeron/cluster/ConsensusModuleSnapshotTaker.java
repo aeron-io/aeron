@@ -47,6 +47,7 @@ class ConsensusModuleSnapshotTaker
         super(publication, idleStrategy, aeronClientInvoker);
     }
 
+    @Override
     public boolean onMessage(final MutableDirectBuffer buffer, final int offset, final int length, final int headOffset)
     {
         offer(buffer, offset, length);
@@ -112,6 +113,7 @@ class ConsensusModuleSnapshotTaker
         }
     }
 
+    @Override
     public void snapshotTimer(final long correlationId, final long deadline)
     {
         idleStrategy.reset();

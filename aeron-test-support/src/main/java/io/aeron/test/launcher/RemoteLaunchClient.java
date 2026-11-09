@@ -96,6 +96,7 @@ public final class RemoteLaunchClient implements AutoCloseable
         }
     }
 
+    @Override
     public void close() throws IOException
     {
         clientChannel.close();

@@ -28,6 +28,7 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
         this.delegate = delegate;
     }
 
+    @Override
     public void onHeader(
         final int eventType,
         final int eventCode,
@@ -37,6 +38,7 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
         this.delegate.onHeader(eventType, eventCode, eventCodeName.toString(), timestamp);
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final CharSequence value)
     {
         if (value == null)
@@ -48,16 +50,19 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
         this.delegate.onValue(name.toString(), tag, value.toString());
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final long value)
     {
         this.delegate.onValue(name.toString(), tag, value);
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final boolean value)
     {
         this.delegate.onValue(name.toString(), tag, value);
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
         if (value == null)
@@ -71,6 +76,7 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
         this.delegate.onValue(name.toString(), tag, new UnsafeBuffer(copy));
     }
 
+    @Override
     public void onFooter(final boolean truncated)
     {
         this.delegate.onFooter(truncated);

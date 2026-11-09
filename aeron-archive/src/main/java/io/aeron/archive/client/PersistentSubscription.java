@@ -1557,6 +1557,7 @@ public final class PersistentSubscription implements AutoCloseable
         int termBufferLength;
         int streamId;
 
+        @Override
         public void onRecordingDescriptor(
             final long controlSessionId,
             final long correlationId,
@@ -1587,6 +1588,7 @@ public final class PersistentSubscription implements AutoCloseable
             }
         }
 
+        @Override
         public String toString()
         {
             return "ListRecordingRequest{" +
@@ -1654,6 +1656,7 @@ public final class PersistentSubscription implements AutoCloseable
          *
          * @return a shallow copy of the object.
          */
+        @Override
         public Context clone()
         {
             try
@@ -2200,16 +2203,19 @@ public final class PersistentSubscription implements AutoCloseable
 
     private static final class NoOpPersistentSubscriptionListener implements PersistentSubscriptionListener
     {
+        @Override
         public void onLiveJoined()
         {
 
         }
 
+        @Override
         public void onLiveLeft()
         {
 
         }
 
+        @Override
         public void onError(final Exception e)
         {
 
@@ -2315,10 +2321,12 @@ public final class PersistentSubscription implements AutoCloseable
 
     private final class ArchiveListener implements AsyncAeronArchiveListener
     {
+        @Override
         public void onConnected()
         {
         }
 
+        @Override
         public void onDisconnected()
         {
             if (State.AWAIT_ARCHIVE_CONNECTION == state ||
@@ -2343,6 +2351,7 @@ public final class PersistentSubscription implements AutoCloseable
             state(State.AWAIT_ARCHIVE_CONNECTION);
         }
 
+        @Override
         public void onControlResponse(
             final long correlationId,
             final long relevantId,
@@ -2367,6 +2376,7 @@ public final class PersistentSubscription implements AutoCloseable
             }
         }
 
+        @Override
         public void onError(final Exception error)
         {
             if (asyncAeronArchive.isClosed())
@@ -2380,6 +2390,7 @@ public final class PersistentSubscription implements AutoCloseable
             }
         }
 
+        @Override
         public void onRecordingDescriptor(
             final long controlSessionId,
             final long correlationId,

@@ -54,6 +54,7 @@ final class WheelTimerService extends DeadlineTimerWheel implements DeadlineTime
         this.timerHandler = Objects.requireNonNull(timerHandler);
     }
 
+    @Override
     public int poll(final long now)
     {
         int expired = 0;
@@ -73,6 +74,7 @@ final class WheelTimerService extends DeadlineTimerWheel implements DeadlineTime
         return expired;
     }
 
+    @Override
     public boolean onTimerExpiry(final TimeUnit timeUnit, final long now, final long timerId)
     {
         final long correlationId = correlationIdByTimerIdMap.get(timerId);
@@ -92,6 +94,7 @@ final class WheelTimerService extends DeadlineTimerWheel implements DeadlineTime
         }
     }
 
+    @Override
     public void scheduleTimerForCorrelationId(final long correlationId, final long deadline)
     {
         cancelTimerByCorrelationId(correlationId);
@@ -101,6 +104,7 @@ final class WheelTimerService extends DeadlineTimerWheel implements DeadlineTime
         correlationIdByTimerIdMap.put(timerId, correlationId);
     }
 
+    @Override
     public boolean cancelTimerByCorrelationId(final long correlationId)
     {
         final long timerId = timerIdByCorrelationIdMap.remove(correlationId);
@@ -115,6 +119,7 @@ final class WheelTimerService extends DeadlineTimerWheel implements DeadlineTime
         return false;
     }
 
+    @Override
     public void snapshot(final TimerSnapshotTaker snapshotTaker)
     {
         final Long2LongHashMap.EntryIterator iter = timerIdByCorrelationIdMap.entrySet().iterator();
@@ -130,6 +135,7 @@ final class WheelTimerService extends DeadlineTimerWheel implements DeadlineTime
         }
     }
 
+    @Override
     public void currentTime(final long now)
     {
         currentTickTime(now);

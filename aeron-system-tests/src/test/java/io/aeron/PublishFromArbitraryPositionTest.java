@@ -63,6 +63,7 @@ class PublishFromArbitraryPositionTest
     @RegisterExtension
     final TestWatcher randomSeedWatcher = new TestWatcher()
     {
+        @Override
         public void testFailed(final ExtensionContext context, final Throwable cause)
         {
             System.err.println(context.getDisplayName() + " failed with random seed: " + seed);

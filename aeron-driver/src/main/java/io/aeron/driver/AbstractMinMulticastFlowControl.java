@@ -200,6 +200,7 @@ public abstract class AbstractMinMulticastFlowControl
      *
      * @return true if the observed receiver count reached the {@link #groupMinSize()} threshold?
      */
+    @Override
     public boolean hasRequiredReceivers()
     {
         return hasRequiredReceivers;

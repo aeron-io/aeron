@@ -553,6 +553,7 @@ public class ClusterToolOperator
         final MutableLong id = new MutableLong(NULL_VALUE);
         final ClusterControlAdapter.Listener listener = new ClusterControlAdapter.Listener()
         {
+            @Override
             public void onClusterMembersResponse(
                 final long correlationId,
                 final int leaderMemberId,
@@ -566,6 +567,7 @@ public class ClusterToolOperator
                 }
             }
 
+            @Override
             public void onClusterMembersExtendedResponse(
                 final long correlationId,
                 final long currentTimeNs,

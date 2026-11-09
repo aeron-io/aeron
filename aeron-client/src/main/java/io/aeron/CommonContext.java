@@ -670,6 +670,7 @@ public class CommonContext implements Cloneable
     private static final PrintStream NO_OP_LOGGER = new PrintStream(
         new OutputStream()
         {
+            @Override
             public void write(final int b)
             {
                 // No-op
@@ -732,6 +733,7 @@ public class CommonContext implements Cloneable
      *
      * @return a shallow copy of the object.
      */
+    @Override
     public CommonContext clone()
     {
         try
@@ -1566,6 +1568,7 @@ public class CommonContext implements Cloneable
             this.userErrorHandler = userErrorHandler;
         }
 
+        @Override
         public void close()
         {
             loggingErrorHandler.close();
@@ -1575,6 +1578,7 @@ public class CommonContext implements Cloneable
             }
         }
 
+        @Override
         public void onError(final Throwable throwable)
         {
             loggingErrorHandler.onError(throwable);

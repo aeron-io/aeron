@@ -223,33 +223,40 @@ class ClusterWithNoServicesTest
             return 0;
         }
 
+        @Override
         public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
         {
         }
 
+        @Override
         public int doWork(final long nowNs)
         {
             return 0;
         }
 
+        @Override
         public int slowTickWork(final long nowNs)
         {
             return 0;
         }
 
+        @Override
         public int consensusWork(final long nowNs)
         {
             return 0;
         }
 
+        @Override
         public void onElectionComplete(final ConsensusControlState consensusControlState)
         {
         }
 
+        @Override
         public void onNewLeadershipTerm(final ConsensusControlState consensusControlState)
         {
         }
 
+        @Override
         public ControlledFragmentHandler.Action onIngressExtensionMessage(
             final int actingBlockLength,
             final int templateId,
@@ -263,6 +270,7 @@ class ClusterWithNoServicesTest
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
+        @Override
         public ControlledFragmentHandler.Action onLogExtensionMessage(
             final int actingBlockLength,
             final int templateId,
@@ -276,6 +284,7 @@ class ClusterWithNoServicesTest
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
+        @Override
         public void close()
         {
             if (LatchTrigger.CLOSED == latchTrigger)
@@ -284,6 +293,7 @@ class ClusterWithNoServicesTest
             }
         }
 
+        @Override
         public void onSessionOpened(final long clusterSessionId)
         {
             if (LatchTrigger.SESSION_OPENED == latchTrigger)
@@ -292,14 +302,17 @@ class ClusterWithNoServicesTest
             }
         }
 
+        @Override
         public void onSessionClosed(final long clusterSessionId, final CloseReason closeReason)
         {
         }
 
+        @Override
         public void onPrepareForNewLeadership()
         {
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
             snapshotCount.getAndIncrement();

@@ -114,6 +114,7 @@ class ReplaySessionTest
     {
         private long time = 10;
 
+        @Override
         public long nanoTime()
         {
             final long result = time;

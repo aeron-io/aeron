@@ -52,16 +52,19 @@ class NetworkSubscriptionLink extends SubscriptionLink
         responseSetupState = state;
     }
 
+    @Override
     boolean isReliable()
     {
         return isReliable;
     }
 
+    @Override
     ReceiveChannelEndpoint channelEndpoint()
     {
         return channelEndpoint;
     }
 
+    @Override
     boolean matches(final PublicationImage image)
     {
         return image.channelEndpoint() == this.channelEndpoint &&
@@ -69,6 +72,7 @@ class NetworkSubscriptionLink extends SubscriptionLink
             isWildcardOrSessionIdMatch(image.sessionId());
     }
 
+    @Override
     boolean matches(final ReceiveChannelEndpoint channelEndpoint, final int streamId, final SubscriptionParams params)
     {
         return channelEndpoint == this.channelEndpoint &&
@@ -77,6 +81,7 @@ class NetworkSubscriptionLink extends SubscriptionLink
             isWildcardOrSessionIdMatch(params.sessionId);
     }
 
+    @Override
     boolean matches(final ReceiveChannelEndpoint channelEndpoint, final int streamId, final int sessionId)
     {
         return channelEndpoint == this.channelEndpoint &&
@@ -84,6 +89,7 @@ class NetworkSubscriptionLink extends SubscriptionLink
             isWildcardOrSessionIdMatch(sessionId);
     }
 
+    @Override
     boolean supportsMds()
     {
         return channelEndpoint.hasDestinationControl();

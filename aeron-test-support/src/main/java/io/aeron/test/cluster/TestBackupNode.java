@@ -74,6 +74,7 @@ public class TestBackupNode implements AutoCloseable
         }
     }
 
+    @Override
     public void close()
     {
         if (!isClosed)

@@ -216,6 +216,7 @@ public final class AeronArchive implements AutoCloseable
      * Notify the archive that this control session is closed, so it can promptly release resources then close the
      * local resources associated with the client.
      */
+    @Override
     public void close()
     {
         lock.lock();
@@ -3086,6 +3087,7 @@ public final class AeronArchive implements AutoCloseable
          *
          * @return a shallow copy of the object.
          */
+        @Override
         public Context clone()
         {
             try
@@ -3873,6 +3875,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Close any allocated resources.
          */
+        @Override
         public void close()
         {
             if (State.DONE != state)

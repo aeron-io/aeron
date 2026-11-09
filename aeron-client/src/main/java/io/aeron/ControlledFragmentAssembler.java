@@ -110,6 +110,7 @@ public class ControlledFragmentAssembler implements ControlledFragmentHandler
      * @param header representing the metadata for the data.
      * @return {@link io.aeron.logbuffer.ControlledFragmentHandler.Action} to be taken after processing fragment.
      */
+    @Override
     public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
         final byte flags = header.flags();

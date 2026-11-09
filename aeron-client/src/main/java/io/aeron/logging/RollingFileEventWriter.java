@@ -78,6 +78,7 @@ final class RollingFileEventWriter implements LoggerEventWriter
         }
     }
 
+    @Override
     public void write(final StringBuilder sb) throws IOException
     {
         if (!endsWithNewLine(sb))

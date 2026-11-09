@@ -67,6 +67,7 @@ public final class AeronVersionArgumentProvider implements CommandLineArgumentPr
     /**
      * {@inheritDoc}
      */
+    @Override
     public Iterable<String> asArguments()
     {
         return List.of("-Aio.aeron.version=" + version.get(), "-Aio.aeron.gitsha=" + gitSha.get());

@@ -42,11 +42,13 @@ class SocketAddressParserTest
     static final int LOOKUP_RESOLVER_PORT = 55;
     static final NameResolver LOOKUP_RESOLVER = new NameResolver()
     {
+        @Override
         public InetAddress resolve(final String name, final String uriParamName, final boolean isReResolution)
         {
             return DEFAULT_RESOLVER.resolve(name, uriParamName, isReResolution);
         }
 
+        @Override
         public String lookup(final String name, final String uriParamName, final boolean isReLookup)
         {
             if (name.equals(LOOKUP_RESOLVER_NAME))

@@ -104,6 +104,7 @@ public class RejectImageTest
         private final OneToOneConcurrentArrayQueue<PublicationErrorFrame> errorFrameQueue =
             new OneToOneConcurrentArrayQueue<>(512);
 
+        @Override
         public void onPublicationError(final PublicationErrorFrame errorFrame)
         {
             if (!errorFrameQueue.offer(errorFrame.clone()))

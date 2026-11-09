@@ -392,6 +392,7 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
      * <p>
      * This method is idempotent.
      */
+    @Override
     public void close()
     {
         if (!isClosed)

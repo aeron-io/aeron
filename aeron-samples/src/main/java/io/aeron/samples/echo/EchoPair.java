@@ -130,6 +130,7 @@ public class EchoPair implements ControlledFragmentHandler, AutoCloseable
     /**
      * Close the echo pair.
      */
+    @Override
     public void close()
     {
         CloseHelper.quietCloseAll(publication, subscription);
@@ -142,6 +143,7 @@ public class EchoPair implements ControlledFragmentHandler, AutoCloseable
          *
          * @return correlationId.
          */
+        @Override
         public long getCorrelationId()
         {
             return correlationId;
@@ -152,6 +154,7 @@ public class EchoPair implements ControlledFragmentHandler, AutoCloseable
          *
          * @return number of back pressure events.
          */
+        @Override
         public long getBackPressureCount()
         {
             return backPressureCount;
@@ -162,6 +165,7 @@ public class EchoPair implements ControlledFragmentHandler, AutoCloseable
          *
          * @return number of fragments.
          */
+        @Override
         public long getFragmentCount()
         {
             return fragmentCount;
@@ -172,6 +176,7 @@ public class EchoPair implements ControlledFragmentHandler, AutoCloseable
          *
          * @return number of bytes.
          */
+        @Override
         public long getByteCount()
         {
             return byteCount;

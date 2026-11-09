@@ -241,6 +241,7 @@ public final class DataCollector
         }
     }
 
+    @Override
     public String toString()
     {
         return "DataCollector{" +
@@ -445,6 +446,7 @@ public final class DataCollector
                 src,
                 new SimpleFileVisitor<>()
                 {
+                    @Override
                     public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs)
                     {
                         try
@@ -461,6 +463,7 @@ public final class DataCollector
                         return FileVisitResult.CONTINUE;
                     }
 
+                    @Override
                     public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
                     {
                         try
@@ -478,6 +481,7 @@ public final class DataCollector
                         return FileVisitResult.CONTINUE;
                     }
 
+                    @Override
                     public FileVisitResult visitFileFailed(final Path file, final IOException exc)
                     {
                         // Ignore failure visiting file.

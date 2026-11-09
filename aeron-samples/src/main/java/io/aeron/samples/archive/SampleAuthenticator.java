@@ -63,6 +63,7 @@ public final class SampleAuthenticator implements Authenticator
      * @param encodedCredentials from the Connect Request. Will not be null, but may be 0 length.
      * @param nowMs              current epoch time in milliseconds.
      */
+    @Override
     public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
     {
         final String credentialsString = new String(encodedCredentials, StandardCharsets.US_ASCII);
@@ -88,6 +89,7 @@ public final class SampleAuthenticator implements Authenticator
      * @param encodedCredentials from the Challenge Response. Will not be null, but may be 0 length.
      * @param nowMs              current epoch time in milliseconds.
      */
+    @Override
     public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
     {
         final String credentialsString = new String(encodedCredentials, StandardCharsets.US_ASCII);
@@ -109,6 +111,7 @@ public final class SampleAuthenticator implements Authenticator
      * @param sessionProxy to use to inform client of status.
      * @param nowMs        current epoch time in milliseconds.
      */
+    @Override
     public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
     {
         final long sessionId = sessionProxy.sessionId();
@@ -143,6 +146,7 @@ public final class SampleAuthenticator implements Authenticator
      * @param sessionProxy to use to inform client of status.
      * @param nowMs        current epoch time in milliseconds.
      */
+    @Override
     public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
     {
         final long sessionId = sessionProxy.sessionId();

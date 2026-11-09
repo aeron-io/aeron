@@ -30,11 +30,13 @@ public class CountingEventReaderAgent implements Agent
     private final ConcurrentHashMap<Integer, AtomicLong> eventCounts = new ConcurrentHashMap<>();
     private final AtomicLong zeroCount = new AtomicLong(0);
 
+    @Override
     public int doWork() throws Exception
     {
         return ringBuffer.read(this::onMessage, 10);
     }
 
+    @Override
     public String roleName()
     {
         return "test-counting-event-reader";

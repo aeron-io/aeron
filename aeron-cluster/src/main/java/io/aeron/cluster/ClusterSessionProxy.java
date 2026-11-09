@@ -39,11 +39,13 @@ final class ClusterSessionProxy implements SessionProxy
         return this;
     }
 
+    @Override
     public long sessionId()
     {
         return clusterSession.id();
     }
 
+    @Override
     public boolean challenge(final byte[] encodedChallenge)
     {
         if (egressPublisher.sendChallenge(clusterSession, encodedChallenge))
@@ -55,6 +57,7 @@ final class ClusterSessionProxy implements SessionProxy
         return false;
     }
 
+    @Override
     public boolean authenticate(final byte[] encodedPrincipal)
     {
         ClusterSession.checkEncodedPrincipalLength(encodedPrincipal);
@@ -63,6 +66,7 @@ final class ClusterSessionProxy implements SessionProxy
         return true;
     }
 
+    @Override
     public void reject()
     {
         clusterSession.reject(

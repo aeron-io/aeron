@@ -128,6 +128,7 @@ class SystemTests
             this.matcher = matcher;
         }
 
+        @Override
         public void accept(
             final int observationCount,
             final long firstObservationTimestamp,
@@ -148,6 +149,7 @@ class SystemTests
             return hasMatched;
         }
 
+        @Override
         public String toString()
         {
             final StringDescription description = new StringDescription();

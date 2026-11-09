@@ -47,6 +47,7 @@ final class OffsetMillisecondClusterClock implements ClusterClock
         this.epochClock = epochClock;
     }
 
+    @Override
     public long time()
     {
         return epochClock.time() + (long)OFFSET_VH.getAcquire(this);

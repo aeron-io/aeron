@@ -65,6 +65,7 @@ final class BoundedLogAdapter implements ControlledFragmentHandler, AutoCloseabl
         this.fragmentLimit = fragmentLimit;
     }
 
+    @Override
     public void close()
     {
         if (null != image)
@@ -74,6 +75,7 @@ final class BoundedLogAdapter implements ControlledFragmentHandler, AutoCloseabl
         }
     }
 
+    @Override
     public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
         Action action = Action.CONTINUE;

@@ -212,6 +212,7 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
      *
      * @return the {@link UdpChannel} associated with the destination.
      */
+    @Override
     public UdpChannel udpChannel()
     {
         return udpChannel;

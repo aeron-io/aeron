@@ -50,6 +50,7 @@ public class DefaultAuthenticatorSupplier implements AuthenticatorSupplier
      *
      * @return {@link #DEFAULT_AUTHENTICATOR} which authenticates all connection requests immediately.
      */
+    @Override
     public Authenticator get()
     {
         return DEFAULT_AUTHENTICATOR;
@@ -57,19 +58,23 @@ public class DefaultAuthenticatorSupplier implements AuthenticatorSupplier
 
     static final class DefaultAuthenticator implements Authenticator
     {
+        @Override
         public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
         {
         }
 
+        @Override
         public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
         {
         }
 
+        @Override
         public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
         {
             sessionProxy.authenticate(NULL_ENCODED_PRINCIPAL);
         }
 
+        @Override
         public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
         {
             sessionProxy.authenticate(NULL_ENCODED_PRINCIPAL);

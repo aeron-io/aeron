@@ -626,6 +626,7 @@ final class PublicationParams
         return entityTag;
     }
 
+    @Override
     public String toString()
     {
         return "PublicationParams{" +

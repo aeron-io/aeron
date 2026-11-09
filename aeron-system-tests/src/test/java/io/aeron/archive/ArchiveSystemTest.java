@@ -331,6 +331,7 @@ class ArchiveSystemTest
         final RecordingEventsAdapter recordingEventsAdapter = new RecordingEventsAdapter(
             new FailRecordingEventsListener()
             {
+                @Override
                 public void onStart(
                     final long recordingId,
                     final long startPosition0,
@@ -387,6 +388,7 @@ class ArchiveSystemTest
         final RecordingEventsAdapter recordingEventsAdapter = new RecordingEventsAdapter(
             new FailRecordingEventsListener()
             {
+                @Override
                 public void onStop(final long id, final long startPosition, final long stopPosition)
                 {
                     assertEquals(recordingId, id);
@@ -462,6 +464,7 @@ class ArchiveSystemTest
         final ControlResponseAdapter controlResponseAdapter = new ControlResponseAdapter(
             new FailControlResponseListener()
             {
+                @Override
                 public void onRecordingDescriptor(
                     final long controlSessionId,
                     final long correlationId,
@@ -703,6 +706,7 @@ class ArchiveSystemTest
         final RecordingEventsAdapter recordingEventsAdapter = new RecordingEventsAdapter(
             new FailRecordingEventsListener()
             {
+                @Override
                 public void onProgress(final long recordingId0, final long startPosition, final long position)
                 {
                     assertEquals(recordingId, recordingId0);

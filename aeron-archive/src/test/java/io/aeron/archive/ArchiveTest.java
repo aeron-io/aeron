@@ -1203,11 +1203,13 @@ class ArchiveTest
                 .aeronDirectoryName(driver.context().aeronDirectoryName())
                 .credentialsSupplier(new CredentialsSupplier()
                 {
+                    @Override
                     public byte[] encodedCredentials()
                     {
                         return "admin:test".getBytes(StandardCharsets.US_ASCII);
                     }
 
+                    @Override
                     public byte[] onChallenge(final byte[] encodedChallenge)
                     {
                         return "challenged".getBytes(StandardCharsets.US_ASCII);
@@ -1834,6 +1836,7 @@ class ArchiveTest
             this.strippedChannel = strippedChannel;
         }
 
+        @Override
         public String toString()
         {
             return "SubscriptionDescriptor{" +

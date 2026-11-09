@@ -132,6 +132,7 @@ class NameResolutionClusterNodeTest
     {
         final ClusteredService clusteredService = new StubClusteredService()
         {
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,

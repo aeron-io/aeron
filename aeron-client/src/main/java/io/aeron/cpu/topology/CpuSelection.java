@@ -63,21 +63,25 @@ interface CpuSelection
      */
     record CpusetSelection(Cpuset cpuset) implements CpuSelection
     {
+        @Override
         public IntArrayList cpus()
         {
             return cpuset.cpus();
         }
 
+        @Override
         public String kind()
         {
             return "cpuset";
         }
 
+        @Override
         public String label(final int index)
         {
             return Integer.toString(cpuset.cpus().getInt(index));
         }
 
+        @Override
         public String configuration()
         {
             return cpuset.formattedCpus();
@@ -105,21 +109,25 @@ interface CpuSelection
             configuration = joiner.toString();
         }
 
+        @Override
         public IntArrayList cpus()
         {
             return cpus;
         }
 
+        @Override
         public String kind()
         {
             return "affinity";
         }
 
+        @Override
         public String label(final int index)
         {
             return claims.get(index).name();
         }
 
+        @Override
         public String configuration()
         {
             return configuration;

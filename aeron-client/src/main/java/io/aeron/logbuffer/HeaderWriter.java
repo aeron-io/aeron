@@ -99,6 +99,7 @@ final class NativeBigEndianHeaderWriter extends HeaderWriter
             ((long)defaultHeader.getInt(STREAM_ID_FIELD_OFFSET)) << 32);
     }
 
+    @Override
     public void write(final UnsafeBuffer termBuffer, final int offset, final int length, final int termId)
     {
         termBuffer.putLongRelease(

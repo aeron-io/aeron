@@ -1608,6 +1608,7 @@ class Election
         return ctx.clusterClock().timeUnit().toNanos(timestamp);
     }
 
+    @Override
     public String toString()
     {
         return "Election{" +

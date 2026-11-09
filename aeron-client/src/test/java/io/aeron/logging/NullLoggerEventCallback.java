@@ -19,6 +19,7 @@ import org.agrona.DirectBuffer;
 
 public class NullLoggerEventCallback implements LoggerEventCallback
 {
+    @Override
     public void onHeader(
         final int eventType,
         final int eventCode,
@@ -28,26 +29,31 @@ public class NullLoggerEventCallback implements LoggerEventCallback
 
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final CharSequence value)
     {
 
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final long value)
     {
 
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final boolean value)
     {
 
     }
 
+    @Override
     public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
 
     }
 
+    @Override
     public void onFooter(final boolean truncated)
     {
 

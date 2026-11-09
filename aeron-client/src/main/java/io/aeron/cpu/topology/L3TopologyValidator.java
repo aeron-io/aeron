@@ -43,6 +43,7 @@ class L3TopologyValidator implements TopologyValidator
         this.perCpuListReader = new PerCpuListReader(sysfsRoot, SHARED_CPU_LIST_DIRECTORY);
     }
 
+    @Override
     public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         try

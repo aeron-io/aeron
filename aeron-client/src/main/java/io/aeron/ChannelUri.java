@@ -305,6 +305,7 @@ public final class ChannelUri
      *
      * @return a String representation of the URI that is valid for an Aeron channel.
      */
+    @Override
     public String toString()
     {
         final StringBuilder sb;

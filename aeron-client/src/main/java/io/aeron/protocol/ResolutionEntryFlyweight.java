@@ -170,6 +170,7 @@ public class ResolutionEntryFlyweight extends HeaderFlyweight
      * @return this for a fluent API.
      * @see #SELF_FLAG
      */
+    @Override
     public ResolutionEntryFlyweight flags(final short flags)
     {
         putByte(RES_FLAGS_FIELD_OFFSET, (byte)flags);
@@ -181,6 +182,7 @@ public class ResolutionEntryFlyweight extends HeaderFlyweight
      *
      * @return the flags for the resolution entry.
      */
+    @Override
     public short flags()
     {
         return (short)(getByte(RES_FLAGS_FIELD_OFFSET) & 0xFF);

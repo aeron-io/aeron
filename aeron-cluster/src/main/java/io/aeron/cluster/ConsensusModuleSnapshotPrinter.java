@@ -32,6 +32,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
         this.out = out;
     }
 
+    @Override
     public void onLoadBeginSnapshot(
         final int appVersion, final TimeUnit timeUnit, final DirectBuffer buffer, final int offset, final int length)
     {
@@ -40,6 +41,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
             " timeUnit=" + timeUnit);
     }
 
+    @Override
     public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
     {
         out.println("End Snapshot, offset=" + offset + ", length=" + length);
@@ -48,6 +50,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
         out.println(formatHexDump(b, 0, length));
     }
 
+    @Override
     public void onLoadConsensusModuleState(
         final long nextSessionId,
         final long nextServiceSessionId,
@@ -67,6 +70,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
         out.println(formatHexDump(b, 0, length));
     }
 
+    @Override
     public void onLoadPendingMessage(
         final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
     {
@@ -75,6 +79,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
             " clusterSessionId=" + clusterSessionId);
     }
 
+    @Override
     public void onLoadClusterSession(
         final long clusterSessionId,
         final long correlationId,
@@ -97,6 +102,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
             " responseChannel=" + responseChannel);
     }
 
+    @Override
     public void onLoadTimer(
         final long correlationId, final long deadline, final DirectBuffer buffer, final int offset, final int length)
     {
@@ -105,6 +111,7 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
             " deadline=" + deadline);
     }
 
+    @Override
     public void onLoadPendingMessageTracker(
         final long nextServiceSessionId,
         final long logServiceSessionId,

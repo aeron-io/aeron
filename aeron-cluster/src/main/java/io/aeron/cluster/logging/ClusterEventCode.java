@@ -231,6 +231,7 @@ public enum ClusterEventCode implements EventCode
      *
      * @return get {@link ClusterEventCode#id()} from {@link #id()}.
      */
+    @Override
     public int toEventCodeId()
     {
         return EVENT_CODE_TYPE << 16 | (id & 0xFFFF);

@@ -173,6 +173,7 @@ public class AsciidoctorPreprocessTask extends DefaultTask
                 asciidoctor.javaExtensionRegistry().preprocessor(
                     new org.asciidoctor.extension.Preprocessor()
                     {
+                        @Override
                         public Reader process(final Document document, final PreprocessorReader reader)
                         {
                             String line;

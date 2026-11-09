@@ -560,11 +560,13 @@ class UdpChannelTest
 
         final NameResolver resolver = new NameResolver()
         {
+            @Override
             public InetAddress resolve(final String name, final String uriParamName, final boolean isReResolution)
             {
                 return DefaultNameResolver.INSTANCE.resolve(name, uriParamName, isReResolution);
             }
 
+            @Override
             public String lookup(final String name, final String uriParamName, final boolean isReLookup)
             {
                 if (endpointName.equals(name))
@@ -697,11 +699,13 @@ class UdpChannelTest
 
     static class NetworkInterfaceTypeSafeMatcher extends TypeSafeMatcher<NetworkInterface>
     {
+        @Override
         public void describeTo(final Description description)
         {
             description.appendText("Interface supports multicast or is loopack");
         }
 
+        @Override
         protected boolean matchesSafely(final NetworkInterface networkInterface)
         {
             boolean matchesSafely = false;

@@ -33,6 +33,7 @@ class SpySubscriptionLink extends SubscriptionLink
         this.udpChannel = spiedChannel;
     }
 
+    @Override
     boolean matches(final NetworkPublication publication)
     {
         final UdpChannel publicationChannel = publication.channelEndpoint().udpChannel();

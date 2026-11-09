@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 class FailControlResponseListener implements ControlResponseListener
 {
+    @Override
     public void onResponse(
         final long controlSessionId,
         final long correlationId,
@@ -37,6 +38,7 @@ class FailControlResponseListener implements ControlResponseListener
         }
     }
 
+    @Override
     public void onRecordingDescriptor(
         final long controlSessionId,
         final long correlationId,

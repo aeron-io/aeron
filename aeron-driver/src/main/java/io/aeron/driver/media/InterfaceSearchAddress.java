@@ -39,6 +39,7 @@ record InterfaceSearchAddress(InetSocketAddress address, int subnetPrefix) imple
         requireNonNull(address, "address must not be null");
     }
 
+    @Override
     public ResolvedInterface resolve(final boolean multicast, final ProtocolFamily protocolFamily)
         throws SocketException
     {

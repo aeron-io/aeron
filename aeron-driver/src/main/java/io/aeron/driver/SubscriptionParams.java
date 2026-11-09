@@ -188,6 +188,7 @@ final class SubscriptionParams
         }
     }
 
+    @Override
     public String toString()
     {
         return "SubscriptionParams" +

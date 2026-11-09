@@ -130,6 +130,7 @@ public class PersistentSubscriber
     {
         private boolean live;
 
+        @Override
         public void onLiveJoined()
         {
             live = true;
@@ -139,6 +140,7 @@ public class PersistentSubscriber
             System.out.println("===========");
         }
 
+        @Override
         public void onLiveLeft()
         {
             live = false;
@@ -148,6 +150,7 @@ public class PersistentSubscriber
             System.out.println("===========");
         }
 
+        @Override
         public void onError(final Exception e)
         {
             System.err.println("Persistent subscription error:");

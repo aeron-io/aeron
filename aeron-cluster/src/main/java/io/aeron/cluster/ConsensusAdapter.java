@@ -61,6 +61,7 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
         this.consensusModuleAgent = consensusModuleAgent;
     }
 
+    @Override
     public void close()
     {
         CloseHelper.close(subscription);
@@ -76,6 +77,7 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
         return subscription.poll(fragmentAssembler, limit);
     }
 
+    @Override
     @SuppressWarnings("MethodLength")
     public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {

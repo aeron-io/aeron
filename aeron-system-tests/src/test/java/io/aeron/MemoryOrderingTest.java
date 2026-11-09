@@ -207,6 +207,7 @@ class MemoryOrderingTest
             this.subscription = subscription;
         }
 
+        @Override
         public void run()
         {
             final IdleStrategy idleStrategy = YieldingIdleStrategy.INSTANCE;
@@ -217,6 +218,7 @@ class MemoryOrderingTest
             }
         }
 
+        @Override
         public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             final long messageValue = buffer.getLong(offset);

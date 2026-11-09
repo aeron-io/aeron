@@ -131,11 +131,13 @@ class MappedRawLog implements RawLog
         }
     }
 
+    @Override
     public int termLength()
     {
         return termLength;
     }
 
+    @Override
     public boolean free()
     {
         final MappedByteBuffer[] mappedBuffers = this.mappedBuffers;
@@ -169,6 +171,7 @@ class MappedRawLog implements RawLog
         return true;
     }
 
+    @Override
     public void close()
     {
         if (!free())
@@ -177,16 +180,19 @@ class MappedRawLog implements RawLog
         }
     }
 
+    @Override
     public UnsafeBuffer[] termBuffers()
     {
         return termBuffers;
     }
 
+    @Override
     public UnsafeBuffer metaData()
     {
         return logMetaDataBuffer;
     }
 
+    @Override
     public ByteBuffer[] sliceTerms()
     {
         final ByteBuffer[] terms = new ByteBuffer[PARTITION_COUNT];
@@ -211,6 +217,7 @@ class MappedRawLog implements RawLog
         return terms;
     }
 
+    @Override
     public String fileName()
     {
         return logFile.getAbsolutePath();

@@ -273,6 +273,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         }
     }
 
+    @Override
     public void close()
     {
         CloseHelper.quietCloseAll(archive, asyncConnect);

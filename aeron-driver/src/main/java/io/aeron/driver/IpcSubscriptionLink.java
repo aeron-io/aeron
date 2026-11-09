@@ -27,6 +27,7 @@ class IpcSubscriptionLink extends SubscriptionLink
         super(registrationId, streamId, channelUri, aeronClient, params);
     }
 
+    @Override
     boolean matches(final IpcPublication publication)
     {
         return publication.streamId() == streamId && isWildcardOrSessionIdMatch(publication.sessionId());

@@ -20,6 +20,7 @@ package io.aeron;
  */
 class MappedLogBuffersFactory implements LogBuffersFactory
 {
+    @Override
     public LogBuffers map(final String logFileName)
     {
         return new LogBuffers(logFileName);

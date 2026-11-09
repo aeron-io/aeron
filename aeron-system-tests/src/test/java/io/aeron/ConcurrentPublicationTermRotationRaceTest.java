@@ -187,6 +187,7 @@ class ConcurrentPublicationTermRotationRaceTest
             setDaemon(true);
         }
 
+        @Override
         public void run()
         {
             startLatch.countDown();
@@ -239,6 +240,7 @@ class ConcurrentPublicationTermRotationRaceTest
             super(publication, messageSize, name, startLatch, errors);
         }
 
+        @Override
         long publish(final ConcurrentPublication publication, final long payload, final int size)
         {
             msgBuffer.checkLimit(size);
@@ -261,6 +263,7 @@ class ConcurrentPublicationTermRotationRaceTest
             super(publication, messageSize, name, startLatch, errors);
         }
 
+        @Override
         long publish(final ConcurrentPublication publication, final long payload, final int size)
         {
             final long position = publication.tryClaim(size, bufferClaim);

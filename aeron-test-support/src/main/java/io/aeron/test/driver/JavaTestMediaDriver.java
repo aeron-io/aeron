@@ -31,11 +31,13 @@ public final class JavaTestMediaDriver implements TestMediaDriver
         this.mediaDriver = mediaDriver;
     }
 
+    @Override
     public void close()
     {
         mediaDriver.close();
     }
 
+    @Override
     public void cleanup()
     {
     }
@@ -46,21 +48,25 @@ public final class JavaTestMediaDriver implements TestMediaDriver
         return new JavaTestMediaDriver(mediaDriver);
     }
 
+    @Override
     public MediaDriver.Context context()
     {
         return mediaDriver.context();
     }
 
+    @Override
     public String aeronDirectoryName()
     {
         return mediaDriver.aeronDirectoryName();
     }
 
+    @Override
     public AgentInvoker sharedAgentInvoker()
     {
         return mediaDriver.sharedAgentInvoker();
     }
 
+    @Override
     public CountersManager counters()
     {
         return mediaDriver.context().countersManager();

@@ -74,21 +74,25 @@ public final class AgentTests
             INSTANCE_COUNT.getAndIncrement();
         }
 
+        @Override
         public int doWork()
         {
             return 0;
         }
 
+        @Override
         public String roleName()
         {
             return "test-logging-agent";
         }
 
+        @Override
         public void onStart()
         {
             isOnStartCalled = true;
         }
 
+        @Override
         public void onClose()
         {
             isOnStopCalled = true;
@@ -104,11 +108,13 @@ public final class AgentTests
             LOG_FILE_NAME.set(logFileName);
         }
 
+        @Override
         public int doWork()
         {
             return 0;
         }
 
+        @Override
         public String roleName()
         {
             return "test-logging-agent-with-file-name";

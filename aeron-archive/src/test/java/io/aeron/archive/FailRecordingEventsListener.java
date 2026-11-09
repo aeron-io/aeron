@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 class FailRecordingEventsListener implements RecordingEventsListener
 {
+    @Override
     public void onStart(
         final long recordingId,
         final long startPosition,
@@ -33,11 +34,13 @@ class FailRecordingEventsListener implements RecordingEventsListener
             ", streamId=" + streamId + ", channel=" + channel + ", sourceIdentity=" + sourceIdentity);
     }
 
+    @Override
     public void onProgress(final long recordingId, final long startPosition, final long position)
     {
         fail("recordingId=" + recordingId + ", startPosition=" + startPosition + ", position=" + position);
     }
 
+    @Override
     public void onStop(final long recordingId, final long startPosition, final long stopPosition)
     {
         fail("recordingId=" + recordingId + ", startPosition=" + startPosition + ", stopPosition=" + stopPosition);

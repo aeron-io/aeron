@@ -478,6 +478,7 @@ class ClusterNodeRestartTest
             private int nextCorrelationId = 0;
             private int counterValue = 0;
 
+            @Override
             public void onStart(final Cluster cluster, final Image snapshotImage)
             {
                 super.onStart(cluster, snapshotImage);
@@ -509,6 +510,7 @@ class ClusterNodeRestartTest
                 }
             }
 
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,
@@ -537,6 +539,7 @@ class ClusterNodeRestartTest
                 }
             }
 
+            @Override
             public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
             {
                 final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();
@@ -565,6 +568,7 @@ class ClusterNodeRestartTest
     {
         final ClusteredService service = new StubClusteredService()
         {
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,
@@ -576,12 +580,14 @@ class ClusterNodeRestartTest
                 scheduleNext(serviceCorrelationId(7), timestamp + 200);
             }
 
+            @Override
             public void onTimerEvent(final long correlationId, final long timestamp)
             {
                 triggeredTimersCounter.getAndIncrement();
                 scheduleNext(correlationId, timestamp + 200);
             }
 
+            @Override
             public void onStart(final Cluster cluster, final Image snapshotImage)
             {
                 super.onStart(cluster, snapshotImage);
@@ -604,6 +610,7 @@ class ClusterNodeRestartTest
                 }
             }
 
+            @Override
             public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
             {
                 final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();

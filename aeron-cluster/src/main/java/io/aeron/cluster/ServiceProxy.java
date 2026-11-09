@@ -46,6 +46,7 @@ final class ServiceProxy implements AutoCloseable
         this.errorHandler = errorHandler;
     }
 
+    @Override
     public void close()
     {
         CloseHelper.close(publication);

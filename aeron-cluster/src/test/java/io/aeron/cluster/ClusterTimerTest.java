@@ -163,6 +163,7 @@ abstract class ClusterTimerTest
 
         final ClusteredService service = new StubClusteredService()
         {
+            @Override
             public void onSessionOpen(final ClientSession session, final long timestamp)
             {
                 schedule(1, timestamp + 1_000_000); // Too far in the future
@@ -170,6 +171,7 @@ abstract class ClusterTimerTest
                 schedule(2, timestamp + 30);
             }
 
+            @Override
             public void onTimerEvent(final long correlationId, final long timestamp)
             {
                 if (correlationId == 1)
@@ -214,12 +216,14 @@ abstract class ClusterTimerTest
         {
             private int timerCorrelationId = 1;
 
+            @Override
             public void onTimerEvent(final long correlationId, final long timestamp)
             {
                 triggeredTimersCounter.getAndIncrement();
                 scheduleNext(serviceCorrelationId(timerCorrelationId++), timestamp + INTERVAL_MS);
             }
 
+            @Override
             public void onStart(final Cluster cluster, final Image snapshotImage)
             {
                 super.onStart(cluster, snapshotImage);
@@ -243,6 +247,7 @@ abstract class ClusterTimerTest
                 }
             }
 
+            @Override
             public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
             {
                 final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer(SIZE_OF_INT);
@@ -255,6 +260,7 @@ abstract class ClusterTimerTest
                 }
             }
 
+            @Override
             public void onNewLeadershipTermEvent(
                 final long leadershipTermId,
                 final long logPosition,

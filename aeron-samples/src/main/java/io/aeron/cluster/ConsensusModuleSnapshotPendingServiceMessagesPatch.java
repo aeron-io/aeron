@@ -350,6 +350,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
         final PendingMessageTrackerState[] pendingMessageTrackers = new PendingMessageTrackerState[127];
         int serviceCount;
 
+        @Override
         public void onLoadBeginSnapshot(
             final int appVersion,
             final TimeUnit timeUnit,
@@ -359,6 +360,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
         {
         }
 
+        @Override
         public void onLoadConsensusModuleState(
             final long nextSessionId,
             final long nextServiceSessionId,
@@ -372,6 +374,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             this.logServiceSessionId = logServiceSessionId;
         }
 
+        @Override
         public void onLoadPendingMessage(
             final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
         {
@@ -382,6 +385,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             trackerState.maxClusterSessionId = max(trackerState.maxClusterSessionId, clusterSessionId);
         }
 
+        @Override
         public void onLoadClusterSession(
             final long clusterSessionId,
             final long correlationId,
@@ -396,6 +400,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
         {
         }
 
+        @Override
         public void onLoadTimer(
             final long correlationId,
             final long deadline,
@@ -405,6 +410,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
         {
         }
 
+        @Override
         public void onLoadPendingMessageTracker(
             final long nextServiceSessionId,
             final long logServiceSessionId,
@@ -419,6 +425,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             trackerState.logServiceSessionId = logServiceSessionId;
         }
 
+        @Override
         public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
         {
         }
@@ -453,6 +460,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             this.targetStates = targetStates;
         }
 
+        @Override
         public void onLoadBeginSnapshot(
             final int appVersion,
             final TimeUnit timeUnit,
@@ -463,6 +471,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             writeToSnapshot(buffer, offset, length);
         }
 
+        @Override
         public void onLoadConsensusModuleState(
             final long nextSessionId,
             final long nextServiceSessionId,
@@ -483,6 +492,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             writeToSnapshot(tempBuffer, 0, length);
         }
 
+        @Override
         public void onLoadPendingMessage(
             final long clusterSessionId,
             final DirectBuffer buffer,
@@ -500,6 +510,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             writeToSnapshot(tempBuffer, 0, length);
         }
 
+        @Override
         public void onLoadClusterSession(
             final long clusterSessionId,
             final long correlationId,
@@ -515,6 +526,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             writeToSnapshot(buffer, offset, length);
         }
 
+        @Override
         public void onLoadTimer(
             final long correlationId,
             final long deadline,
@@ -525,6 +537,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             writeToSnapshot(buffer, offset, length);
         }
 
+        @Override
         public void onLoadPendingMessageTracker(
             final long nextServiceSessionId,
             final long logServiceSessionId,
@@ -545,6 +558,7 @@ public class ConsensusModuleSnapshotPendingServiceMessagesPatch
             writeToSnapshot(tempBuffer, 0, length);
         }
 
+        @Override
         public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
         {
             writeToSnapshot(buffer, offset, length);

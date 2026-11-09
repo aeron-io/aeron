@@ -273,6 +273,7 @@ class ClusterNodeTest
     {
         final ClusteredService clusteredService = new StubClusteredService()
         {
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,
@@ -300,6 +301,7 @@ class ClusterNodeTest
             private int nextCorrelationId;
             private String msg;
 
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,
@@ -319,6 +321,7 @@ class ClusterNodeTest
                 }
             }
 
+            @Override
             public void onTimerEvent(final long correlationId, final long timestamp)
             {
                 final String responseMsg = msg + "-scheduled";
@@ -340,6 +343,7 @@ class ClusterNodeTest
     {
         final ClusteredService clusteredService = new StubClusteredService()
         {
+            @Override
             public void onSessionMessage(
                 final ClientSession session,
                 final long timestamp,

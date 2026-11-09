@@ -62,6 +62,7 @@ public final class GetNextAvailableSessionIdMessageFlyweight extends CorrelatedM
      * @param offset at which the message begins.
      * @return this for a fluent API.
      */
+    @Override
     public GetNextAvailableSessionIdMessageFlyweight wrap(final MutableDirectBuffer buffer, final int offset)
     {
         super.wrap(buffer, offset);
@@ -108,6 +109,7 @@ public final class GetNextAvailableSessionIdMessageFlyweight extends CorrelatedM
      * @param msgTypeId type of message.
      * @param length of message in bytes to validate.
      */
+    @Override
     public void validateLength(final int msgTypeId, final int length)
     {
         if (length < LENGTH)

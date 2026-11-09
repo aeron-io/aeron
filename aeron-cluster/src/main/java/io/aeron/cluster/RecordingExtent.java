@@ -53,6 +53,7 @@ class RecordingExtent implements RecordingDescriptorConsumer
      */
     public int sessionId;
 
+    @Override
     public void onRecordingDescriptor(
         final long controlSessionId,
         final long correlationId,
@@ -80,6 +81,7 @@ class RecordingExtent implements RecordingDescriptorConsumer
         this.sessionId = sessionId;
     }
 
+    @Override
     public String toString()
     {
         return "RecordingExtent{" +

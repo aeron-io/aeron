@@ -30,6 +30,7 @@ public class ThreadNamingTestCallback
         oldThreadName.set("UNKNOWN");
     }
 
+    @Override
     public void beforeTestExecution(final ExtensionContext context) throws Exception
     {
         final String className = context.getTestClass().map(Class::getSimpleName).orElse("UNKNOWN");
@@ -41,12 +42,14 @@ public class ThreadNamingTestCallback
         thread.setName(testThreadName);
     }
 
+    @Override
     public void afterEach(final ExtensionContext context) throws Exception
     {
         Thread.currentThread().setName(oldThreadName.get());
         oldThreadName.remove();
     }
 
+    @Override
     public void afterTestExecution(final ExtensionContext context) throws Exception
     {
         final Thread thread = Thread.currentThread();

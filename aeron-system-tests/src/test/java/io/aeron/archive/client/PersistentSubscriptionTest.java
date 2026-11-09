@@ -3448,6 +3448,7 @@ abstract class PersistentSubscriptionTest
     {
         return new LossGenerator()
         {
+            @Override
             public boolean shouldDropFrame(
                 final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
             {
@@ -3455,6 +3456,7 @@ abstract class PersistentSubscriptionTest
                     b.shouldDropFrame(address, buffer, length);
             }
 
+            @Override
             public boolean shouldDropFrame(
                 final InetSocketAddress address, final UnsafeBuffer buffer,
                 final int streamId, final int sessionId, final int termId,
@@ -3967,6 +3969,7 @@ abstract class PersistentSubscriptionTest
             this.maxProcessingTime = maxProcessingTime;
         }
 
+        @Override
         public ControlledFragmentHandler.Action consumeFragment(
             final DirectBuffer buffer,
             final int offset,
@@ -3999,6 +4002,7 @@ abstract class PersistentSubscriptionTest
         private final List<byte[]> receivedPayloads = new ArrayList<>();
         private long position;
 
+        @Override
         public ControlledFragmentHandler.Action consumeFragment(
             final DirectBuffer buffer,
             final int offset,
@@ -4022,6 +4026,7 @@ abstract class PersistentSubscriptionTest
     {
         private long receivedFragments = 0;
 
+        @Override
         public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             receivedFragments++;
@@ -4040,16 +4045,19 @@ abstract class PersistentSubscriptionTest
         int errorCount;
         Exception lastException;
 
+        @Override
         public void onLiveJoined()
         {
             liveJoinedCount++;
         }
 
+        @Override
         public void onLiveLeft()
         {
             liveLeftCount++;
         }
 
+        @Override
         public void onError(final Exception e)
         {
             errorCount++;
@@ -4252,6 +4260,7 @@ abstract class PersistentSubscriptionTest
             return publication.position();
         }
 
+        @Override
         public void close()
         {
             aeronArchive.stopRecording(publication);
@@ -4272,6 +4281,7 @@ abstract class PersistentSubscriptionTest
 
     static class ControlledPollingPersistentSubscriptionTest extends PersistentSubscriptionTest
     {
+        @Override
         int poll(
             final PersistentSubscription persistentSubscription,
             final FragmentConsumer fragmentConsumer,
@@ -4286,6 +4296,7 @@ abstract class PersistentSubscriptionTest
 
     static class UncontrolledPollingPersistentSubscriptionTest extends PersistentSubscriptionTest
     {
+        @Override
         int poll(
             final PersistentSubscription persistentSubscription,
             final FragmentConsumer fragmentConsumer,

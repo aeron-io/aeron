@@ -69,5 +69,6 @@ public interface RawLog extends AutoCloseable
     /**
      * Close the resource regardless of if {@link #free()} has succeeded or not.
      */
+    @Override
     void close();
 }

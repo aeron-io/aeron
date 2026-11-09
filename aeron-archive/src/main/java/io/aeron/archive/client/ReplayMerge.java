@@ -204,6 +204,7 @@ public final class ReplayMerge implements AutoCloseable
      * Close and stop any active replay. Will remove the replay destination from the subscription.
      * This operation Will NOT remove the live destination if it has been added, so it can be used for live consumption.
      */
+    @Override
     public void close()
     {
         final State state = this.state;

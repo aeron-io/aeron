@@ -998,6 +998,7 @@ class ClientConductorTest
 
     class PrintError implements ErrorHandler
     {
+        @Override
         public void onError(final Throwable throwable)
         {
             if (!suppressPrintError)

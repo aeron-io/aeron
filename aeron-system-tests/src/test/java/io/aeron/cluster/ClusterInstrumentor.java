@@ -61,6 +61,7 @@ class ClusterInstrumentor
 
     static class AgentBuilderListener implements AgentBuilder.Listener
     {
+        @Override
         public void onDiscovery(
             final String typeName,
             final ClassLoader classLoader,
@@ -69,6 +70,7 @@ class ClusterInstrumentor
         {
         }
 
+        @Override
         public void onTransformation(
             final TypeDescription typeDescription,
             final ClassLoader classLoader,
@@ -78,6 +80,7 @@ class ClusterInstrumentor
         {
         }
 
+        @Override
         public void onIgnored(
             final TypeDescription typeDescription,
             final ClassLoader classLoader,
@@ -86,6 +89,7 @@ class ClusterInstrumentor
         {
         }
 
+        @Override
         public void onError(
             final String typeName,
             final ClassLoader classLoader,
@@ -100,6 +104,7 @@ class ClusterInstrumentor
             throwable.printStackTrace(System.err);
         }
 
+        @Override
         public void onComplete(
             final String typeName,
             final ClassLoader classLoader,

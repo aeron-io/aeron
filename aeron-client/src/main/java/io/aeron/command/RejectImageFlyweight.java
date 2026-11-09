@@ -71,6 +71,7 @@ public class RejectImageFlyweight extends CorrelatedMessageFlyweight
      * @param offset at which the message begins.
      * @return this for a fluent API.
      */
+    @Override
     public RejectImageFlyweight wrap(final MutableDirectBuffer buffer, final int offset)
     {
         super.wrap(buffer, offset);
@@ -192,6 +193,7 @@ public class RejectImageFlyweight extends CorrelatedMessageFlyweight
      * @param msgTypeId type of message.
      * @param length of message in bytes to validate.
      */
+    @Override
     public void validateLength(final int msgTypeId, final int length)
     {
         if (length < MINIMUM_SIZE)

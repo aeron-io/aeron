@@ -24,15 +24,18 @@ import static io.aeron.logbuffer.LogBufferDescriptor.PARTITION_COUNT;
 
 public class TestLogFactory implements LogFactory
 {
+    @Override
     public void close()
     {
     }
 
+    @Override
     public RawLog newPublication(final long correlationId, final int termBufferLength, final boolean useSparseFiles)
     {
         return newLogBuffers(termBufferLength);
     }
 
+    @Override
     public RawLog newImage(final long correlationId, final int termBufferLength, final boolean useSparseFiles)
     {
         return newLogBuffers(termBufferLength);
@@ -51,21 +54,25 @@ public class TestLogFactory implements LogFactory
 
             private final UnsafeBuffer logMetaData = new UnsafeBuffer(ByteBuffer.allocateDirect(LOG_META_DATA_LENGTH));
 
+            @Override
             public int termLength()
             {
                 return termBuffers[0].capacity();
             }
 
+            @Override
             public UnsafeBuffer[] termBuffers()
             {
                 return termBuffers;
             }
 
+            @Override
             public UnsafeBuffer metaData()
             {
                 return logMetaData;
             }
 
+            @Override
             public ByteBuffer[] sliceTerms()
             {
                 final ByteBuffer[] terms = new ByteBuffer[PARTITION_COUNT];
@@ -77,16 +84,19 @@ public class TestLogFactory implements LogFactory
                 return terms;
             }
 
+            @Override
             public String fileName()
             {
                 return "stream.log";
             }
 
+            @Override
             public boolean free()
             {
                 return true;
             }
 
+            @Override
             public void close()
             {
             }
