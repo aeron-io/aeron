@@ -179,13 +179,8 @@ jobs:
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ matrix.java }}" >> $GITHUB_ENV
-      - name: Setup virtual network interfaces
-        run: ./aeron-samples/scripts/cluster/setup-namespaces
       - name: Build aeron with Gradle
         run: ./gradlew clean assemble -x javadoc
-      - name: Run execution agents
-        working-directory: ./aeron-samples/scripts/cluster
-        run: ./agent-ns
       - name: Get network information
         run:  |
           sudo sysctl -w net.ipv4.ip_forward=1
