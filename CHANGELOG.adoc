@@ -4,10 +4,9 @@
 
 === New & Noteworthy
 
-* **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
-
 === Changelog
 
+* **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
 rebuild `recording.log` entries from the metadata alone.
 * **[Archive]** Find a torn last fragment's page boundary from its offset in the file. (https://github.com/aeron-io/aeron/pull/2238[#2238])
@@ -34,14 +33,14 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
-* **[Java]** Upgrade to `Gradle` 9.9.0.
+* **[Java]** Upgrade to `Gradle` 9.9.1.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
 * **[Java]** Upgrade to `jackson-dataformat-cbor` 3.3.0.
 * **[C]** Upgrade to `CMake` 4.4.5.
 
-== 1.54.1 (unreleased)
+== 1.54.1 (2026-11-10)
 
 * **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
@@ -69,7 +68,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
-* **[Java]** Upgrade to `Gradle` 9.9.0.
+* **[Java]** Upgrade to `Gradle` 9.9.1.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
