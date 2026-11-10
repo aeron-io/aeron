@@ -5040,10 +5040,6 @@ public final class MediaDriver implements AutoCloseable
                 "\n    driverCommandQueue=" + driverCommandQueue +
                 "\n    receiverCommandQueue=" + receiverCommandQueue +
                 "\n    senderCommandQueue=" + senderCommandQueue +
-                "\n    receiverProxy=" + receiverProxy +
-                "\n    senderProxy=" + senderProxy +
-                "\n    driverConductorProxy=" + driverConductorProxy +
-                "\n    nativeResourceAgentProxy=" + nativeResourceAgentProxy +
                 "\n    clientProxy=" + clientProxy +
                 "\n    toDriverCommands=" + toDriverCommands +
                 "\n    lossReportBuffer=" + lossReportBuffer +

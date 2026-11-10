@@ -4767,7 +4767,6 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    authenticatorSupplier=" + authenticatorSupplier +
                 "\n    authorisationServiceSupplier=" + authorisationServiceSupplier +
                 "\n    logPublisher=" + logPublisher +
-                "\n    egressPublisher=" + egressPublisher +
                 "\n    isLogMdc=" + isLogMdc +
                 "\n    useAgentInvoker=" + useAgentInvoker +
                 "\n    clusterCpuAffinity=" + clusterCpuAffinity +
