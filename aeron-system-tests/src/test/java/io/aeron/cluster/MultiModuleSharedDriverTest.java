@@ -212,6 +212,7 @@ class MultiModuleSharedDriverTest
 
     static class EchoService extends StubClusteredService
     {
+        @Override
         public void onSessionMessage(
             final ClientSession session,
             final long timestamp,
@@ -271,6 +272,7 @@ class MultiModuleSharedDriverTest
             container1 = container(consensusModule1.context());
         }
 
+        @Override
         public void close()
         {
             CloseHelper.closeAll(

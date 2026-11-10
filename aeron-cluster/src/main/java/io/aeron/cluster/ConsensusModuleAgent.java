@@ -476,6 +476,7 @@ final class ConsensusModuleAgent
         return workCount;
     }
 
+    @Override
     public ConsensusModule.Context context()
     {
         return ctx;
@@ -526,6 +527,7 @@ final class ConsensusModuleAgent
         return this;
     }
 
+    @Override
     public void idle()
     {
         checkInterruptStatus();
@@ -539,6 +541,7 @@ final class ConsensusModuleAgent
         pollArchiveEvents();
     }
 
+    @Override
     public void idle(final int workCount)
     {
         checkInterruptStatus();
@@ -556,6 +559,7 @@ final class ConsensusModuleAgent
         }
     }
 
+    @Override
     public void reset()
     {
         idleStrategy.reset();
@@ -624,11 +628,13 @@ final class ConsensusModuleAgent
         return ctx.clusterId();
     }
 
+    @Override
     public ClusterMember clusterMember()
     {
         return thisMember;
     }
 
+    @Override
     public void onLoadBeginSnapshot(
         final int appVersion, final TimeUnit timeUnit, final DirectBuffer buffer, final int offset, final int length)
     {
@@ -671,10 +677,12 @@ final class ConsensusModuleAgent
         }
     }
 
+    @Override
     public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
     {
     }
 
+    @Override
     public void onLoadClusterSession(
         final long clusterSessionId,
         final long correlationId,
@@ -697,6 +705,7 @@ final class ConsensusModuleAgent
             responseChannel);
     }
 
+    @Override
     public void onLoadConsensusModuleState(
         final long nextSessionId,
         final long nextServiceSessionId,
@@ -715,6 +724,7 @@ final class ConsensusModuleAgent
         }
     }
 
+    @Override
     public void onLoadPendingMessageTracker(
         final long nextServiceSessionId,
         final long logServiceSessionId,
@@ -734,6 +744,7 @@ final class ConsensusModuleAgent
             nextServiceSessionId, logServiceSessionId, pendingMessageCapacity);
     }
 
+    @Override
     public void onLoadPendingMessage(
         final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
     {
@@ -741,6 +752,7 @@ final class ConsensusModuleAgent
         pendingServiceMessageTrackers[serviceId].appendMessage(buffer, offset, length);
     }
 
+    @Override
     public void onLoadTimer(
         final long correlationId, final long deadline, final DirectBuffer buffer, final int offset, final int length)
     {
@@ -886,6 +898,7 @@ final class ConsensusModuleAgent
         sessionManager.onChallengeResponseForBackupSession(correlationId, clusterSessionId, encodedCredentials);
     }
 
+    @Override
     public boolean onTimerEvent(final long correlationId)
     {
         final long appendPosition = logPublisher.appendTimer(correlationId, leadershipTermId, clusterClock.time());
@@ -3704,6 +3717,7 @@ final class ConsensusModuleAgent
         return workCount;
     }
 
+    @Override
     public String toString()
     {
         return "ConsensusModuleAgent{" +

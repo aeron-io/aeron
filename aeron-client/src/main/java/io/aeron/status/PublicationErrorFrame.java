@@ -160,6 +160,7 @@ public class PublicationErrorFrame implements Cloneable
      *
      * @return a copy of this instance's data.
      */
+    @Override
     public PublicationErrorFrame clone()
     {
         try
@@ -177,6 +178,7 @@ public class PublicationErrorFrame implements Cloneable
      *
      * @return a String representation of the error frame.
      */
+    @Override
     public String toString()
     {
         return "PublicationErrorFrame{" +

@@ -291,6 +291,7 @@ class StreamStatTest
             this.subscription = subscription;
         }
 
+        @Override
         public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             count++;

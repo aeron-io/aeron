@@ -817,6 +817,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         super(nanoClock, errorHandler);
     }
 
+    @Override
     void onStatusMessage(final StatusMessageFlyweight msg, final InetSocketAddress address)
     {
         final long receiverId = msg.receiverId();
@@ -838,6 +839,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         }
     }
 
+    @Override
     int send(
         final DatagramChannel channel,
         final ByteBuffer buffer,
@@ -882,6 +884,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         return result;
     }
 
+    @Override
     void addDestination(final ChannelUri channelUri, final InetSocketAddress address, final long registrationId)
     {
         final Destination destination = new Destination(
@@ -890,6 +893,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         destinationsCounter.setRelease(destinations.length);
     }
 
+    @Override
     void removeDestination(final ChannelUri channelUri, final InetSocketAddress address)
     {
         boolean found = false;
@@ -920,6 +924,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         destinationsCounter.setRelease(destinations.length);
     }
 
+    @Override
     void removeDestination(final long destinationRegistrationId)
     {
         boolean found = false;
@@ -950,6 +955,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         destinationsCounter.setRelease(destinations.length);
     }
 
+    @Override
     void checkForReResolution(
         final SendChannelEndpoint channelEndpoint, final long nowNs, final DriverConductorProxy conductorProxy)
     {
@@ -963,6 +969,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         }
     }
 
+    @Override
     void updateDestination(final String endpoint, final InetSocketAddress newAddress)
     {
         for (final Destination destination : destinations)
@@ -975,6 +982,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         }
     }
 
+    @Override
     public long findRegistrationId(final ErrorFlyweight msg, final InetSocketAddress address)
     {
         for (final Destination destination : destinations)
@@ -996,6 +1004,7 @@ class DynamicSndMultiDestination extends MultiSndDestination
         super(nanoClock, errorHandler);
     }
 
+    @Override
     void onStatusMessage(final StatusMessageFlyweight msg, final InetSocketAddress address)
     {
         final long receiverId = msg.receiverId();
@@ -1018,6 +1027,7 @@ class DynamicSndMultiDestination extends MultiSndDestination
         }
     }
 
+    @Override
     int send(
         final DatagramChannel channel,
         final ByteBuffer buffer,

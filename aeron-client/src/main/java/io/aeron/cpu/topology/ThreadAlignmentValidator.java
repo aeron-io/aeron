@@ -70,6 +70,7 @@ class ThreadAlignmentValidator implements TopologyValidator
         return missingSiblings;
     }
 
+    @Override
     public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         try

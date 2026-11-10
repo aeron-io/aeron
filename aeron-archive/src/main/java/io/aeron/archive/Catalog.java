@@ -325,6 +325,7 @@ final class Catalog implements AutoCloseable
         }
     }
 
+    @Override
     public void close()
     {
         if (!isClosed)
@@ -1495,6 +1496,7 @@ final class Catalog implements AutoCloseable
         return true;
     }
 
+    @Override
     public String toString()
     {
         return "Catalog{" +

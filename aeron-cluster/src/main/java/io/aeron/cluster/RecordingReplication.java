@@ -241,6 +241,7 @@ final class RecordingReplication implements AutoCloseable
         return srcArchiveChannel;
     }
 
+    @Override
     public String toString()
     {
         return "RecordingReplication{" +

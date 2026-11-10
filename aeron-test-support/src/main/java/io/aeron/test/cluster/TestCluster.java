@@ -407,6 +407,7 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    @Override
     public void close()
     {
         final boolean isInterrupted = Thread.interrupted();
@@ -2696,6 +2697,7 @@ public final class TestCluster implements AutoCloseable
             assertTrue(matches.get());
         }
 
+        @Override
         public void close()
         {
             CloseHelper.quietCloseAll(subscription, publication);
@@ -3132,6 +3134,7 @@ public final class TestCluster implements AutoCloseable
 
         return new DriverOutputConsumer()
         {
+            @Override
             public void outputFiles(final String aeronDirectoryName, final File stdoutFile, final File stderrFile)
             {
                 dataCollector.add(stdoutFile.toPath());
@@ -3142,11 +3145,13 @@ public final class TestCluster implements AutoCloseable
 
     public static final CredentialsSupplier SIMPLE_CREDENTIALS_SUPPLIER = new CredentialsSupplier()
     {
+        @Override
         public byte[] encodedCredentials()
         {
             return "admin:admin".getBytes(StandardCharsets.US_ASCII);
         }
 
+        @Override
         public byte[] onChallenge(final byte[] encodedChallenge)
         {
             return ArrayUtil.EMPTY_BYTE_ARRAY;
@@ -3155,11 +3160,13 @@ public final class TestCluster implements AutoCloseable
 
     public static final CredentialsSupplier CHALLENGE_RESPONSE_CREDENTIALS_SUPPLIER = new CredentialsSupplier()
     {
+        @Override
         public byte[] encodedCredentials()
         {
             return "admin:adminC".getBytes(StandardCharsets.US_ASCII);
         }
 
+        @Override
         public byte[] onChallenge(final byte[] encodedChallenge)
         {
             return "admin:CSadmin".getBytes(StandardCharsets.US_ASCII);
@@ -3168,11 +3175,13 @@ public final class TestCluster implements AutoCloseable
 
     public static final CredentialsSupplier INVALID_SIMPLE_CREDENTIALS_SUPPLIER = new CredentialsSupplier()
     {
+        @Override
         public byte[] encodedCredentials()
         {
             return "admin:invalid".getBytes(StandardCharsets.US_ASCII);
         }
 
+        @Override
         public byte[] onChallenge(final byte[] encodedChallenge)
         {
             return ArrayUtil.EMPTY_BYTE_ARRAY;
@@ -3181,11 +3190,13 @@ public final class TestCluster implements AutoCloseable
 
     public static final CredentialsSupplier INVALID_CHALLENGE_RESPONSE_CREDENTIALS_SUPPLIER = new CredentialsSupplier()
     {
+        @Override
         public byte[] encodedCredentials()
         {
             return "admin:adminC".getBytes(StandardCharsets.US_ASCII);
         }
 
+        @Override
         public byte[] onChallenge(final byte[] encodedChallenge)
         {
             return "admin:invalid".getBytes(StandardCharsets.US_ASCII);
@@ -3205,6 +3216,7 @@ public final class TestCluster implements AutoCloseable
             keepAliveDeadlineMs = nowMs + TimeUnit.SECONDS.toMillis(1);
         }
 
+        @Override
         public void run()
         {
             final long nowMs = requireNonNull(epochClock, "did you call init() first?").time();
@@ -3223,6 +3235,7 @@ public final class TestCluster implements AutoCloseable
         private final MutableInteger newLeaderEvent = new MutableInteger();
         private boolean shouldErrorOnClientClose = true;
 
+        @Override
         public void onMessage(
             final long clusterSessionId,
             final long timestamp,
@@ -3234,6 +3247,7 @@ public final class TestCluster implements AutoCloseable
             responseCount.increment();
         }
 
+        @Override
         public void onSessionEvent(
             final long correlationId,
             final long clusterSessionId,
@@ -3253,6 +3267,7 @@ public final class TestCluster implements AutoCloseable
             }
         }
 
+        @Override
         public void onNewLeader(
             final long clusterSessionId,
             final long leadershipTermId,
@@ -3275,14 +3290,17 @@ public final class TestCluster implements AutoCloseable
 
     private static final class BackupListener implements ClusterBackupEventsListener
     {
+        @Override
         public void onBackupQuery()
         {
         }
 
+        @Override
         public void onPossibleFailure(final Exception ex)
         {
         }
 
+        @Override
         public void onBackupResponse(
             final ClusterMember[] clusterMembers,
             final ClusterMember logSourceMember,
@@ -3299,11 +3317,13 @@ public final class TestCluster implements AutoCloseable
             throw new RuntimeException("No member has isLeader flag set");
         }
 
+        @Override
         public void onUpdatedRecordingLog(
             final RecordingLog recordingLog, final List<RecordingLog.Snapshot> snapshotsRetrieved)
         {
         }
 
+        @Override
         public void onLiveLogProgress(final long recordingId, final long recordingPosCounterId, final long logPosition)
         {
         }

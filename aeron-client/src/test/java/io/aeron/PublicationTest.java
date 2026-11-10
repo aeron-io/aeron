@@ -346,17 +346,20 @@ class PublicationTest
     {
         private final BufferClaim bufferClaim = new BufferClaim();
 
+        @Override
         long invoke(final int length, final ReservedValueSupplier reservedValueSupplier)
         {
             return publication.tryClaim(length, bufferClaim);
         }
 
+        @Override
         void onError(final UnsafeBuffer termBuffer, final int termOffset, final int length)
         {
             final MutableDirectBuffer buffer = bufferClaim.buffer();
             assertEquals(0, buffer.capacity());
         }
 
+        @Override
         void onSuccess(final UnsafeBuffer termBuffer, final int termOffset, final int length)
         {
             assertEquals(-(length + HEADER_LENGTH), DataHeaderFlyweight.fragmentLength(termBuffer, termOffset));
@@ -386,6 +389,7 @@ class PublicationTest
     {
         abstract UnsafeBuffer buffer(int processedBytes);
 
+        @Override
         void onError(final UnsafeBuffer termBuffer, final int termOffset, final int length)
         {
             int offset = termOffset + HEADER_LENGTH;
@@ -395,6 +399,7 @@ class PublicationTest
             }
         }
 
+        @Override
         void onSuccess(final UnsafeBuffer termBuffer, final int termOffset, final int length)
         {
             int index = 0, processedBytes = 0;
@@ -469,11 +474,13 @@ class PublicationTest
             sendBuffer = new UnsafeBuffer(bytes);
         }
 
+        @Override
         UnsafeBuffer buffer(final int length)
         {
             return sendBuffer;
         }
 
+        @Override
         long invoke(final int length, final ReservedValueSupplier reservedValueSupplier)
         {
             return publication.offer(sendBuffer, 0, length, reservedValueSupplier);
@@ -516,11 +523,13 @@ class PublicationTest
         {
         }
 
+        @Override
         UnsafeBuffer buffer(final int processedBytes)
         {
             return processedBytes < buffer1.capacity() ? buffer1 : buffer2;
         }
 
+        @Override
         long invoke(final int length, final ReservedValueSupplier reservedValueSupplier)
         {
             final byte[] bytes = new byte[length];
@@ -582,11 +591,13 @@ class PublicationTest
     {
         private final DirectBufferVector[] vectors = new DirectBufferVector[3];
 
+        @Override
         UnsafeBuffer buffer(final int processedBytes)
         {
             return (UnsafeBuffer)vectors[0].buffer();
         }
 
+        @Override
         long invoke(final int length, final ReservedValueSupplier reservedValueSupplier)
         {
             final byte[] bytes = new byte[length];

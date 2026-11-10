@@ -271,6 +271,7 @@ final class AsyncAeronArchive implements AutoCloseable
         return state == State.CLOSED;
     }
 
+    @Override
     public void close()
     {
         if (state != State.CLOSED)

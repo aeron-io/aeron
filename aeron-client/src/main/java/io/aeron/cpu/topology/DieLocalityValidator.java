@@ -47,6 +47,7 @@ class DieLocalityValidator implements TopologyValidator
         this.perCpuIdReader = new PerCpuIdReader(sysfsRoot, DIE_ID_DIRECTORY);
     }
 
+    @Override
     public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         try

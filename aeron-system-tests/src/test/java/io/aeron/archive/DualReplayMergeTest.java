@@ -326,6 +326,7 @@ public class DualReplayMergeTest
             return fragments;
         }
 
+        @Override
         public String toString()
         {
             return "InProcessMerge{" +

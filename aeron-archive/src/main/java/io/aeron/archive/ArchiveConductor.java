@@ -242,6 +242,7 @@ abstract class ArchiveConductor
             decoders, controlSubscription, localControlSubscription, this, authorisationService);
     }
 
+    @Override
     public void onStart()
     {
         ArchiveTracing.traceStart(ArchiveVersion.VERSION);
@@ -252,11 +253,13 @@ abstract class ArchiveConductor
         dutyCycleTracker.update(nanoClock.nanoTime());
     }
 
+    @Override
     public void onUnavailableImage(final Image image)
     {
         controlSessionAdapter.abortControlSessionByImage(image);
     }
 
+    @Override
     public void onUnavailableCounter(
         final CountersReader countersReader, final long registrationId, final int counterId)
     {
@@ -2764,6 +2767,7 @@ abstract class ArchiveConductor
             }
         }
 
+        @Override
         public int doWork()
         {
             final int workCount = super.doWork();
@@ -2811,6 +2815,7 @@ abstract class ArchiveConductor
             }
         }
 
+        @Override
         public int doWork()
         {
             final int workCount = super.doWork();

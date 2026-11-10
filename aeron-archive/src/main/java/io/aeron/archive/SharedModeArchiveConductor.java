@@ -33,6 +33,7 @@ final class SharedModeArchiveConductor extends ArchiveConductor
         super(ctx, threadName(AERON_ARCHIVE_SHARED_THREAD_NAME, AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC));
     }
 
+    @Override
     public void onStart()
     {
         super.onStart();
@@ -44,16 +45,19 @@ final class SharedModeArchiveConductor extends ArchiveConductor
         recorderAgentInvoker.start();
     }
 
+    @Override
     Recorder newRecorder()
     {
         return new SharedModeRecorder(errorHandler, ctx);
     }
 
+    @Override
     Replayer newReplayer()
     {
         return new SharedModeReplayer(errorHandler, ctx);
     }
 
+    @Override
     public int doWork()
     {
         return super.doWork() +
@@ -65,6 +69,7 @@ final class SharedModeArchiveConductor extends ArchiveConductor
             invokeDriverConductor();
     }
 
+    @Override
     protected void closeSessionWorkers()
     {
         CloseHelper.close(ctx.countedErrorHandler(), recorderAgentInvoker);
@@ -78,6 +83,7 @@ final class SharedModeArchiveConductor extends ArchiveConductor
             super(errorHandler, context);
         }
 
+        @Override
         protected void closeSession(final RecordingSession session)
         {
             closeRecordingSession(session);
@@ -91,6 +97,7 @@ final class SharedModeArchiveConductor extends ArchiveConductor
             super(errorHandler, context);
         }
 
+        @Override
         protected void closeSession(final ReplaySession session)
         {
             closeReplaySession(session);

@@ -52,6 +52,7 @@ public class AeronEvent extends AeronException
      *
      * @return a reference to this {@link AeronEvent} instance.
      */
+    @Override
     public synchronized Throwable fillInStackTrace()
     {
         return this;
@@ -62,6 +63,7 @@ public class AeronEvent extends AeronException
      *
      * @return empty stack trace.
      */
+    @Override
     public StackTraceElement[] getStackTrace()
     {
         return EMPTY_STACK;

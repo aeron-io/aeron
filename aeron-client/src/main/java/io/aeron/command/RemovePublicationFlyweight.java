@@ -61,6 +61,7 @@ public class RemovePublicationFlyweight extends RemoveMessageFlyweight
      * @param offset at which the message begins.
      * @return this for a fluent API.
      */
+    @Override
     public RemovePublicationFlyweight wrap(final MutableDirectBuffer buffer, final int offset)
     {
         super.wrap(buffer, offset);

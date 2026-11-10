@@ -43,6 +43,7 @@ final class ServiceAdapter implements AutoCloseable
         this.clusteredServiceAgent = clusteredServiceAgent;
     }
 
+    @Override
     public void close()
     {
         CloseHelper.close(subscription);

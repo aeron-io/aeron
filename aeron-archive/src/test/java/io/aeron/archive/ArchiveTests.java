@@ -57,6 +57,7 @@ class ArchiveTests
         final ControlResponseAdapter controlResponseAdapter = new ControlResponseAdapter(
             new FailControlResponseListener()
             {
+                @Override
                 public void onResponse(
                     final long controlSessionId,
                     final long correlationId,
@@ -100,6 +101,7 @@ class ArchiveTests
         final ControlResponseAdapter controlResponseAdapter = new ControlResponseAdapter(
             new FailControlResponseListener()
             {
+                @Override
                 public void onResponse(
                     final long controlSessionId,
                     final long correlationId,
@@ -146,6 +148,7 @@ class ArchiveTests
         final ControlResponseAdapter controlResponseAdapter = new ControlResponseAdapter(
             new FailControlResponseListener()
             {
+                @Override
                 public void onResponse(
                     final long controlSessionId,
                     final long correlationId,

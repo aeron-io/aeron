@@ -51,6 +51,7 @@ class MultiClusteredServicesTest
     {
         final AtomicLong count = new AtomicLong(0);
 
+        @Override
         public void onSessionMessage(
             final ClientSession session,
             final long timestamp,

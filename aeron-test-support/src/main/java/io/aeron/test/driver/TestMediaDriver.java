@@ -117,6 +117,7 @@ public interface TestMediaDriver extends AutoCloseable
 
     String aeronDirectoryName();
 
+    @Override
     void close();
 
     void cleanup();

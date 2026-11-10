@@ -27,11 +27,13 @@ class ReplicationCredentialsSupplier implements CredentialsSupplier
         this.encodedCredentials = encodedCredentials;
     }
 
+    @Override
     public byte[] encodedCredentials()
     {
         return encodedCredentials;
     }
 
+    @Override
     public byte[] onChallenge(final byte[] encodedChallenge)
     {
         throw new ArchiveException("Replication does not support challenge/response authentication");

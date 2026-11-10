@@ -87,6 +87,7 @@ public final class SetupAtPositionLossGenerator implements LossGenerator
         return setupsDropped.get();
     }
 
+    @Override
     public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
     {
         if (!(boolean)ENABLED_VH.getAcquire(this))
@@ -118,6 +119,7 @@ public final class SetupAtPositionLossGenerator implements LossGenerator
         return true;
     }
 
+    @Override
     public boolean shouldDropFrame(
         final InetSocketAddress address,
         final UnsafeBuffer buffer,

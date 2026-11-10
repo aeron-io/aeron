@@ -2381,6 +2381,7 @@ class ClusterTest
                     new TestNode.TestService().index(i),
                     new TestNode.TestService()
                     {
+                        @Override
                         public void onSessionMessage(
                             final ClientSession session,
                             final long timestamp,
@@ -2444,6 +2445,7 @@ class ClusterTest
             {
                 private int messageOffset;
 
+                @Override
                 public void onSessionMessage(
                     final ClientSession session,
                     final long timestamp,
@@ -2690,6 +2692,7 @@ class ClusterTest
                 .serviceName("test1")
                 .clusteredService(new TestNode.TestService()
                 {
+                    @Override
                     public void onNewLeadershipTermEvent(
                         final long leadershipTermId,
                         final long logPosition,
@@ -2727,6 +2730,7 @@ class ClusterTest
                 .serviceName("test2")
                 .clusteredService(new TestNode.TestService()
                 {
+                    @Override
                     public void onNewLeadershipTermEvent(
                         final long leadershipTermId,
                         final long logPosition,
@@ -3096,6 +3100,7 @@ class ClusterTest
         final MutableInteger onNewLeader = new MutableInteger(NULL_VALUE);
         final EgressListener egressListener = new EgressListener()
         {
+            @Override
             public void onMessage(
                 final long clusterSessionId,
                 final long timestamp,
@@ -3106,6 +3111,7 @@ class ClusterTest
             {
             }
 
+            @Override
             public void onNewLeader(
                 final long clusterSessionId,
                 final long leadershipTermId,
@@ -3290,6 +3296,7 @@ class ClusterTest
     {
         class ThrowingExtension extends TestNode.TestConsensusModuleExtension
         {
+            @Override
             public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
             {
                 throw new RuntimeException("some snapshot error");
@@ -3328,6 +3335,7 @@ class ClusterTest
     {
         class ThrowingExtension extends TestNode.TestConsensusModuleExtension
         {
+            @Override
             public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
             {
                 throw new RuntimeException("some other error");
@@ -3369,6 +3377,7 @@ class ClusterTest
     {
         class ThrowingExtension extends TestNode.TestConsensusModuleExtension
         {
+            @Override
             public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
             {
                 throw terminalException;
@@ -3723,6 +3732,7 @@ class ClusterTest
 
         readConsensusModuleSnapshot(newLeader, new ConsensusModuleSnapshotListener()
         {
+            @Override
             public void onLoadBeginSnapshot(
                 final int appVersion,
                 final TimeUnit timeUnit,
@@ -3738,6 +3748,7 @@ class ClusterTest
                 assertEquals(latestCMSnapshot.logPosition, snapshotMarkerDecoder.logPosition());
             }
 
+            @Override
             public void onLoadConsensusModuleState(
                 final long nextSessionId,
                 final long nextServiceSessionId,
@@ -3749,11 +3760,13 @@ class ClusterTest
             {
             }
 
+            @Override
             public void onLoadPendingMessage(
                 final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
             {
             }
 
+            @Override
             public void onLoadClusterSession(
                 final long clusterSessionId,
                 final long correlationId,
@@ -3768,6 +3781,7 @@ class ClusterTest
             {
             }
 
+            @Override
             public void onLoadTimer(
                 final long correlationId,
                 final long deadline,
@@ -3777,6 +3791,7 @@ class ClusterTest
             {
             }
 
+            @Override
             public void onLoadPendingMessageTracker(
                 final long nextServiceSessionId,
                 final long logServiceSessionId,
@@ -3788,6 +3803,7 @@ class ClusterTest
             {
             }
 
+            @Override
             public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
             {
                 messageHeaderDecoder.wrap(buffer, offset);
@@ -3847,6 +3863,7 @@ class ClusterTest
 
     private static final class ExceptionOnLoadService extends TestNode.TestService
     {
+        @Override
         public void onStart(final Cluster cluster, final Image snapshotImage)
         {
             if (null != snapshotImage)
@@ -4052,6 +4069,7 @@ class ClusterTest
         cluster.egressListener(
             new EgressListener()
             {
+                @Override
                 public void onMessage(
                     final long clusterSessionId,
                     final long timestamp,
@@ -4062,6 +4080,7 @@ class ClusterTest
                 {
                 }
 
+                @Override
                 public void onAdminResponse(
                     final long clusterSessionId,
                     final long correlationId,
@@ -4099,6 +4118,7 @@ class ClusterTest
         cluster.controlledEgressListener(
             new ControlledEgressListener()
             {
+                @Override
                 public ControlledFragmentHandler.Action onMessage(
                     final long clusterSessionId,
                     final long timestamp,
@@ -4110,6 +4130,7 @@ class ClusterTest
                     return ControlledFragmentHandler.Action.ABORT;
                 }
 
+                @Override
                 public void onAdminResponse(
                     final long clusterSessionId,
                     final long correlationId,

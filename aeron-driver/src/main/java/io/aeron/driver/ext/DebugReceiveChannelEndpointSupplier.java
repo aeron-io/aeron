@@ -43,6 +43,7 @@ public class DebugReceiveChannelEndpointSupplier implements ReceiveChannelEndpoi
      * @param context         for the configuration of the driver.
      * @return a new instance of a {@link DebugReceiveChannelEndpoint} for testing loss.
      */
+    @Override
     public ReceiveChannelEndpoint newInstance(
         final UdpChannel udpChannel,
         final DataPacketDispatcher dispatcher,

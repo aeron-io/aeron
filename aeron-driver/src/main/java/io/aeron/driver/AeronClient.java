@@ -82,6 +82,7 @@ final class AeronClient implements DriverManagedResource
     }
 
 
+    @Override
     public String toString()
     {
         return "AeronClient{" +

@@ -92,6 +92,7 @@ public final class RateReporter extends RateReporterRhsPadding implements Runnab
     /**
      * Run loop for the rate reporter.
      */
+    @Override
     public void run()
     {
         do

@@ -221,16 +221,19 @@ class NetworkUtilTest
         private final IdentityHashMap<NetworkInterface, List<InterfaceAddress>> addressesByInterface =
             new IdentityHashMap<>();
 
+        @Override
         public Enumeration<NetworkInterface> getNetworkInterfaces()
         {
             return Collections.enumeration(addressesByInterface.keySet());
         }
 
+        @Override
         public List<InterfaceAddress> getInterfaceAddresses(final NetworkInterface ifc)
         {
             return addressesByInterface.get(ifc);
         }
 
+        @Override
         public boolean isLoopback(final NetworkInterface ifc)
         {
             return false;

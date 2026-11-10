@@ -31,11 +31,13 @@ public class AdjustableClock implements NanoClock, EpochClock
     private final NanoClock baseNanoClock = SystemNanoClock.INSTANCE;
     private final AtomicLong offsetNs = new AtomicLong(0);
 
+    @Override
     public long time()
     {
         return baseEpochClock.time() + TimeUnit.NANOSECONDS.toMillis(offsetNs.get());
     }
 
+    @Override
     public long nanoTime()
     {
         nanoCallCount.incrementAndGet();

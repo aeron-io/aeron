@@ -17,6 +17,7 @@ package io.aeron.cluster;
 
 class PriorityHeapTimerServiceClusterTimeTest extends ClusterTimerTest
 {
+    @Override
     TimerServiceSupplier timerServiceSupplier()
     {
         return new PriorityHeapTimerServiceSupplier();

@@ -70,6 +70,7 @@ public class RecordingDescriptorCollector
     @SuppressWarnings("Convert2Lambda")
     private final RecordingDescriptorConsumer consumer = new RecordingDescriptorConsumer()
     {
+        @Override
         public void onRecordingDescriptor(
             final long controlSessionId,
             final long correlationId,

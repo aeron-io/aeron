@@ -133,6 +133,7 @@ public class ResponseServer implements AutoCloseable, Agent
      *
      * @return amount of work done.
      */
+    @Override
     public int doWork()
     {
         int workCount = 0;

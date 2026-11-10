@@ -63,6 +63,7 @@ final class PriorityHeapTimerService implements TimerService
      * @param now current time.
      * @return the number of expired timers
      */
+    @Override
     public int poll(final long now)
     {
         int expiredTimers = 0;
@@ -309,6 +310,7 @@ final class PriorityHeapTimerService implements TimerService
             this.index = index;
         }
 
+        @Override
         public String toString()
         {
             return "PriorityHeapTimerService.Timer{" +

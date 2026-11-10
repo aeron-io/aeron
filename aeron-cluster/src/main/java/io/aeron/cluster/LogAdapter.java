@@ -141,6 +141,7 @@ final class LogAdapter implements ControlledFragmentHandler
         }
     }
 
+    @Override
     public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
         Action action = Action.CONTINUE;

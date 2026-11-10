@@ -36,6 +36,7 @@ class FixedNameCompositeAgent extends CompositeAgent
         this.name = CommonContext.threadName(newName, generateClassicName(classicName));
     }
 
+    @Override
     public String roleName()
     {
         return name;

@@ -74,6 +74,7 @@ class RecordingSessionTest
     {
         private long timeNs = 1;
 
+        @Override
         public long nanoTime()
         {
             timeNs = timeNs * 2;

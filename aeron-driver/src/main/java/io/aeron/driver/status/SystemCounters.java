@@ -56,6 +56,7 @@ public final class SystemCounters implements AutoCloseable
     /**
      * Close all the counters.
      */
+    @Override
     public void close()
     {
         CloseHelper.closeAll(counterByDescriptorMap.values());

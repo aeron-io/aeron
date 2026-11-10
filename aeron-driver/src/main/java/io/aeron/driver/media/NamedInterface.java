@@ -30,6 +30,7 @@ record NamedInterface(String name, int port) implements UnresolvedInterface
 {
     static final char OPENING_CHAR = '{';
 
+    @Override
     public ResolvedInterface resolve(final boolean multicast, final ProtocolFamily protocolFamily)
         throws SocketException
     {

@@ -52,6 +52,7 @@ class ActiveLogEvent
         this.isStandby = isStandby;
     }
 
+    @Override
     public String toString()
     {
         return "ActiveLogEvent{" +

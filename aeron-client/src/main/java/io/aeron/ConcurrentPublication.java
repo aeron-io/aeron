@@ -90,6 +90,7 @@ public final class ConcurrentPublication extends Publication
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
      * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
+    @Override
     public long offer(
         final DirectBuffer buffer,
         final int offset,
@@ -152,6 +153,7 @@ public final class ConcurrentPublication extends Publication
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
      * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
+    @Override
     public long offer(
         final DirectBuffer bufferOne,
         final int offsetOne,
@@ -228,6 +230,7 @@ public final class ConcurrentPublication extends Publication
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
      * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
+    @Override
     public long offer(final DirectBufferVector[] vectors, final ReservedValueSupplier reservedValueSupplier)
     {
         final int length = DirectBufferVector.validateAndComputeLength(vectors);
@@ -309,6 +312,7 @@ public final class ConcurrentPublication extends Publication
      * @see BufferClaim#commit()
      * @see BufferClaim#abort()
      */
+    @Override
     public long tryClaim(final int length, final BufferClaim bufferClaim)
     {
         checkPayloadLength(length);

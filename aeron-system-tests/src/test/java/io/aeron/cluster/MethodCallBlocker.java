@@ -245,6 +245,7 @@ public final class MethodCallBlocker
 
     private static final class AgentBuilderListener extends AgentBuilder.Listener.Adapter
     {
+        @Override
         @SuppressWarnings("NullableProblems")
         public void onError(
             final String typeName,

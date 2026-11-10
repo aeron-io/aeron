@@ -292,6 +292,7 @@ public final class SimpleAuthorisationService implements AuthorisationService
             this.data = data;
         }
 
+        @Override
         public boolean equals(final Object o)
         {
             if (this == o)
@@ -308,6 +309,7 @@ public final class SimpleAuthorisationService implements AuthorisationService
             return Arrays.equals(data, that.data);
         }
 
+        @Override
         public int hashCode()
         {
             return Arrays.hashCode(data);

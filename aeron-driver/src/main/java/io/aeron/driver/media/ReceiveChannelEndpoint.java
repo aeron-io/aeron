@@ -511,6 +511,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
      *
      * @return true if the primary transport is multicast.
      */
+    @Override
     public boolean isMulticast()
     {
         return isMulticast(0);
@@ -551,6 +552,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
      *
      * @return the {@link UdpChannel} for the primary transport.
      */
+    @Override
     public UdpChannel udpChannel()
     {
         return udpChannel(0);
@@ -612,6 +614,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
      *
      * @return the multicast TTL for the primary transport.
      */
+    @Override
     public int multicastTtl()
     {
         return multicastTtl(0);

@@ -55,6 +55,7 @@ public final class FrameDataLossGenerator implements LossGenerator
     }
 
 
+    @Override
     public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
     {
         if ((boolean)ENABLED_VH.getAcquire(this))

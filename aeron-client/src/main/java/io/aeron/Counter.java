@@ -118,6 +118,7 @@ public final class Counter extends AtomicCounter
      * <p>
      * This method is idempotent and thread safe.
      */
+    @Override
     public void close()
     {
         if (IS_CLOSED_VH.compareAndSet(this, false, true))
@@ -135,6 +136,7 @@ public final class Counter extends AtomicCounter
      *
      * @return true if it has been closed otherwise false.
      */
+    @Override
     public boolean isClosed()
     {
         return isClosed;

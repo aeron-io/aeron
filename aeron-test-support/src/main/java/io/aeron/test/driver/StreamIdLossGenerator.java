@@ -52,6 +52,7 @@ public final class StreamIdLossGenerator implements LossGenerator
         ENABLED_VH.setRelease(this, false);
     }
 
+    @Override
     public boolean shouldDropFrame(
         final InetSocketAddress address,
         final UnsafeBuffer buffer,
@@ -64,6 +65,7 @@ public final class StreamIdLossGenerator implements LossGenerator
         return (boolean)ENABLED_VH.getAcquire(this) && streamId == this.streamId;
     }
 
+    @Override
     public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
     {
         return false;

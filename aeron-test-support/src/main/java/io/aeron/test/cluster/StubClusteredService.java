@@ -33,20 +33,24 @@ public class StubClusteredService implements ClusteredService
     protected IdleStrategy idleStrategy;
     private volatile boolean isTerminated;
 
+    @Override
     public void onStart(final Cluster cluster, final Image snapshotImage)
     {
         this.cluster = cluster;
         this.idleStrategy = cluster.idleStrategy();
     }
 
+    @Override
     public void onSessionOpen(final ClientSession session, final long timestamp)
     {
     }
 
+    @Override
     public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
     {
     }
 
+    @Override
     public void onSessionMessage(
         final ClientSession session,
         final long timestamp,
@@ -57,18 +61,22 @@ public class StubClusteredService implements ClusteredService
     {
     }
 
+    @Override
     public void onTimerEvent(final long correlationId, final long timestamp)
     {
     }
 
+    @Override
     public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
     {
     }
 
+    @Override
     public void onRoleChange(final Cluster.Role newRole)
     {
     }
 
+    @Override
     public void onTerminate(final Cluster cluster)
     {
         isTerminated = true;

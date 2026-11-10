@@ -61,6 +61,7 @@ class ConsensusModuleSnapshotAdapter implements ControlledFragmentHandler
         return image.controlledPoll(fragmentAssembler, FRAGMENT_LIMIT);
     }
 
+    @Override
     @SuppressWarnings("MethodLength")
     public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {

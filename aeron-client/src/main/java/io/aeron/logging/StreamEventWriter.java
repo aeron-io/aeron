@@ -45,6 +45,7 @@ final class StreamEventWriter implements LoggerEventWriter
         }
     }
 
+    @Override
     public void write(final StringBuilder sb)
     {
         if (endsWithNewLine(sb))

@@ -94,6 +94,7 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
         }
     }
 
+    @Override
     Recorder newRecorder()
     {
         return new DedicatedModeRecorder(
@@ -105,6 +106,7 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
             ctx);
     }
 
+    @Override
     Replayer newReplayer()
     {
         return new DedicatedModeReplayer(

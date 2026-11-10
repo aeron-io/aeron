@@ -83,6 +83,7 @@ public final class ThreadAffinityRecording implements AutoCloseable
         assertArrayEquals(new int[]{ expectedCpu }, ThreadAffinity.getAffinity(tid), threadName);
     }
 
+    @Override
     public void close()
     {
         try

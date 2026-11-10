@@ -578,6 +578,7 @@ public final class UdpChannel
      *
      * @return the {@link #canonicalForm()} for the channel.
      */
+    @Override
     public String toString()
     {
         return canonicalForm;
@@ -896,6 +897,7 @@ public final class UdpChannel
      * @param o object to be compared with.
      * @return true if the {@link #canonicalForm()} is equal, otherwise false.
      */
+    @Override
     public boolean equals(final Object o)
     {
         if (this == o)
@@ -918,6 +920,7 @@ public final class UdpChannel
      *
      * @return the hash code for the {@link #canonicalForm()}.
      */
+    @Override
     public int hashCode()
     {
         return canonicalForm != null ? canonicalForm.hashCode() : 0;

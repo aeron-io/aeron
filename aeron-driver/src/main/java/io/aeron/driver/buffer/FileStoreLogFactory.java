@@ -105,6 +105,7 @@ public class FileStoreLogFactory implements LogFactory
      * @param useSparseFiles   for the log buffer.
      * @return the newly allocated {@link RawLog}
      */
+    @Override
     public RawLog newPublication(final long correlationId, final int termBufferLength, final boolean useSparseFiles)
     {
         return newInstance(publicationsDir, correlationId, termBufferLength, useSparseFiles);
@@ -118,6 +119,7 @@ public class FileStoreLogFactory implements LogFactory
      * @param useSparseFiles   for the log buffer.
      * @return the newly allocated {@link RawLog}
      */
+    @Override
     public RawLog newImage(final long correlationId, final int termBufferLength, final boolean useSparseFiles)
     {
         return newInstance(imagesDir, correlationId, termBufferLength, useSparseFiles);

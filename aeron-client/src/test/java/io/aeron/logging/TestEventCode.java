@@ -17,11 +17,13 @@ package io.aeron.logging;
 
 record TestEventCode(int eventCode, int id) implements EventCode
 {
+    @Override
     public int toEventCodeId()
     {
         return eventCode << 16 | id & 0xFFFF;
     }
 
+    @Override
     public String name()
     {
         return "TestEventCode";

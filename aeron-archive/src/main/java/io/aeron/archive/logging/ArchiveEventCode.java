@@ -348,6 +348,7 @@ public enum ArchiveEventCode implements EventCode
      *
      * @return get {@link ArchiveEventCode#id()} from {@link #id()}.
      */
+    @Override
     public int toEventCodeId()
     {
         return EVENT_CODE_TYPE << 16 | (id & 0xFFFF);

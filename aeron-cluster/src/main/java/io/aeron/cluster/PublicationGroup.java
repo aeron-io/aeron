@@ -109,6 +109,7 @@ class PublicationGroup<P extends Publication> implements AutoCloseable
         }
     }
 
+    @Override
     public void close()
     {
         CloseHelper.quietClose(current);
@@ -124,6 +125,7 @@ class PublicationGroup<P extends Publication> implements AutoCloseable
         P addPublication(Aeron aeron, String channel, int streamId);
     }
 
+    @Override
     public String toString()
     {
         return "PublicationGroup{" +

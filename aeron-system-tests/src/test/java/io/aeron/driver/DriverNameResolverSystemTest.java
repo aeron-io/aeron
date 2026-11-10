@@ -435,6 +435,7 @@ class DriverNameResolverSystemTest
         final MutableBoolean resolveHostA = new MutableBoolean(true);
         final NameResolverAgent bootstrapResolver = new NameResolverAgent()
         {
+            @Override
             public InetAddress resolve(final String name, final String uriParamName, final boolean isReResolution)
             {
                 if (name.contains("0.0.0.0"))

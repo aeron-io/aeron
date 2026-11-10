@@ -195,6 +195,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         sessionMessageHeaderEncoder.wrapAndApplyHeader(headerBuffer, 0, new MessageHeaderEncoder());
     }
 
+    @Override
     public void onStart()
     {
         closeHandlerRegistrationId = aeron.addCloseHandler(this::abort);
@@ -207,6 +208,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         isServiceActive = true;
     }
 
+    @Override
     public void onClose()
     {
         if (isAbort)
@@ -245,6 +247,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         ctx.close();
     }
 
+    @Override
     public int doWork()
     {
         int workCount = 0;
@@ -281,46 +284,55 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return workCount;
     }
 
+    @Override
     public String roleName()
     {
         return ctx.serviceName();
     }
 
+    @Override
     public Cluster.Role role()
     {
         return role;
     }
 
+    @Override
     public int memberId()
     {
         return memberId;
     }
 
+    @Override
     public Aeron aeron()
     {
         return aeron;
     }
 
+    @Override
     public ClusteredServiceContainer.Context context()
     {
         return ctx;
     }
 
+    @Override
     public ClientSession getClientSession(final long clusterSessionId)
     {
         return sessionByIdMap.get(clusterSessionId);
     }
 
+    @Override
     public Collection<ClientSession> clientSessions()
     {
         return unmodifiableClientSessions;
     }
 
+    @Override
     public void forEachClientSession(final Consumer<? super ClientSession> action)
     {
         sessions.forEach(action);
     }
 
+    @Override
     public boolean closeClientSession(final long clusterSessionId)
     {
         checkForValidInvocation();
@@ -351,21 +363,25 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return false;
     }
 
+    @Override
     public TimeUnit timeUnit()
     {
         return timeUnit;
     }
 
+    @Override
     public long time()
     {
         return clusterTime;
     }
 
+    @Override
     public long logPosition()
     {
         return logPosition;
     }
 
+    @Override
     public boolean scheduleTimer(final long correlationId, final long deadline)
     {
         checkForValidInvocation();
@@ -373,6 +389,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return consensusModuleProxy.scheduleTimer(correlationId, deadline);
     }
 
+    @Override
     public boolean cancelTimer(final long correlationId)
     {
         checkForValidInvocation();
@@ -380,6 +397,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return consensusModuleProxy.cancelTimer(correlationId);
     }
 
+    @Override
     public long offer(final DirectBuffer buffer, final int offset, final int length)
     {
         checkForValidInvocation();
@@ -388,6 +406,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return consensusModuleProxy.offer(headerBuffer, 0, SESSION_HEADER_LENGTH, buffer, offset, length);
     }
 
+    @Override
     public long offer(final DirectBufferVector[] vectors)
     {
         checkForValidInvocation();
@@ -397,6 +416,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return consensusModuleProxy.offer(vectors);
     }
 
+    @Override
     public long tryClaim(final int length, final BufferClaim bufferClaim)
     {
         checkForValidInvocation();
@@ -405,22 +425,26 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return consensusModuleProxy.tryClaim(length + SESSION_HEADER_LENGTH, bufferClaim, headerBuffer);
     }
 
+    @Override
     public IdleStrategy idleStrategy()
     {
         return this;
     }
 
+    @Override
     public void reset()
     {
         idleStrategy.reset();
     }
 
+    @Override
     public void idle()
     {
         idleStrategy.idle();
         doIdleWork();
     }
 
+    @Override
     public void idle(final int workCount)
     {
         idleStrategy.idle(workCount);

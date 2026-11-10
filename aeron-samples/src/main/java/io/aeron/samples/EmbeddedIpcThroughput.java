@@ -92,6 +92,7 @@ public class EmbeddedIpcThroughput
             this.publication = publication;
         }
 
+        @Override
         public void run()
         {
             final IdleStrategy idleStrategy = SampleConfiguration.newIdleStrategy();

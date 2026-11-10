@@ -34,21 +34,25 @@ interface ToggleApplication<T extends Enum<T>>
      */
     ToggleApplication<ClusterControl.ToggleState> CLUSTER_CONTROL = new ToggleApplication<ClusterControl.ToggleState>()
     {
+        @Override
         public ClusterControl.ToggleState get(final AtomicCounter counter)
         {
             return ClusterControl.ToggleState.get(counter);
         }
 
+        @Override
         public boolean apply(final AtomicCounter counter, final ClusterControl.ToggleState targetState)
         {
             return targetState.toggle(counter);
         }
 
+        @Override
         public AtomicCounter find(final CountersReader countersReader, final int clusterId)
         {
             return ClusterControl.findControlToggle(countersReader, clusterId);
         }
 
+        @Override
         public boolean isNeutral(final ClusterControl.ToggleState toggleState)
         {
             return ClusterControl.ToggleState.NEUTRAL == toggleState;
@@ -60,21 +64,25 @@ interface ToggleApplication<T extends Enum<T>>
      */
     ToggleApplication<NodeControl.ToggleState> NODE_CONTROL = new ToggleApplication<NodeControl.ToggleState>()
     {
+        @Override
         public NodeControl.ToggleState get(final AtomicCounter counter)
         {
             return NodeControl.ToggleState.get(counter);
         }
 
+        @Override
         public boolean apply(final AtomicCounter counter, final NodeControl.ToggleState targetState)
         {
             return targetState.toggle(counter);
         }
 
+        @Override
         public AtomicCounter find(final CountersReader countersReader, final int clusterId)
         {
             return NodeControl.findControlToggle(countersReader, clusterId);
         }
 
+        @Override
         public boolean isNeutral(final NodeControl.ToggleState toggleState)
         {
             return NodeControl.ToggleState.NEUTRAL == toggleState;

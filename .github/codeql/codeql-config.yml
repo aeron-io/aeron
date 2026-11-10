@@ -5,8 +5,6 @@ queries:
 
 query-filters:
   - exclude:
-      id: java/missing-override-annotation
-  - exclude:
       id: cpp/poorly-documented-function
   - exclude:
       id: cpp/unused-static-variable

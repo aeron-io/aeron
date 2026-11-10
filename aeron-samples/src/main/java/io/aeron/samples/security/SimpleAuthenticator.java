@@ -160,6 +160,7 @@ public final class SimpleAuthenticator implements Authenticator
             this.encodedCredentials = encodedCredentials;
         }
 
+        @Override
         public boolean equals(final Object o)
         {
             if (this == o)
@@ -174,6 +175,7 @@ public final class SimpleAuthenticator implements Authenticator
             return Arrays.equals(encodedCredentials, that.encodedCredentials);
         }
 
+        @Override
         public int hashCode()
         {
             return Arrays.hashCode(encodedCredentials);

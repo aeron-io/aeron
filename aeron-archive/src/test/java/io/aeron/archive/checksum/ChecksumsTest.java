@@ -97,6 +97,7 @@ class ChecksumsTest
 
     static class TestChecksum implements Checksum
     {
+        @Override
         public int compute(final long address, final int offset, final int length)
         {
             return 0;

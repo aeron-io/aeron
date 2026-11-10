@@ -169,6 +169,7 @@ final class ClientConductor implements Agent
         timeOfLastServiceNs = nowNs;
     }
 
+    @Override
     public void onClose()
     {
         boolean isInterrupted = false;
@@ -220,6 +221,7 @@ final class ClientConductor implements Agent
         }
     }
 
+    @Override
     public int doWork()
     {
         int workCount = 0;
@@ -244,6 +246,7 @@ final class ClientConductor implements Agent
         return workCount;
     }
 
+    @Override
     public String roleName()
     {
         return "aeron-client";

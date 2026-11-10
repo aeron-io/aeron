@@ -12,6 +12,7 @@ public class TestIdleStrategy implements IdleStrategy
      */
     public static final TestIdleStrategy INSTANCE = new TestIdleStrategy();
 
+    @Override
     public void idle(final int i)
     {
         if (i == 0)
@@ -20,11 +21,13 @@ public class TestIdleStrategy implements IdleStrategy
         }
     }
 
+    @Override
     public void idle()
     {
         Tests.yield();
     }
 
+    @Override
     public void reset()
     {
 

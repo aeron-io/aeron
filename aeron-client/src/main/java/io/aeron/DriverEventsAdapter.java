@@ -92,6 +92,7 @@ class DriverEventsAdapter implements MessageHandler
         return clientId;
     }
 
+    @Override
     @SuppressWarnings("MethodLength")
     public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
     {

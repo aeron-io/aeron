@@ -46,6 +46,7 @@ class IngressAdapter implements AutoCloseable
         this.consensusModuleAgent = consensusModuleAgent;
     }
 
+    @Override
     public void close()
     {
         final Subscription subscription = this.subscription;

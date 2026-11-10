@@ -908,6 +908,7 @@ class MigrateSegmentsTest
             return this;
         }
 
+        @Override
         public String toString()
         {
             return "{" +
@@ -1016,6 +1017,7 @@ class MigrateSegmentsTest
             return this;
         }
 
+        @Override
         public String toString()
         {
             return "{" +
@@ -1067,6 +1069,7 @@ class MigrateSegmentsTest
             return expectedSegments.getExpectedFiles(dstRecordingId);
         }
 
+        @Override
         public String toString()
         {
             return "{" +
@@ -1092,10 +1095,12 @@ class MigrateSegmentsTest
         {
         }
 
+        @Override
         public void perturb(final File archiveDir, final long srcRecordingId, final long dstRecordingId)
         {
         }
 
+        @Override
         public String toString()
         {
             return "None";
@@ -1111,6 +1116,7 @@ class MigrateSegmentsTest
             this.segmentBasePosition = segmentBasePosition;
         }
 
+        @Override
         public void perturb(final File archiveDir, final long srcRecordingId, final long dstRecordingId)
         {
             final String fileName = Archive.segmentFileName(srcRecordingId, segmentBasePosition);
@@ -1119,6 +1125,7 @@ class MigrateSegmentsTest
             assertTrue(segmentFile.delete());
         }
 
+        @Override
         public String toString()
         {
             return "DeleteSrcSegment(" + segmentBasePosition + ")";
@@ -1134,6 +1141,7 @@ class MigrateSegmentsTest
             this.segmentBasePosition = segmentBasePosition;
         }
 
+        @Override
         public void perturb(final File archiveDir, final long srcRecordingId, final long dstRecordingId)
         {
             final String fileName = Archive.segmentFileName(dstRecordingId, segmentBasePosition);
@@ -1149,6 +1157,7 @@ class MigrateSegmentsTest
             }
         }
 
+        @Override
         public String toString()
         {
             return "AddDstSegment(" + segmentBasePosition + ")";
@@ -1195,6 +1204,7 @@ class MigrateSegmentsTest
             return this;
         }
 
+        @Override
         public String toString()
         {
             return "{" +

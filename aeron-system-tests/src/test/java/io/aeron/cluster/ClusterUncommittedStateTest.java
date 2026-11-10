@@ -388,12 +388,14 @@ public class ClusterUncommittedStateTest
         private int committedCounter = 0;
         private final List<Integer> counterSnapshots = new ArrayList<>();
 
+        @Override
         public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
         {
             assertNull(snapshotImage);
             commitPosition = consensusModuleControl.context().commitPositionCounter();
         }
 
+        @Override
         public void onPrepareForNewLeadership()
         {
             logPublication = null;
@@ -401,11 +403,13 @@ public class ClusterUncommittedStateTest
             uncommittedCounters.clear();
         }
 
+        @Override
         public void onElectionComplete(final ConsensusControlState consensusControlState)
         {
             logPublication = consensusControlState.logPublication();
         }
 
+        @Override
         public ControlledFragmentHandler.Action onIngressExtensionMessage(
             final int actingBlockLength,
             final int templateId,
@@ -430,6 +434,7 @@ public class ClusterUncommittedStateTest
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
+        @Override
         public ControlledFragmentHandler.Action onLogExtensionMessage(
             final int actingBlockLength,
             final int templateId,
@@ -446,6 +451,7 @@ public class ClusterUncommittedStateTest
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
+        @Override
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
             drainUncommitted();
@@ -479,6 +485,7 @@ public class ClusterUncommittedStateTest
         final ToggledLossGenerator inboundLossGenerator = new ToggledLossGenerator(
             shouldDropInboundFrames, droppedInboundFrames);
 
+        @Override
         public ReceiveChannelEndpoint newInstance(
             final UdpChannel udpChannel,
             final DataPacketDispatcher dispatcher,
@@ -489,6 +496,7 @@ public class ClusterUncommittedStateTest
                 udpChannel, dispatcher, statusIndicator, context, inboundLossGenerator, inboundLossGenerator);
         }
 
+        @Override
         public SendChannelEndpoint newInstance(
             final UdpChannel udpChannel,
             final AtomicCounter statusIndicator,
@@ -515,12 +523,14 @@ public class ClusterUncommittedStateTest
                 this.droppedFrames = droppedFrames;
             }
 
+            @Override
             public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
             {
                 droppedFrames.incrementAndGet();
                 return shouldDropFrame.get();
             }
 
+            @Override
             public boolean shouldDropFrame(
                 final InetSocketAddress address,
                 final UnsafeBuffer buffer,

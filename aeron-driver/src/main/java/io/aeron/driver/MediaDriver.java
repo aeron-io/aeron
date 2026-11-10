@@ -466,6 +466,7 @@ public final class MediaDriver implements AutoCloseable
     /**
      * Shutdown the media driver by stopping all threads and freeing resources.
      */
+    @Override
     public void close()
     {
         try
@@ -743,6 +744,7 @@ public final class MediaDriver implements AutoCloseable
          *
          * @return a shallow copy of the object.
          */
+        @Override
         public Context clone()
         {
             return (Context)super.clone();
@@ -752,6 +754,7 @@ public final class MediaDriver implements AutoCloseable
          * Free up resources but don't delete files in case they are required for debugging unless
          * {@link #dirDeleteOnShutdown()} is set.
          */
+        @Override
         public void close()
         {
             if (IS_CLOSED_VH.compareAndSet(this, false, true))

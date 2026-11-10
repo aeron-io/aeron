@@ -156,6 +156,7 @@ public final class ReadableCounter implements AutoCloseable
     /**
      * Close this counter. This has no impact on the {@link io.aeron.Counter} it is viewing.
      */
+    @Override
     public void close()
     {
         isClosed = true;

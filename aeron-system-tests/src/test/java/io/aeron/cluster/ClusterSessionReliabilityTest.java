@@ -275,6 +275,7 @@ class ClusterSessionReliabilityTest
             index(index);
         }
 
+        @Override
         public void onSessionMessage(
             final ClientSession session,
             final long timestamp,
@@ -295,12 +296,14 @@ class ClusterSessionReliabilityTest
             messageCount.incrementAndGet();
         }
 
+        @Override
         public void onSessionOpen(final ClientSession session, final long timestamp)
         {
             super.onSessionOpen(session, timestamp);
             nextSequenceBySessionId.put(session.id(), 0);
         }
 
+        @Override
         public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
         {
             super.onSessionClose(session, timestamp, closeReason);
@@ -320,6 +323,7 @@ class ClusterSessionReliabilityTest
             index(index);
         }
 
+        @Override
         public void onSessionOpen(final ClientSession session, final long timestamp)
         {
             super.onSessionOpen(session, timestamp);
@@ -330,6 +334,7 @@ class ClusterSessionReliabilityTest
             }
         }
 
+        @Override
         public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
         {
             super.onSessionClose(session, timestamp, closeReason);
@@ -360,6 +365,7 @@ class ClusterSessionReliabilityTest
             }
         }
 
+        @Override
         public void onTimerEvent(final long correlationId, final long timestamp)
         {
             super.onTimerEvent(correlationId, timestamp);
@@ -384,6 +390,7 @@ class ClusterSessionReliabilityTest
         private long outOfSequenceCount;
         private long nextSequence;
 
+        @Override
         public void onMessage(
             final long clusterSessionId,
             final long timestamp,

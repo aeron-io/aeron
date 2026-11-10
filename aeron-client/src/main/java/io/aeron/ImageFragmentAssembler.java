@@ -100,6 +100,7 @@ public class ImageFragmentAssembler implements FragmentHandler
      * @param length of the data in bytes.
      * @param header representing the metadata for the data.
      */
+    @Override
     public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
         final byte flags = header.flags();

@@ -1042,6 +1042,7 @@ class BasicArchiveTest
 
     private static final class FailingRecordingDescriptorConsumer implements RecordingDescriptorConsumer
     {
+        @Override
         public void onRecordingDescriptor(
             final long controlSessionId,
             final long correlationId,

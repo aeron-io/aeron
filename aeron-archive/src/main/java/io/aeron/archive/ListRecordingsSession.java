@@ -36,6 +36,7 @@ class ListRecordingsSession extends AbstractListRecordingsSession
             descriptorBuffer);
     }
 
+    @Override
     boolean acceptDescriptor(final UnsafeBuffer descriptorBuffer)
     {
         return true;

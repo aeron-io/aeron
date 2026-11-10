@@ -1162,6 +1162,7 @@ class ArchiveContextTest
 
     public static class TestAuthorisationSupplier implements AuthorisationServiceSupplier
     {
+        @Override
         public AuthorisationService get()
         {
             return new TestAuthorisationService();
@@ -1170,6 +1171,7 @@ class ArchiveContextTest
 
     static class TestAuthorisationService implements AuthorisationService
     {
+        @Override
         public boolean isAuthorised(
             final int protocolId, final int actionId, final Object type, final byte[] encodedPrincipal)
         {

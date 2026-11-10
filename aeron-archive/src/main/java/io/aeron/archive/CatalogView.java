@@ -77,6 +77,7 @@ public final class CatalogView
             this.consumer = consumer;
         }
 
+        @Override
         public void accept(
             final int recordingDescriptorOffset,
             final RecordingDescriptorHeaderEncoder headerEncoder,

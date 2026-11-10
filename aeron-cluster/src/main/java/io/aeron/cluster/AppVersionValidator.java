@@ -42,6 +42,7 @@ public final class AppVersionValidator implements VersionValidator
      * @param appVersionUnderTest to check against configured appVersion.
      * @return true for compatible or false for not compatible.
      */
+    @Override
     public boolean isVersionCompatible(final int contextAppVersion, final int appVersionUnderTest)
     {
         return SemanticVersion.major(contextAppVersion) == SemanticVersion.major(appVersionUnderTest);

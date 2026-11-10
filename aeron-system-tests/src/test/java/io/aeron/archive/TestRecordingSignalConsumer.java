@@ -35,6 +35,7 @@ class TestRecordingSignalConsumer implements RecordingSignalConsumer
         this.controlSessionId = controlSessionId;
     }
 
+    @Override
     public void onSignal(
         final long controlSessionId,
         final long correlationId,

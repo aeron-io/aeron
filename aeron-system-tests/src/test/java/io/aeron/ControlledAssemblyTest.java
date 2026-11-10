@@ -167,6 +167,7 @@ class ControlledAssemblyTest
         private final List<Fragment> fragments = new ArrayList<>();
         private Action action;
 
+        @Override
         public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             fragments.add(new Fragment(

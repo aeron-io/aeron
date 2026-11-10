@@ -122,6 +122,7 @@ final class LogReplay
         return logAdapter.position();
     }
 
+    @Override
     public String toString()
     {
         return "LogReplay{" +

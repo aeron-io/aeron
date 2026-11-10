@@ -112,6 +112,7 @@ class RecordingLogValidator implements AutoCloseable
         return isComplete;
     }
 
+    @Override
     public void close()
     {
         CloseHelper.quietClose(archive);

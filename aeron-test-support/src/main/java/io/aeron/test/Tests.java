@@ -81,6 +81,7 @@ public class Tests
     private static final String LOGGING_MBEAN_NAME = "io.aeron:type=logging";
     private static final ClassValue<Map<String, Field>> CLASS_FIELDS = new ClassValue<>()
     {
+        @Override
         protected Map<String, Field> computeValue(final Class<?> type)
         {
             return new HashMap<>();
@@ -807,6 +808,7 @@ public class Tests
     {
         return new TestWatcher()
         {
+            @Override
             public void testFailed(final ExtensionContext context, final Throwable cause)
             {
                 System.err.println(context.getDisplayName() + " failed with random seed: " + seed);
@@ -970,6 +972,7 @@ public class Tests
             this.out = out;
         }
 
+        @Override
         public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs)
         {
             pad(indent, out);
@@ -986,6 +989,7 @@ public class Tests
             }
         }
 
+        @Override
         public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs) throws IOException
         {
             if (Files.isSymbolicLink(file))
@@ -1004,11 +1008,13 @@ public class Tests
             }
         }
 
+        @Override
         public FileVisitResult visitFileFailed(final Path file, final IOException exc)
         {
             return FileVisitResult.CONTINUE;
         }
 
+        @Override
         public FileVisitResult postVisitDirectory(final Path dir, final IOException exc)
         {
             indent -= 2;

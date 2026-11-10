@@ -66,6 +66,7 @@ public class Provisioning implements ProvisioningMBean
     /**
      * Remove all existing echo pairs.
      */
+    @Override
     public void removeAll()
     {
         final RemoveAllEchoPairs removeAllEchoPairs = new RemoveAllEchoPairs();
@@ -91,6 +92,7 @@ public class Provisioning implements ProvisioningMBean
      * @param pubChannel    channel used for publication.
      * @param pubStreamId   stream id used for publication.
      */
+    @Override
     public void createEchoPair(
         final long correlationId,
         final String subChannel,

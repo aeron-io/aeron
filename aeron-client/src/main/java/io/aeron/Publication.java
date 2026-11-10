@@ -288,6 +288,7 @@ public abstract class Publication implements AutoCloseable
      * <p>
      * Publications are reference counted and are only truly closed when the ref count reaches zero.
      */
+    @Override
     public void close()
     {
         if (!isClosed)

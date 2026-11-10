@@ -197,6 +197,7 @@ public class RedirectingNameResolver implements NameResolverAgent
             }
         }
 
+        @Override
         public String toString()
         {
             return "NameEntry{" +

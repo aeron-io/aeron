@@ -45,6 +45,7 @@ final class ConsensusModuleAdapter implements AutoCloseable
         this.consensusModuleAgent = consensusModuleAgent;
     }
 
+    @Override
     public void close()
     {
         subscription.close();

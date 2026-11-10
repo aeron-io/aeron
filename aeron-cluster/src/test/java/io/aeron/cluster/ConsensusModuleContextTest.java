@@ -1053,6 +1053,7 @@ class ConsensusModuleContextTest
 
     public static class TestAuthorisationSupplier implements AuthorisationServiceSupplier
     {
+        @Override
         public AuthorisationService get()
         {
             return new TestAuthorisationService();
@@ -1061,6 +1062,7 @@ class ConsensusModuleContextTest
 
     static class TestAuthorisationService implements AuthorisationService
     {
+        @Override
         public boolean isAuthorised(
             final int protocolId, final int actionId, final Object type, final byte[] encodedPrincipal)
         {
@@ -1070,6 +1072,7 @@ class ConsensusModuleContextTest
 
     public static class TestAuthenticatorSupplier implements AuthenticatorSupplier
     {
+        @Override
         public Authenticator get()
         {
             return new TestAuthenticator();
@@ -1078,18 +1081,22 @@ class ConsensusModuleContextTest
 
     static class TestAuthenticator implements Authenticator
     {
+        @Override
         public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
         {
         }
 
+        @Override
         public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
         {
         }
 
+        @Override
         public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
         {
         }
 
+        @Override
         public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
         {
         }

@@ -37,6 +37,7 @@ class NamedCompositeAgent extends CompositeAgent
         this.name = name;
     }
 
+    @Override
     public String roleName()
     {
         final String prefix = Strings.isEmpty(name) ? "" : name + " ";

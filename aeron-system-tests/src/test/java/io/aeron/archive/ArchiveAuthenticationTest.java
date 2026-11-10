@@ -106,11 +106,13 @@ class ArchiveAuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return encodedCredentials;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 fail();
@@ -120,23 +122,27 @@ class ArchiveAuthenticationTest
 
         final Authenticator authenticator = spy(new Authenticator()
         {
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(CREDENTIALS_STRING, new String(encodedCredentials));
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 fail();
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.authenticate(PRINCIPAL_STRING.getBytes());
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 fail();
@@ -159,11 +165,13 @@ class ArchiveAuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 assertEquals(CHALLENGE_STRING, new String(encodedChallenge));
@@ -175,12 +183,14 @@ class ArchiveAuthenticationTest
         {
             boolean challengeSuccessful = false;
 
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 assertEquals(sessionId, authenticatorSessionId.value);
@@ -188,12 +198,14 @@ class ArchiveAuthenticationTest
                 challengeSuccessful = true;
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.challenge(encodedChallenge);
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 if (challengeSuccessful)
@@ -220,11 +232,13 @@ class ArchiveAuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 assertEquals(CHALLENGE_STRING, new String(encodedChallenge));
@@ -234,23 +248,27 @@ class ArchiveAuthenticationTest
 
         final Authenticator authenticator = spy(new Authenticator()
         {
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 fail();
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.reject();
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 fail();
@@ -280,11 +298,13 @@ class ArchiveAuthenticationTest
 
         final CredentialsSupplier credentialsSupplier = spy(new CredentialsSupplier()
         {
+            @Override
             public byte[] encodedCredentials()
             {
                 return NULL_CREDENTIAL;
             }
 
+            @Override
             public byte[] onChallenge(final byte[] encodedChallenge)
             {
                 assertEquals(CHALLENGE_STRING, new String(encodedChallenge));
@@ -296,12 +316,14 @@ class ArchiveAuthenticationTest
         {
             boolean challengeRespondedTo = false;
 
+            @Override
             public void onConnectRequest(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 authenticatorSessionId.value = sessionId;
                 assertEquals(0, encodedCredentials.length);
             }
 
+            @Override
             public void onChallengeResponse(final long sessionId, final byte[] encodedCredentials, final long nowMs)
             {
                 assertEquals(sessionId, authenticatorSessionId.value);
@@ -309,12 +331,14 @@ class ArchiveAuthenticationTest
                 challengeRespondedTo = true;
             }
 
+            @Override
             public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 assertEquals(sessionProxy.sessionId(), authenticatorSessionId.value);
                 sessionProxy.challenge(encodedChallenge);
             }
 
+            @Override
             public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
             {
                 if (challengeRespondedTo)

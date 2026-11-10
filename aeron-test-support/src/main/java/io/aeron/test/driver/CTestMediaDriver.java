@@ -89,6 +89,7 @@ public final class CTestMediaDriver implements TestMediaDriver
         this.stderrFile = stderrFile;
     }
 
+    @Override
     public void close()
     {
         if (isClosed)
@@ -169,6 +170,7 @@ public final class CTestMediaDriver implements TestMediaDriver
         while (0 != counterCount.get() && System.currentTimeMillis() < deadlineMs);
     }
 
+    @Override
     public void cleanup()
     {
         if (NULL_FILE != stdoutFile)
@@ -182,6 +184,7 @@ public final class CTestMediaDriver implements TestMediaDriver
         }
     }
 
+    @Override
     public CountersReader counters()
     {
         if (null == countersReader)
@@ -365,16 +368,19 @@ public final class CTestMediaDriver implements TestMediaDriver
         }
     }
 
+    @Override
     public MediaDriver.Context context()
     {
         return context;
     }
 
+    @Override
     public String aeronDirectoryName()
     {
         return context.aeronDirectoryName();
     }
 
+    @Override
     public AgentInvoker sharedAgentInvoker()
     {
         return null;

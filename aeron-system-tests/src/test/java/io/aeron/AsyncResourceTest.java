@@ -252,11 +252,13 @@ class AsyncResourceTest
                 "asyncAddPublication",
                 new Resource()
                 {
+                    @Override
                     public long add(final Aeron aeron, final String channel, final int streamId)
                     {
                         return aeron.asyncAddPublication(channel, streamId);
                     }
 
+                    @Override
                     public Object get(final Aeron aeron, final long registrationId)
                     {
                         return aeron.getPublication(registrationId);
@@ -266,11 +268,13 @@ class AsyncResourceTest
                 "asyncAddExclusivePublication",
                 new Resource()
                 {
+                    @Override
                     public long add(final Aeron aeron, final String channel, final int streamId)
                     {
                         return aeron.asyncAddExclusivePublication(channel, streamId);
                     }
 
+                    @Override
                     public Object get(final Aeron aeron, final long registrationId)
                     {
                         return aeron.getExclusivePublication(registrationId);
@@ -280,11 +284,13 @@ class AsyncResourceTest
                 "asyncAddSubscription",
                 new Resource()
                 {
+                    @Override
                     public long add(final Aeron aeron, final String channel, final int streamId)
                     {
                         return aeron.asyncAddSubscription(channel, streamId);
                     }
 
+                    @Override
                     public Object get(final Aeron aeron, final long registrationId)
                     {
                         return aeron.getSubscription(registrationId);

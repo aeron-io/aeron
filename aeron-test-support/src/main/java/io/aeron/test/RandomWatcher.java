@@ -36,6 +36,7 @@ public class RandomWatcher implements TestWatcher
         this(System.nanoTime());
     }
 
+    @Override
     public void testFailed(final ExtensionContext context, final Throwable cause)
     {
         System.err.println(context.getDisplayName() + " failed with random seed: " + seed);

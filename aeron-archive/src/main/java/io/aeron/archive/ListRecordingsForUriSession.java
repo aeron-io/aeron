@@ -49,6 +49,7 @@ class ListRecordingsForUriSession extends AbstractListRecordingsSession
         descriptorDecoder = recordingDescriptorDecoder;
     }
 
+    @Override
     boolean acceptDescriptor(final UnsafeBuffer descriptorBuffer)
     {
         descriptorDecoder.wrap(

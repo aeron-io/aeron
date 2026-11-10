@@ -26,6 +26,7 @@ public class HideStdErrExtension implements BeforeEachCallback, AfterEachCallbac
     private final PrintStream nullPrintStream = new PrintStream(new NullOutputStream());
     private PrintStream originalStream = null;
 
+    @Override
     public void beforeEach(final ExtensionContext context)
     {
         if (context.getTestMethod().isPresent() &&
@@ -36,6 +37,7 @@ public class HideStdErrExtension implements BeforeEachCallback, AfterEachCallbac
         }
     }
 
+    @Override
     public void afterEach(final ExtensionContext context)
     {
         if (null != originalStream)

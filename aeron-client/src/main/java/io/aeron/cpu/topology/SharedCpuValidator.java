@@ -22,6 +22,7 @@ import java.io.PrintStream;
 
 class SharedCpuValidator implements TopologyValidator
 {
+    @Override
     public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         final IntArrayList cpus = selection.cpus();

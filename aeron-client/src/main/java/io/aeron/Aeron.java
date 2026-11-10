@@ -273,6 +273,7 @@ public final class Aeron implements AutoCloseable
      * This will close all currently open {@link Publication}s, {@link Subscription}s, and {@link Counter}s created
      * from this client. To check for the command being acknowledged by the driver
      */
+    @Override
     public void close()
     {
         if (IS_CLOSED_VH.compareAndSet(this, false, true))
@@ -1158,6 +1159,7 @@ public final class Aeron implements AutoCloseable
          *
          * @return a shallow copy of the object.
          */
+        @Override
         public Context clone()
         {
             return (Context)super.clone();
@@ -1170,6 +1172,7 @@ public final class Aeron implements AutoCloseable
          *
          * @return this for a fluent API.
          */
+        @Override
         @SuppressWarnings("checkstyle:methodlength")
         public Context conclude()
         {
@@ -1788,6 +1791,7 @@ public final class Aeron implements AutoCloseable
          * @return this for a fluent API.
          * @see #errorHandler(ErrorHandler)
          */
+        @Override
         public Context driverTimeoutMs(final long value)
         {
             super.driverTimeoutMs(value);
@@ -1979,6 +1983,7 @@ public final class Aeron implements AutoCloseable
         /**
          * Clean up all resources that the client uses to communicate with the Media Driver.
          */
+        @Override
         public void close()
         {
             BufferUtil.free(cncByteBuffer);

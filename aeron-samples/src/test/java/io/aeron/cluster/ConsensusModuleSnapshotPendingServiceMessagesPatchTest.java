@@ -179,6 +179,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         final LongArrayList pendingMessageClusterSessionIds = new LongArrayList();
         final ConsensusModuleSnapshotListener stateReader = new NoOpConsensusModuleSnapshotListener()
         {
+            @Override
             public void onLoadConsensusModuleState(
                 final long nextSessionId,
                 final long nextServiceSessionId,
@@ -193,6 +194,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
                 mutableLogServiceSessionId.set(logServiceSessionId);
             }
 
+            @Override
             public void onLoadPendingMessage(
                 final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
             {
@@ -304,6 +306,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
             leaderSnapshot.recordingId,
             new NoOpConsensusModuleSnapshotListener()
             {
+                @Override
                 public void onLoadConsensusModuleState(
                     final long nextSessionId,
                     final long nextServiceSessionId,
@@ -320,6 +323,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
                     assertEquals(MessageHeaderDecoder.ENCODED_LENGTH + ConsensusModuleDecoder.BLOCK_LENGTH, length);
                 }
 
+                @Override
                 public void onLoadPendingMessageTracker(
                     final long nextServiceSessionId,
                     final long logServiceSessionId,
@@ -335,6 +339,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
                         length);
                 }
 
+                @Override
                 public void onLoadPendingMessage(
                     final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
                 {
@@ -386,6 +391,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
             {
                 final long[] nextClusterSessionIds = new long[serviceCount];
 
+                @Override
                 public void onLoadConsensusModuleState(
                     final long nextSessionId,
                     final long nextServiceSessionId,
@@ -430,6 +436,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
                     hasLoadedConsensusModuleState.set(true);
                 }
 
+                @Override
                 public void onLoadPendingMessageTracker(
                     final long nextServiceSessionId,
                     final long logServiceSessionId,
@@ -442,6 +449,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
                     nextClusterSessionIds[serviceId] = logServiceSessionId + 1;
                 }
 
+                @Override
                 public void onLoadPendingMessage(
                     final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
                 {
@@ -683,6 +691,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
 
     private static class NoOpConsensusModuleSnapshotListener implements ConsensusModuleSnapshotListener
     {
+        @Override
         public void onLoadBeginSnapshot(
             final int appVersion,
             final TimeUnit timeUnit,
@@ -692,6 +701,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         {
         }
 
+        @Override
         public void onLoadConsensusModuleState(
             final long nextSessionId,
             final long nextServiceSessionId,
@@ -703,11 +713,13 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         {
         }
 
+        @Override
         public void onLoadPendingMessage(
             final long clusterSessionId, final DirectBuffer buffer, final int offset, final int length)
         {
         }
 
+        @Override
         public void onLoadClusterSession(
             final long clusterSessionId,
             final long correlationId,
@@ -722,6 +734,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         {
         }
 
+        @Override
         public void onLoadTimer(
             final long correlationId,
             final long deadline,
@@ -731,6 +744,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         {
         }
 
+        @Override
         public void onLoadPendingMessageTracker(
             final long nextServiceSessionId,
             final long logServiceSessionId,
@@ -742,6 +756,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         {
         }
 
+        @Override
         public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
         {
         }

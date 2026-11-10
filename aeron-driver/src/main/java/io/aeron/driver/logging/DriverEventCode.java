@@ -304,6 +304,7 @@ public enum DriverEventCode implements EventCode
     /**
      * {@return the full event code for this code}
      */
+    @Override
     public int toEventCodeId()
     {
         return EVENT_CODE_TYPE << 16 | (0xFFFF & id());
