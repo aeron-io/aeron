@@ -29,6 +29,7 @@ callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
+* **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
 * **[Java]** Upgrade to `Gradle` 9.9.0.
@@ -62,6 +63,7 @@ callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
+* **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
 * **[Java]** Upgrade to `Gradle` 9.9.0.
