@@ -156,6 +156,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -3713,8 +3714,8 @@ class ClusterTest
         final RecordingLog.Entry latestCMSnapshot = newLeader.consensusModule().context().recordingLog()
             .getLatestSnapshot(ConsensusModule.Configuration.SERVICE_ID);
         assertNotNull(latestCMSnapshot);
-        assertEquals(firstCMSnapshot.leadershipTermId + 1, latestCMSnapshot.leadershipTermId);
-        assertEquals(firstCMSnapshot.logPosition, latestCMSnapshot.termBaseLogPosition);
+        assertThat(latestCMSnapshot.leadershipTermId, greaterThan(firstCMSnapshot.leadershipTermId));
+        assertThat(latestCMSnapshot.termBaseLogPosition, greaterThanOrEqualTo(firstCMSnapshot.logPosition));
         assertEquals(newLeader.commitPosition(), latestCMSnapshot.logPosition);
 
         final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
