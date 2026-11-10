@@ -4,6 +4,8 @@
 
 === New & Noteworthy
 
+* **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
+
 === Changelog
 
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
@@ -41,6 +43,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.1 (unreleased)
 
+* **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
 rebuild `recording.log` entries from the metadata alone.
 * **[Archive]** Find a torn last fragment's page boundary from its offset in the file. (https://github.com/aeron-io/aeron/pull/2238[#2238])
