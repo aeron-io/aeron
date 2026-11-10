@@ -4,6 +4,8 @@
 
 === New & Noteworthy
 
+* **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
+
 === Changelog
 
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
@@ -29,6 +31,7 @@ callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
+* **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
 * **[Java]** Upgrade to `Gradle` 9.9.0.
@@ -40,6 +43,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.1 (unreleased)
 
+* **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
 rebuild `recording.log` entries from the metadata alone.
 * **[Archive]** Find a torn last fragment's page boundary from its offset in the file. (https://github.com/aeron-io/aeron/pull/2238[#2238])
@@ -62,6 +66,7 @@ callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 * **[Client/C]** Mark all pending async resources as `AERON_CLIENT_REGISTRATION_STATUS_ERRORED` when client conductor
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
+* **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
 * **[Java]** Upgrade to `Gradle` 9.9.0.
