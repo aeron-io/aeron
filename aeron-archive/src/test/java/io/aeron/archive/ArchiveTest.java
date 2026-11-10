@@ -1392,6 +1392,7 @@ class ArchiveTest
             final int threads = maxConcurrentRecordings * 2 + 1;
             final String channel = "aeron:ipc?term-length=64k";
             final long[] recordingIds = new long[threads];
+            final Counter recordingSessionCounter = archive.context().recordingSessionCounter();
             try (AeronArchive aeronArchive = AeronArchive.connect(aeronArchiveCtx.clone()))
             {
                 for (int i = 0; i < threads; i++)
@@ -1405,6 +1406,7 @@ class ArchiveTest
                         aeron.countersReader(), publication.sessionId(), aeronArchive.archiveId());
                     recordingIds[i] = RecordingPos.getRecordingId(aeron.countersReader(), counterId);
                     aeronArchive.stopRecording(recordedChannel, streamId);
+                    Tests.await(() -> 0 == recordingSessionCounter.getAcquire());
                 }
 
                 int count = 0;
