@@ -40,6 +40,11 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `jackson-dataformat-cbor` 3.3.0.
 * **[C]** Upgrade to `CMake` 4.4.5.
 
+== 1.54.2 (2026-11-11)
+
+* **[Driver]** Update consumer/spyPosition when the local subscriber (IPC)/spy (UDP) is removed from the publication,
+i.e. ensure that the `joinPosition` will be up to date when a new subscriber is added. (https://github.com/aeron-io/aeron/issues/2225[#2225])
+
 == 1.54.1 (2026-11-10)
 
 * **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
@@ -50,8 +55,6 @@ rebuild `recording.log` entries from the metadata alone.
 the iteration threshold (`aeron.udp.channel.transport.poller.iteration.threshold`). (https://github.com/aeron-io/aeron/pull/2209[#2209])
 * **[Driver]** Send the setup message of a response publication as soon as it learns the response subscription's
 address, instead of up to 100ms later when the setup timeout expires. (https://github.com/aeron-io/aeron/pull/2233[#2233])
-* **[Driver]** Update consumer/spyPosition when the local subscriber (IPC)/spy (UDP) is removed from the publication,
-i.e. ensure that the `joinPosition` will be up to date when a new subscriber is added. (https://github.com/aeron-io/aeron/issues/2225[#2225])
 * **[Driver/Java]** On Media Driver startup, save error log in aeron directory's parent rather than aeron directory
 (that is immediately deleted).
 * **[Client/C{plus}{plus} Wrapper]** Add copy and move constructor and assignment for Image for the correct
