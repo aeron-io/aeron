@@ -6,6 +6,8 @@
 
 === Changelog
 
+* **[Cluster]** Fix overlapping elections losing messages and leaving the cluster unavailable or in a diverged state.
+(https://github.com/aeron-io/aeron/pull/2212[#2212])
 * **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
 * **[Cluster]** Add `termBaseLogPosition` to the consensus module/service snapshot metadata in order to be able to
 rebuild `recording.log` entries from the metadata alone.
