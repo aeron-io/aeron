@@ -38,6 +38,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
 * **[Java]** Upgrade to `jackson-dataformat-cbor` 3.3.0.
+* **[Java]** Upgrade to `jgit` 7.8.1.202611041320-r.
 * **[C]** Upgrade to `CMake` 4.4.5.
 
 == 1.54.2 (2026-11-11)
