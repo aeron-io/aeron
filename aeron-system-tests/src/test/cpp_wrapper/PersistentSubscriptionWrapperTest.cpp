@@ -359,6 +359,18 @@ TEST_F(PersistentSubscriptionWrapperTest, shouldCycleThroughMultipleLiveReplayTr
             [&] { return static_cast<int>(fastSub->poll(fastAssembler.handler(), 1)); },
             [&] { return fastCount >= 64; });
 
+        // Let the flood land before the subscription is read. The over-run gate is
+        // `last_overrun_threshold = sm_position + term_length / 2`
+        // (aeron_publication_image.c:983) and the status-message position follows the
+        // subscriber's read position, so a read that lands while the flood is still
+        // arriving raises the threshold, nothing is over-run, and the image never drops.
+        // The subscription still has to be read afterwards -- the image cannot reach
+        // LINGER until every active subscriber has caught up to its `rcv_pos`
+        // (aeron_publication_image.h:291) -- but not until the flood has landed. Where
+        // that is is not observable from the client, so this is a wait, generous against
+        // a 64 KiB flood that lands in well under a millisecond.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
         executeUntil("drops to replaying", poller, [&] { return persistentSubscription->isReplaying(); });
         ASSERT_EQ(cycle + 1, liveLeftCount);
 
