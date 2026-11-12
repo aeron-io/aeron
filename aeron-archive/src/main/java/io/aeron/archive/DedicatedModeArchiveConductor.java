@@ -84,6 +84,16 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
         CloseHelper.close(errorHandler, recorderAgentRunner);
         CloseHelper.close(errorHandler, replayerAgentRunner);
 
+        if (null != recorder)
+        {
+            ((DedicatedModeRecorder)recorder).closeRemainingSessions();
+        }
+
+        if (null != replayer)
+        {
+            ((DedicatedModeReplayer)replayer).closeRemainingSessions();
+        }
+
         while (processCloseQueue() > 0 || !closeQueue.isEmpty())
         {
             Thread.yield();
@@ -92,6 +102,16 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
                 break;
             }
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    void checkSessionWorkers()
+    {
+        checkSessionWorkerRunning(recorderAgentRunner, "recorder");
+        checkSessionWorkerRunning(replayerAgentRunner, "replayer");
     }
 
     @Override
@@ -139,6 +159,14 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
         }
 
         return i;
+    }
+
+    private void checkSessionWorkerRunning(final AgentRunner agentRunner, final String name)
+    {
+        if (agentRunner.isClosed() && !isAbort())
+        {
+            throw new AgentTerminationException("unexpected " + name + " termination");
+        }
     }
 
     static class DedicatedModeRecorder extends Recorder
@@ -212,6 +240,17 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
         protected void preSessionsClose()
         {
             drainSessionsQueue();
+        }
+
+        void closeRemainingSessions()
+        {
+            onClose();
+
+            RecordingSession session;
+            while (null != (session = sessionsQueue.poll()))
+            {
+                closeSession(session);
+            }
         }
 
         /**
@@ -367,6 +406,17 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
         protected void preSessionsClose()
         {
             drainSessionQueue();
+        }
+
+        void closeRemainingSessions()
+        {
+            onClose();
+
+            ReplaySession session;
+            while (null != (session = sessionsQueue.poll()))
+            {
+                closeSession(session);
+            }
         }
 
         /**
