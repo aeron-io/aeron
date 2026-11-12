@@ -23,7 +23,10 @@ import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.status.CountersReader;
 
 import static org.agrona.BitUtil.SIZE_OF_INT;
-import static org.agrona.concurrent.status.CountersReader.*;
+import static org.agrona.concurrent.status.CountersReader.KEY_OFFSET;
+import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
+import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
+import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
 
 /**
  * For allocating and finding cluster associated counters identified by
@@ -116,7 +119,7 @@ public final class ClusterCounters
     {
         final AtomicBuffer buffer = counters.metaDataBuffer();
 
-        for (int i = 0, size = counters.maxCounterId(); i < size; i++)
+        for (int i = 0, maxCounterId = counters.maxCounterId(); i <= maxCounterId; i++)
         {
             final int counterState = counters.getCounterState(i);
 
@@ -134,7 +137,7 @@ public final class ClusterCounters
             }
         }
 
-        return Aeron.NULL_VALUE;
+        return NULL_COUNTER_ID;
     }
 
     /**
