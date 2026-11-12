@@ -100,14 +100,6 @@ jobs:
           sarif_file: sarif-results/${{ matrix.language }}.sarif
           wait-for-processing: true
 
-      # optional: for debugging the uploaded sarif
-      - name: Upload loc as a Build Artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: sarif-results-${{ matrix.language }}
-          path: sarif-results
-          retention-days: 1
-
       - name: Dismiss alerts
         if: github.ref == 'refs/heads/master'
         uses: advanced-security/dismiss-alerts@046d6b48d2e43cf563f96f67332c47c432eff83e # v2.0.2
@@ -116,3 +108,12 @@ jobs:
           sarif-file: sarif-results/${{ matrix.language }}.sarif
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+      # optional: for debugging the uploaded sarif
+      - name: Upload loc as a Build Artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sarif-results-${{ matrix.language }}
+          path: sarif-results
+          retention-days: 1
