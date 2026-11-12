@@ -83,8 +83,8 @@ public class SystemTestWatcher implements
     public static final Predicate<String> CLUSTER_TERMINATION_FILTER =
         (s) -> s.contains(CLUSTER_TERMINATION_EXCEPTION);
     public static final Predicate<String> ATS_GCM_DECRYPT_ERROR_FILTER =
-        (s) -> s.contains("ats_gcm_decrypt final_ex: error:00000000:lib(0)::reason(0)") ||
-            s.contains("ats_gcm_decrypt final_ex: error:1C800064:Provider routines::bad decrypt");
+        (s) -> s.contains("final_ex: error:00000000:lib(0)::reason(0)") ||
+            s.contains("final_ex: error:1C800064:Provider routines::bad decrypt");
     public static final Predicate<String> TEST_CLUSTER_DEFAULT_LOG_FILTER =
         WARNING_FILTER.negate()
         .and(CLUSTER_TERMINATION_FILTER.negate())
