@@ -303,6 +303,11 @@ class Election
         {
             consensusModuleAgent.updateMemberLogPosition(follower, logLeadershipTermId, logPosition);
 
+            if (leadershipTermId > this.leadershipTermId && Cluster.Role.LEADER == consensusModuleAgent.role())
+            {
+                throw new ClusterEvent("potential new election in progress");
+            }
+
             if (logLeadershipTermId < this.leadershipTermId)
             {
                 if (Cluster.Role.LEADER == consensusModuleAgent.role())
@@ -318,9 +323,14 @@ class Election
             }
             else if (logLeadershipTermId > this.leadershipTermId)
             {
-                if (Cluster.Role.LEADER == consensusModuleAgent.role())
+                switch (state)
                 {
-                    throw new ClusterEvent("potential new election in progress");
+                    case LEADER_LOG_REPLICATION:
+                    case LEADER_READY:
+                        throw new ClusterEvent("potential new election in progress");
+
+                    default:
+                        break;
                 }
             }
         }
