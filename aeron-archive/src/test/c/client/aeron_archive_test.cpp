@@ -5266,8 +5266,8 @@ TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsW
     aeron_archive_context_set_delegating_invoker(context, test_invoker, &invoker_data);
 
     EXPECT_EQ(-1, aeron_archive_context_conclude(context));
-    EXPECT_EQ(-AERON_CLIENT_ERROR_CLIENT_ILLEGAL_STATE, aeron_errcode());
-    EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("client must be closed and discarded"));
+    EXPECT_EQ(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
+    EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("(-1000) driver timeout"));
 
     EXPECT_EQ(0, aeron_close(client));
     EXPECT_EQ(0, aeron_context_close(aeron_context));
