@@ -439,8 +439,6 @@ from the cache. That gain is PR 2's; on CI it depends on whether the cache survi
 
 **Left over:**
 
-- `topologyTest` no longer runs anything: `master` removed `ClusterNetworkTopologyTest` and its CI steps
-  (`432da44f7a`). Remove it with the test task tidy-up (5d).
 - C validation output shows absolute paths since PR 3 (see "Reworking PR 3"); the tasks have no outputs and always
   exit 0.
 - Step 5's optional clean-ups (5f dropped) and step 6 (CI and test speed) are not started.
