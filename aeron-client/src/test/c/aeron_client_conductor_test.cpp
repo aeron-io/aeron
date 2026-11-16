@@ -1208,23 +1208,22 @@ TEST_F(ClientConductorTest, shouldCreateServiceIntervalTimeoutError)
     ASSERT_EQ(-AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, aeron_errcode());
 }
 
-TEST_F(ClientConductorTest, shouldFreeRegisteredResourcesOnTimeout)
+TEST_F(ClientConductorTest, shouldStopPollingAsyncResourceIfConductorIsClosed)
 {
-    int errorcode = 0;
-    m_conductor.error_handler_clientd = &errorcode;
-    m_conductor.error_handler = save_last_errorcode;
-
     aeron_async_add_publication_t *async = nullptr;
     EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
     EXPECT_EQ(AERON_CLIENT_REGISTRATION_STATUS_AWAITING, async->registration_status);
 
-    doWork();
-    ASSERT_EQ(-1, doWorkForNs(CLIENT_LIVENESS_TIMEOUT + 1, false, CLIENT_LIVENESS_TIMEOUT + 1));
+    m_conductor.fatal_error_code = AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT;
+    m_conductor.is_closed = true;
 
-    ASSERT_EQ(AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, errorcode);
-    ASSERT_EQ(-AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, aeron_errcode());
-    EXPECT_EQ(AERON_CLIENT_REGISTRATION_STATUS_ERRORED, async->registration_status);
-    ASSERT_EQ(AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, async->error_code);
+    aeron_publication_t *publication = nullptr;
+    EXPECT_EQ(-1, aeron_client_conductor_async_resource_poll(
+        reinterpret_cast<void **>(&publication), AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION, async));
+
+    EXPECT_EQ(-AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, aeron_errcode());
+    EXPECT_EQ(AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED, async->registration_status);
+    EXPECT_EQ(0, async->error_code);
 }
 
 TEST_F(ClientConductorTest, shouldCreateDriverTimeoutError)
