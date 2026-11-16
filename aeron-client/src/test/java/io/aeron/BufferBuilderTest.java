@@ -103,6 +103,18 @@ class BufferBuilderTest
     }
 
     @ParameterizedTest
+    @CsvSource({"0,0", "10,5", "20,20", "100,99", "111,111"})
+    void shouldLimitBufferUpToCapacity(final int capacity, final int limit)
+    {
+        final BufferBuilder builder = new BufferBuilder(capacity);
+        builder.limit(limit);
+
+        assertEquals(capacity, builder.capacity());
+        assertEquals(limit, builder.limit());
+        assertEquals(capacity, builder.buffer().capacity());
+    }
+
+    @ParameterizedTest
     @ValueSource(ints = { -1, Integer.MAX_VALUE, Integer.MAX_VALUE - 7 })
     void shouldThrowIllegalArgumentExceptionIfInitialCapacityIsOutOfRange(final int initialCapacity)
     {
@@ -113,7 +125,7 @@ class BufferBuilderTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { -1, 65, 1000000 })
+    @ValueSource(ints = { -1, 1, 65, 1000000 })
     void shouldThrowIllegalArgumentExceptionIfLimitIsOutOfRange(final int limit)
     {
         final BufferBuilder builder = new BufferBuilder(0);

@@ -129,7 +129,7 @@ public final class BufferBuilder
      */
     public void limit(final int limit)
     {
-        if (limit < 0 || limit >= buffer.capacity())
+        if (limit < 0 || limit > buffer.capacity())
         {
             throw new IllegalArgumentException(
                 "limit outside range: capacity=" + buffer.capacity() + " limit=" + limit);
