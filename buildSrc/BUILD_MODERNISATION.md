@@ -171,6 +171,8 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 | 6e | Look at the slowest tests found in 6a. | ☐ |
 | 6f | A remote build cache for CI (e.g. Develocity, which has an open-source programme and also brings build scans), so CI can reuse task outputs, including test results, for modules a pull request didn't affect. | ☐ |
 | 6g | Configure an encryption key for `gradle/actions/setup-gradle`, so CI restores configuration cache entries between runs. | ☐ |
+| 6h | Retry `add-apt-repository` in the C++ jobs' "Install compiler" step, which fails intermittently on network errors. | ☐ |
+| 6i | Stop "Remove small temp file system" failing when the file system was never mounted, so a failed install shows one red step, not two. | ☐ |
 
 ## Delivery: four pull requests
 
@@ -386,6 +388,9 @@ Whenever a lower one is rebased or merged, the ones above it need rebasing in tu
   - check that any new CI workflow changes don't add Gradle commands the branch must support.
 - **Switching between branches** with and without PR 4's per-task test-codec folders needs a `clean`. Otherwise
   `compileGeneratedTestJava` on the old layout reports "duplicate class".
+- **`git rebase --update-refs` skips branches checked out in another worktree,** without saying so. Rebasing
+  `build-wiring` with `--update-refs` left `build-restructure` behind when it was checked out in the main worktree.
+  Check every branch's SHA after the rebase, and move a skipped one in its own worktree (`git reset --keep`).
 
 ### Merged: final results (November 2026)
 
@@ -439,6 +444,10 @@ from the cache. That gain is PR 2's; on CI it depends on whether the cache survi
 
 **Left over:**
 
+- **CodeQL alert 3206** (open on `master`): `BuildJavaVersion.major()` doesn't catch the `NumberFormatException` from
+  `Integer.parseInt`. PR 3 moved this parsing from the root Groovy script, which CodeQL doesn't analyse, into Java,
+  which it does. Behaviour is unchanged: the Groovy code made the same `Integer.parseInt` call, so a malformed
+  `BUILD_JAVA_VERSION` failed the build the same way. Either throw a `GradleException` naming the variable, or dismiss the alert as "won't fix".
 - C validation output shows absolute paths since PR 3 (see "Reworking PR 3"); the tasks have no outputs and always
   exit 0.
 - Step 5's optional clean-ups (5f dropped) and step 6 (CI and test speed) are not started.
@@ -1320,6 +1329,13 @@ jobs:
   `7c026d38a0` on the performance PR). A shared remote cache would let CI skip tests in modules a pull request didn't
   change. Develocity's open-source programme could provide it, together with build scans, which would also help with
   6a and 6e.
+- **6h, retry adding the compiler PPA:** C++ jobs fail intermittently in "Install compiler", before any build runs,
+  because `add-apt-repository -y ppa:ubuntu-toolchain-r/test` can't reach Launchpad (`Network is unreachable`,
+  `Connection timed out`; seen on PR 4's runs and `master`'s run 43045642813, November 2026). `Acquire::Retries` only
+  covers apt downloads, not this API call. A retry loop around it would stop these false failures.
+- **6i, no second red step after a failed install:** when "Install compiler" fails, "Remove small temp file system"
+  fails too: it runs `if: always()` and unmounts a file system that was never mounted. Guarding it on the mount
+  existing would leave only the real failure in the job.
 
 ### Native-binary test runs and the build cache (found in review of PR #2215)
 
