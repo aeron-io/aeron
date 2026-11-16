@@ -175,7 +175,7 @@ Compare `publishToMavenLocal` output and POMs before and after each structural s
 ## Delivery: four pull requests
 
 This branch is the full record of the work: every detour, measurement and decision, in 26+ commits that each also
-update this file. That is too much for a maintainer to review. So the work is being delivered as four smaller pull
+update this file. That is too much for a maintainer to review. So the work was delivered as four smaller pull
 requests, each built fresh from `master` (or on the previous one), going straight to the final design without the
 detours, and without this notes file.
 
@@ -215,8 +215,10 @@ question that per-step comparisons left open.
 |---|---|---|---|
 | 1. Bug fixes | `build-bug-fixes` (deleted after merge) | 3 commits, 9 lines of `build.gradle`: the cluster node-state schema as a `generateCodecs` input; `generateConfigDoc`/`validate*Expectations` depending on `compileJava` (via `files(...).builtBy(...)`); the test jar classifier using the property's value (`test-<module>`) | **Merged** as #2216, squash-merged into `b77aff82b4` |
 | 2. Faster builds | `build-performance` | 8 commits: compiler arguments as inputs and a shared git SHA service; build cache on; Javadoc links task; `TutorialPublishTask`; signing decided during configuration; one test task at a time; configuration cache on; no caching of native-binary test runs | **Merged** as #2215 on 3 November, squash-merged into `c4c95b1a7f` |
-| 3. Restructure | `build-restructure` | 7 commits on `master`: `aeron.publishing`; typed `GenerateSbeCodecs`; config doc and C validation plugins; a build file per module; `aeron.java-conventions` as a straight move; split into Java, test and Javadoc conventions; tidy-ups. See "Reworking PR 3" | Reworked and verified (`bb6fc6f625`); PR to be opened |
-| 4. Wiring tidy-up | `build-wiring` | 6 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants; a tidy-up. See "Rebuilding PR 4" | Rebuilt on the reworked PR 3 and verified (`41fe966729`); on top of PR 3 |
+| 3. Restructure | `build-restructure` (deleted after merge) | 7 commits on `master`: `aeron.publishing`; typed `GenerateSbeCodecs`; config doc and C validation plugins; a build file per module; `aeron.java-conventions` as a straight move; split into Java, test and Javadoc conventions; tidy-ups. See "Reworking PR 3" | **Merged** as #2241 on 10 November, squash-merged into `b48d96f8ce` |
+| 4. Wiring tidy-up | `build-wiring` (deleted after merge) | 6 commits on PR 3: test codecs in their own folders; generated codecs wired through source set outputs (option B); only archive shares a test jar; Javadoc and `aeron-all` sources through the `mainSourceElements` variant; `testReport` through test-results variants; a tidy-up. See "Rebuilding PR 4" | **Merged** as #2247 on 16 November, squash-merged into `5490cb062d` |
+
+All four pull requests are merged. See "Merged: final results" for the last checks and measurements.
 
 PR 1 started as part of PR 2's branch, then was rebased onto `master` so it could be reviewed and merged on its own.
 The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be enabled correctly without it.
@@ -257,8 +259,8 @@ The stale git SHA fix moved from PR 1 to PR 2, because the build cache can't be 
 
 After PR 2 merged, PR 3 was rebased onto `master` (`7ecfd1a1ed`), then reviewed commit by commit for readability and
 rebuilt on a new branch, which then replaced `build-restructure` (5 November). Each commit was checked before the
-next was added. The previous versions are kept locally as tags `backup/build-restructure-2026-11-04` and
-`backup/build-wiring-2026-11-04`.
+next was added. The previous versions were kept locally as tags `backup/build-restructure-2026-11-04` and
+`backup/build-wiring-2026-11-04` until both PRs were ready, then deleted (11 November).
 
 **Rebase after the squash merge.** PR 2's squash commit `c4c95b1a7f` was first confirmed identical to the combined diff
 of its 8 commits, then those commits were dropped with `git rebase --onto origin/master <last PR 2 commit>`.
@@ -385,6 +387,64 @@ Whenever a lower one is rebased or merged, the ones above it need rebasing in tu
 - **Switching between branches** with and without PR 4's per-task test-codec folders needs a `clean`. Otherwise
   `compileGeneratedTestJava` on the old layout reports "duplicate class".
 
+### Merged: final results (November 2026)
+
+**Rebases before merging.** Each time `master` moved, the open branch was rebased, and checked: `git range-diff`
+showed every commit unchanged, and published artifacts were identical to the new `master` (41 files).
+
+- PR 3 was rebased twice on 10 November (onto `a62440f2fb`, then `432da44f7a`) and merged from `23aa932067`.
+- After PR 3 merged, PR 4 was rebased onto `master` with PR 3's 7 commits dropped (11 November). The squash commit
+  `b48d96f8ce` has the same patch ID as PR 3's combined diff, so nothing was lost. PR 4 was rebased once more
+  (16 November, onto `88ee208143`) and merged from `ecc5e771c9`.
+- `master`'s build changes in that time: Gradle 9.9.0 and library bumps, `@Override` on two `buildSrc` classes, and a
+  `jgit` bump. None touched the files these PRs change.
+
+**CI:**
+
+- PR 3 at `23aa932067` (run 42837471382): all jobs passed.
+- PR 4 at `a595cd588f` (run 43062012906) and #2247's own runs at `ecc5e771c9` (43861969370, and Low Cadence
+  43861969393): all Java jobs passed. Some C++ jobs failed in "Install compiler", before any build ran:
+  `add-apt-repository` couldn't reach Launchpad (`Network is unreachable`, `Connection timed out`). `master`'s run
+  43045642813 failed the same way, and its next runs passed, so these are runner network problems.
+
+**Performance: alternate the branches.** The 5 November run showed PR 3 7–13% slower than `master`. That was run-order
+bias: PR 3 was always measured second. With the two clones alternating on every run (`bench-alt.sh`), the difference
+disappeared. Medians of 5, seconds; the two runs were on different days, so compare within a run only:
+
+| Scenario | `master` `432da44f7a` | PR 3 | `master` `aed559594a` (has PR 3) | PR 4 |
+|---|---|---|---|---|
+| Configuration only (`help`) | 0.93 | 0.96 | 0.98 | 0.90 |
+| Clean `assemble`, no build cache | 7.45 | 7.54 | 8.09 | 7.62 |
+| Clean `assemble`, build cache | 3.93 | 3.66 | 3.68 | 3.68 |
+| No-op `assemble` | 1.91 | 1.94 | 2.06 | 2.12 |
+| Client class edit, `assemble` | 1.83 | 1.82 | 2.15 | 2.00 |
+| Clean `javadoc`, no build cache | 24.57 | 24.26 | 26.61 | 26.20 |
+| Change to compiled code in `buildSrc`, then `help` | 2.96 | **1.89** | 2.32 | 2.04 |
+
+Everything is within noise except PR 3's faster recompile of build logic (−36%). PR 4 changes no timings.
+
+**Before PR 1 against the finished build, with tests.** CI's build (`clean build -x javadoc`, with `--continue`), on
+`454f05e857` (the commit before PR 1) and on PR 4 (`a595cd588f`), alternating, 3 runs each (`bench-tests.sh`). All
+12 runs passed with no test failures; both ran the same 7 test tasks (4,060 and 4,068 tests). Seconds:
+
+| | Before PR 1 | PR 4 |
+|---|---|---|
+| No build cache, runs 1–3 | 372, 374, 374 | 369, 369, 368 |
+| Build cache, run 1 | 372 | 368 |
+| Build cache, runs 2–3 | 372, 373 | **12, 12** |
+
+With every test running, the time is the same: almost all of it is the tests, which none of the PRs changed. With the
+build cache, a repeat build of unchanged code takes 12 seconds instead of 6 minutes, because all 7 test tasks come
+from the cache. That gain is PR 2's; on CI it depends on whether the cache survives between runs.
+
+**Left over:**
+
+- `topologyTest` no longer runs anything: `master` removed `ClusterNetworkTopologyTest` and its CI steps
+  (`432da44f7a`). Remove it with the test task tidy-up (5d).
+- C validation output shows absolute paths since PR 3 (see "Reworking PR 3"); the tasks have no outputs and always
+  exit 0.
+- Step 5's optional clean-ups (5f dropped) and step 6 (CI and test speed) are not started.
+
 ### Verification tools
 
 These are kept outside version control, so they never end up in a commit:
@@ -397,7 +457,9 @@ These are kept outside version control, so they never end up in a commit:
   - `gen.zsh`: generated-codec capture.
   - `overlap.py`: test task overlap from JUnit timestamps.
   - `cpdiff.py`: element-level classpath differences.
-  - `bench.sh`: benchmarks.
+  - `bench.sh`: benchmarks, one branch after the other (superseded by `bench-alt.sh`).
+  - `bench-alt.sh <master-clone> <pr-clone> <out>`: the same scenarios, alternating the two clones on every run.
+  - `bench-tests.sh <base-clone> <pr-clone> <out> <logdir>`: CI's build with tests, alternating, with per-run logs.
 - **`~/Library/Caches/aeron-build-verify/`:** the exports and benchmark clones.
 
 Two lessons about the tools, both from false alarms:
