@@ -1322,12 +1322,6 @@ static void aeron_client_conductor_force_close_resources(
     aeron_client_conductor_t *conductor, int error_code, const char* error_message)
 {
     conductor->fatal_error_code = error_code;
-    conductor->error_handler(conductor->error_handler_clientd, error_code, error_message);
-
-    /*
-     * loop will be terminating. So, will not process lingering, etc. Let the aeron_close() cleanup
-     * everything when the app is ready, but we want to mark everything as closed so that it won't be used.
-     */
     AERON_SET_RELEASE(conductor->is_closed, true);
 
     aeron_array_to_ptr_hash_map_for_each(
@@ -1335,18 +1329,7 @@ static void aeron_client_conductor_force_close_resources(
     aeron_int64_to_ptr_hash_map_for_each(
         &conductor->resource_by_id_map, aeron_client_conductor_force_close_resource, NULL);
 
-    size_t error_message_length = strlen(error_message);
-    for (size_t i = 0, size = conductor->registering_resources.length; i < size; i++)
-    {
-        aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        aeron_client_registration_status_t status;
-        AERON_GET_ACQUIRE(status, resource->registration_status);
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status)
-        {
-            aeron_client_conductor_on_resource_registration_error(
-                resource, error_code, error_message_length, error_message);
-        }
-    }
+    conductor->error_handler(conductor->error_handler_clientd, error_code, error_message);
 
     aeron_err_clear();
     AERON_SET_ERR(-conductor->fatal_error_code, "%s", error_message);
@@ -3796,6 +3779,19 @@ int aeron_client_conductor_async_resource_poll(
     {
         case AERON_CLIENT_REGISTRATION_STATUS_AWAITING:
         {
+            if (NULL != async->command_base.item)
+            {
+                aeron_client_conductor_t *conductor = (aeron_client_conductor_t *)async->command_base.item;
+                if (aeron_client_conductor_is_closed(conductor))
+                {
+                    AERON_SET_ERR(
+                        -conductor->fatal_error_code,
+                        "async_add_%s registration error: client conductor is being shutdown",
+                        aeron_client_conductor_managed_resource_type_to_string(resource_type));
+                    AERON_SET_RELEASE(async->registration_status, AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED);
+                    return -1;
+                }
+            }
             return 0;
         }
 
