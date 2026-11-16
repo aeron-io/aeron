@@ -22,16 +22,21 @@ import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
+import io.aeron.cluster.codecs.AdminRequestType;
+import io.aeron.cluster.codecs.AdminResponseCode;
+import io.aeron.cluster.codecs.AdminResponseEncoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeaderEventEncoder;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.BufferClaim;
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.Header;
 import io.aeron.protocol.DataHeaderFlyweight;
 import org.agrona.DirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.NoOpIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,9 +49,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static org.agrona.BitUtil.align;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,6 +65,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class AeronClusterTest
@@ -81,6 +91,7 @@ class AeronClusterTest
     private final ExclusivePublication ingressPublication = mock(ExclusivePublication.class);
     private final Subscription egressSubscription = mock(Subscription.class);
     private final Image egressImage = mock(Image.class);
+    private final Header header = new Header(0, 0, egressImage);
     private AeronCluster aeronCluster;
     private long nanoTime;
     private int leadershipTermId = 2;
@@ -107,6 +118,7 @@ class AeronClusterTest
 
                 final int offset = DataHeaderFlyweight.HEADER_LENGTH;
                 FrameDescriptor.frameFlags(buffer, 0, FrameDescriptor.UNFRAGMENTED);
+                header.buffer(buffer).offset(0);
 
                 final NewLeaderEventEncoder newLeaderEventEncoder = new NewLeaderEventEncoder();
                 newLeaderEventEncoder.wrapAndApplyHeader(buffer, offset, new MessageHeaderEncoder());
@@ -116,9 +128,6 @@ class AeronClusterTest
                 newLeaderEventEncoder.ingressEndpoints(INGRESS_ENDPOINTS);
 
                 final int length = MessageHeaderEncoder.ENCODED_LENGTH + newLeaderEventEncoder.encodedLength();
-
-                final Header header = new Header(0, 0, egressImage);
-                header.buffer(buffer);
 
                 final FragmentHandler handler = invocation.getArgument(0, FragmentHandler.class);
                 handler.onFragment(buffer, offset, length, header);
@@ -301,6 +310,143 @@ class AeronClusterTest
         verify(ingressPublication).close();
         assertEquals(1, aeronCluster.pollStateChanges());
         assertTrue(aeronCluster.isClosed());
+    }
+
+    @Test
+    void shouldDelegateUnknownSchemaMessagesToEgressListenerExtension()
+    {
+        final EgressListenerExtension egressListenerExtension = mock(EgressListenerExtension.class);
+        aeronCluster.egressListenerExtension(egressListenerExtension);
+
+        final MutableInteger encodedLength = new MutableInteger();
+        when(egressSubscription.poll(any(FragmentHandler.class), anyInt())).thenAnswer(invocation ->
+        {
+            final FragmentHandler fragmentHandler = invocation.getArgument(0);
+
+            final int offset = 0;
+            encodedLength.set(encodeAdminRespinseWithWrongSchema(offset));
+            fragmentHandler.onFragment(buffer, offset + HEADER_LENGTH, encodedLength.get(), header);
+
+            return 1;
+        });
+
+        assertEquals(1, aeronCluster.pollEgress());
+
+        assertNotEquals(0, encodedLength.get());
+        verify(egressListenerExtension).onExtensionMessage(
+            AdminResponseEncoder.BLOCK_LENGTH,
+            AdminResponseEncoder.TEMPLATE_ID,
+            AdminResponseEncoder.SCHEMA_ID + 5,
+            AdminResponseEncoder.SCHEMA_VERSION,
+            buffer,
+            HEADER_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH,
+            encodedLength.get() - MessageHeaderEncoder.ENCODED_LENGTH);
+        verifyNoInteractions(egressListener);
+    }
+
+    @Test
+    void shouldThrowClusterExceptionIfInvalidSchemaAndEgressListenerExtensionIsNotSet()
+    {
+        aeronCluster.egressListenerExtension(null);
+
+        final MutableInteger encodedLength = new MutableInteger();
+        when(egressSubscription.poll(any(FragmentHandler.class), anyInt())).thenAnswer(invocation ->
+        {
+            final FragmentHandler fragmentHandler = invocation.getArgument(0);
+
+            final int offset = 64;
+            encodedLength.set(encodeAdminRespinseWithWrongSchema(offset));
+            fragmentHandler.onFragment(buffer, offset + HEADER_LENGTH, encodedLength.get(), header);
+
+            return 1;
+        });
+
+        final ClusterException exception = assertThrowsExactly(ClusterException.class, aeronCluster::pollEgress);
+        assertEquals("ERROR - expected cluster egress schemaId=111 actual=116", exception.getMessage());
+        verifyNoInteractions(egressListener);
+    }
+
+    @Test
+    void shouldDelegateUnknownSchemaMessagesToControlledEgressListenerExtension()
+    {
+        final ControlledEgressListenerExtension egressListenerExtension = mock(ControlledEgressListenerExtension.class);
+        aeronCluster.controlledEgressListenerExtension(egressListenerExtension);
+
+        final int offset = 32;
+        final MutableInteger encodedLength = new MutableInteger();
+        when(egressSubscription.controlledPoll(any(ControlledFragmentHandler.class), anyInt())).thenAnswer(invocation ->
+        {
+            final ControlledFragmentHandler fragmentHandler = invocation.getArgument(0);
+
+            encodedLength.set(encodeAdminRespinseWithWrongSchema(offset));
+            fragmentHandler.onFragment(buffer, offset + HEADER_LENGTH, encodedLength.get(), header);
+
+            return 1;
+        });
+
+        assertEquals(1, aeronCluster.controlledPollEgress());
+
+        assertNotEquals(0, encodedLength.get());
+        verify(egressListenerExtension).onExtensionMessage(
+            AdminResponseEncoder.BLOCK_LENGTH,
+            AdminResponseEncoder.TEMPLATE_ID,
+            AdminResponseEncoder.SCHEMA_ID + 5,
+            AdminResponseEncoder.SCHEMA_VERSION,
+            buffer,
+            offset + HEADER_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH,
+            encodedLength.get() - MessageHeaderEncoder.ENCODED_LENGTH);
+        verifyNoInteractions(egressListener);
+    }
+
+    @Test
+    void shouldThrowClusterExceptionIfInvalidSchemaAndControlledEgressListenerExtensionIsNotSet()
+    {
+        aeronCluster.controlledEgressListenerExtension(null);
+
+        final int offset = 0;
+        final MutableInteger encodedLength = new MutableInteger();
+        when(egressSubscription.controlledPoll(any(ControlledFragmentHandler.class), anyInt())).thenAnswer(invocation ->
+        {
+            final ControlledFragmentHandler fragmentHandler = invocation.getArgument(0);
+
+            encodedLength.set(encodeAdminRespinseWithWrongSchema(offset));
+            fragmentHandler.onFragment(buffer, offset + HEADER_LENGTH, encodedLength.get(), header);
+
+            return 1;
+        });
+
+        final ClusterException exception =
+            assertThrowsExactly(ClusterException.class, aeronCluster::controlledPollEgress);
+        assertEquals("ERROR - expected cluster egress schemaId=111 actual=116", exception.getMessage());
+        verifyNoInteractions(egressListener);
+    }
+
+    private int encodeAdminRespinseWithWrongSchema(final int offset)
+    {
+        final DataHeaderFlyweight headerFlyweight = new DataHeaderFlyweight();
+        headerFlyweight.wrap(buffer, offset, HEADER_LENGTH);
+        headerFlyweight.flags(BEGIN_AND_END_FLAGS);
+
+        header.buffer(buffer).offset(offset);
+
+        new MessageHeaderEncoder()
+            .wrap(buffer, offset + HEADER_LENGTH)
+            .blockLength(AdminResponseEncoder.BLOCK_LENGTH)
+            .templateId(AdminResponseEncoder.TEMPLATE_ID)
+            .schemaId(AdminResponseEncoder.SCHEMA_ID + 5) // unknown schemaId
+            .version(AdminResponseEncoder.SCHEMA_VERSION);
+
+        final AdminResponseEncoder encoder =
+            new AdminResponseEncoder()
+                .wrap(buffer, offset + HEADER_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH)
+                .clusterSessionId(aeronCluster.clusterSessionId())
+                .correlationId(System.nanoTime())
+                .requestType(AdminRequestType.SNAPSHOT)
+                .responseCode(AdminResponseCode.ERROR)
+                .message("something failed badly")
+                .putPayload(new byte[]{ 1, 2, 3 }, 0, 3);
+
+        return MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength();
     }
 
     private void makeIngressPublicationReturn(final long result)

@@ -848,9 +848,9 @@ public final class AeronCluster implements AutoCloseable
         final int schemaId = messageHeaderDecoder.schemaId();
         final int templateId = messageHeaderDecoder.templateId();
 
-        if (schemaId != MessageHeaderDecoder.SCHEMA_ID)
+        if (MessageHeaderDecoder.SCHEMA_ID != schemaId)
         {
-            if (egressListenerExtension != null)
+            if (null != egressListenerExtension)
             {
                 egressListenerExtension.onExtensionMessage(
                     messageHeaderDecoder.blockLength(),
@@ -860,6 +860,7 @@ public final class AeronCluster implements AutoCloseable
                     buffer,
                     offset + MessageHeaderDecoder.ENCODED_LENGTH,
                     length - MessageHeaderDecoder.ENCODED_LENGTH);
+                return;
             }
             else
             {
@@ -990,7 +991,7 @@ public final class AeronCluster implements AutoCloseable
         final int schemaId = messageHeaderDecoder.schemaId();
         final int templateId = messageHeaderDecoder.templateId();
 
-        if (schemaId != MessageHeaderDecoder.SCHEMA_ID)
+        if (MessageHeaderDecoder.SCHEMA_ID != schemaId)
         {
             if (null != controlledEgressListenerExtension)
             {
