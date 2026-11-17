@@ -73,10 +73,8 @@ jobs:
           sudo nft list hooks ip
           sudo lsmod | grep -E 'nf_nat|nf_conntrack'
           sudo iptables -t nat -F
-          sudo rmmod nf_defrag_ipv6
-          sudo rmmod nf_defrag_ipv4
+          sudo rmmod nf_nat
           sudo rmmod nf_conntrack
-          sudo modprobe -r nf_nat
           sudo nft list hooks ip
 #          cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --no-tests --no-unit-tests
 #      - name: Remove small temp file system
