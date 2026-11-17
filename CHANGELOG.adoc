@@ -6,6 +6,8 @@
 
 === Changelog
 
+* **[Client/Java]** Fix `BufferBuilder` limit validation to allow setting limit equal to capacity.
+(https://github.com/aeron-io/aeron/pull/2246[#2246])
 * **[Client/C]** Stop polling for async resources if client conductor is being shutdown.
 (https://github.com/aeron-io/aeron/issues/2245[#2245])
 * **[Cluster]** Exit after invoking `EgressListenerExtension` when dealing with unknown schema messages in
@@ -50,6 +52,8 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.3 (unreleased)
 
+* **[Client/Java]** Fix `BufferBuilder` limit validation to allow setting limit equal to capacity.
+(https://github.com/aeron-io/aeron/pull/2246[#2246])
 * **[Client/C]** Stop polling for async resources if client conductor is being shutdown.
 (https://github.com/aeron-io/aeron/issues/2245[#2245])
 * **[Cluster]** Exit after invoking `EgressListenerExtension` when dealing with unknown schema messages in
