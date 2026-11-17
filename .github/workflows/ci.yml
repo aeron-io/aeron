@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [ '11', '12', '13', '14', '15', '16' ]
+        version: [ '16' ]
     env:
       CC: gcc-${{ matrix.version }}
       CXX: g++-${{ matrix.version }}
@@ -72,7 +72,12 @@ jobs:
         run: |
           sudo nft list hooks ip
           sudo iptables -t nat -F
-          sudo modprobe -r nf_nat
+          sudo conntrack -F
+          sudo lsmod | grep -E 'nf_nat|nf_conntrack'
+          sudo rmmod nf_defrag_ipv6
+          sudo rmmod nf_defrag_ipv4
+          sudo rmmod nf_conntrack
+          sudo rmmod nf_nat
           sudo nft list hooks ip
           cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --no-tests --no-unit-tests
       - name: Remove small temp file system
