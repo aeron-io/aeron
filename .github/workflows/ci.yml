@@ -73,6 +73,8 @@ jobs:
           sudo nft list hooks ip
           sudo lsmod | grep -E 'nf_nat|nf_conntrack'
           sudo iptables -t nat -F
+          sudo rmmod nft_chain_nat
+          sudo rmmod xt_MASQUERADE
           sudo rmmod nf_nat
           sudo rmmod nf_conntrack
           sudo nft list hooks ip
