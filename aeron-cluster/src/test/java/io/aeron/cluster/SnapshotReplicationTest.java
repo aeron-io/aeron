@@ -46,6 +46,7 @@ class SnapshotReplicationTest
         when(archive.context()).thenReturn(mockContext);
         when(mockContext.aeron()).thenReturn(mockAeron);
         when(mockAeron.nextCorrelationId()).thenReturn(correlationId);
+        when(mockAeron.nextSessionId()).thenCallRealMethod();
     }
 
     @Test

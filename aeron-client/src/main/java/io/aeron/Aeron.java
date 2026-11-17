@@ -524,6 +524,32 @@ public final class Aeron implements AutoCloseable
     }
 
     /**
+     * Get the next session id that is unique for the connected media driver across all streams.
+     * <p>
+     * Unlike {@link #nextSessionId(int)}, the id is not checked against the session ids the media driver allocates for
+     * publications.
+     * <p>
+     * Use this instead of casting {@link #nextCorrelationId()} to an int: the cast can yield {@link #NULL_VALUE},
+     * which Aeron treats as no session id.
+     * <p>
+     * This method is thread safe and will work across processes that all use the same media driver.
+     *
+     * @return next session id that is unique for the media driver, never {@link #NULL_VALUE}.
+     * @since 1.55.0
+     */
+    public int nextSessionId()
+    {
+        int sessionId;
+        do
+        {
+            sessionId = (int)nextCorrelationId();
+        }
+        while (NULL_VALUE == sessionId);
+
+        return sessionId;
+    }
+
+    /**
      * Get the {@link CountersReader} for the Aeron media driver counters.
      *
      * @return new {@link CountersReader} for the Aeron media driver in use.

@@ -204,7 +204,7 @@ final class MultipleRecordingReplication implements AutoCloseable
             .stopPosition(recordingInfo.stopPosition)
             .replicationChannel(replicationChannel)
             .srcResponseChannel(srcResponseChannel)
-            .replicationSessionId((int)archive.context().aeron().nextCorrelationId());
+            .replicationSessionId(archive.context().aeron().nextSessionId());
 
         recordingReplication = new RecordingReplication(
             archive,
