@@ -525,7 +525,8 @@ public final class ArchiveTool
 
     /**
      * Dump the contents of an {@link Archive} so it can be inspected or debugged. Each recording will have its
-     * contents dumped up to fragmentCountLimit before requesting to continue.
+     * contents dumped up to fragmentCountLimit before requesting to continue. Recordings which are not
+     * {@link RecordingState#VALID} only have their descriptor printed.
      *
      * @param out                               to which the contents will be printed.
      * @param archiveDir                        containing the {@link Archive}.
@@ -1194,6 +1195,13 @@ public final class ArchiveTool
         out.println("  stream length: " + (NULL_POSITION == stopPosition ? NULL_POSITION : streamLength));
         out.println(header);
         out.println(descriptor);
+
+        final RecordingState state = header.state();
+        if (VALID != state)
+        {
+            out.println("(recordingId=" + descriptor.recordingId() + ") skipping data: " + state);
+            return;
+        }
 
         if (0 == streamLength)
         {
