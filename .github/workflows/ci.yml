@@ -71,30 +71,29 @@ jobs:
       - name: Build
         run: |
           sudo nft list hooks ip
-          sudo iptables -t nat -F
-          sudo conntrack -F
           sudo lsmod | grep -E 'nf_nat|nf_conntrack'
-          sudo rmmod nf_defrag_ipv6
-          sudo rmmod nf_defrag_ipv4
-          sudo rmmod nf_conntrack
-          sudo rmmod nf_nat
-          sudo nft list hooks ip
-          cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --no-tests --no-unit-tests
-      - name: Remove small temp file system
-        if: always()
-        run: |
-          sudo umount /mnt/tmp_aeron_dir
-          sudo rm -rf /mnt/tmp_aeron_dir
-      - name: Copy test logs
-        id: copy_test_logs
-        if: failure()
-        run: |
-          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
-          ./gradlew tarTestLogs
-      - name: Upload crash logs
-        if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: crash-logs-gcc-${{ matrix.version }}
-          path: ${{ steps.copy_test_logs.outputs.file }}
+#          sudo iptables -t nat -F
+#          sudo rmmod nf_defrag_ipv6
+#          sudo rmmod nf_defrag_ipv4
+#          sudo rmmod nf_conntrack
+#          sudo modprobe -r nf_nat
+#          sudo nft list hooks ip
+#          cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --no-tests --no-unit-tests
+#      - name: Remove small temp file system
+#        if: always()
+#        run: |
+#          sudo umount /mnt/tmp_aeron_dir
+#          sudo rm -rf /mnt/tmp_aeron_dir
+#      - name: Copy test logs
+#        id: copy_test_logs
+#        if: failure()
+#        run: |
+#          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
+#          ./gradlew tarTestLogs
+#      - name: Upload crash logs
+#        if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
+#        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+#        with:
+#          name: crash-logs-gcc-${{ matrix.version }}
+#          path: ${{ steps.copy_test_logs.outputs.file }}
 
