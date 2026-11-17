@@ -28,70 +28,18 @@ permissions:
   contents: read
 
 jobs:
-  java-build:
-    name: Java ${{ matrix.java }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  cpp-gcc-build:
+    name: C++ GCC ${{ matrix.version }} (Ubuntu 26.04)
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        java: [ '17' ]
-        os: ['ubuntu-26.04']
+        version: [ '11', '12', '13', '14', '15', '16' ]
+    env:
+      CC: gcc-${{ matrix.version }}
+      CXX: g++-${{ matrix.version }}
     steps:
-      - name: Use faster temporary storage (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Disable CPU hogs (Windows)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true -Force
-          Add-MpPreference -ExclusionPath "C:\" -Force
-          Add-MpPreference -ExclusionPath "D:\" -Force
-          sc config wuauserv start= disabled
-          Stop-Service wuauserv -ErrorAction SilentlyContinue
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\wsl.exe" /v Debugger /t REG_SZ /d "block.exe" /f
-          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\CompatTelRunner.exe" /v Debugger /t REG_SZ /d "block.exe" /f
-      - name: Setup small temp file system (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo mkdir -p /mnt/tmp_aeron_dir
-          sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
-      - name: Setup small temp file system and localhost name (MacOS)
-        if: runner.os == 'macOS'
-        run: |
-          sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
-          dscacheutil -flushcache
-          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
-      - name: Setup small temp file system (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          $current_size = (Get-PartitionSupportedSize -DriveLetter D)
-          $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
-          Resize-Partition -DriveLetter D -Size ($new_size)
-          $disk = (Get-Disk -Partition (Get-Partition -DriveLetter D)).Number
-          New-Partition -DiskNumber ($disk) -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
-          New-Item -ItemType Directory -Path T:\tmp_aeron_dir
-      - name: Enable core dumps (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          ulimit -c unlimited
-          sudo systemctl stop apport.service || true
-          sudo systemctl disable apport.service || true
-          sudo mkdir -p /var/coredump
-          sudo chmod a+rw /var/coredump
-          sudo sysctl -w kernel.core_pattern="/var/coredump/core_%e.%p"
-          sudo nft list hooks ip
-      - name: Enable core dumps (MacOS)
-        if: runner.os == 'macOS'
-        run: |
-          ulimit -c unlimited
-          sudo mkdir -p /var/coredump
-          sudo chmod a+rw /var/coredump
-          sudo sysctl -w kern.coredump=1
-          sudo sysctl -w kern.corefile="/var/coredump/core.%P"
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -100,54 +48,48 @@ jobs:
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
-          java-version: ${{ matrix.java }}
-      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION (Unix)
-        if: runner.os != 'Windows'
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=${{ matrix.java }}" >> $GITHUB_ENV
-      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          java -Xinternalversion
-          echo "BUILD_JAVA_HOME=$env:JAVA_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "BUILD_JAVA_VERSION=${{ matrix.java }}" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Setup java to run Gradle
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
-        with:
-          distribution: 'zulu'
-          java-version: ${{ env.JAVA_VERSION }}
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
         with:
           cache-provider: basic
-      - name: Build with Gradle
-        run: ./gradlew -x javadoc --console=plain
-      - name: Remove small temp file system (Linux)
-        if: always() && runner.os == 'Linux'
+      - name: Install compiler
+        run: |
+          echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y g++-${{ matrix.version }} libbsd-dev uuid-dev
+      - name: Setup small temp file system
+        run: |
+          sudo mkdir -p /mnt/tmp_aeron_dir
+          sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
+      - name: Build
+        run: |
+          sudo nft list hooks ip
+          sudo iptables -t nat -F
+          sudo modprobe -r nf_nat
+          sudo nft list hooks ip
+          cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --no-tests --no-unit-tests
+      - name: Remove small temp file system
+        if: always()
         run: |
           sudo umount /mnt/tmp_aeron_dir
           sudo rm -rf /mnt/tmp_aeron_dir
-      - name: Remove small temp file system (MacOS)
-        if: always() && runner.os == 'macOS'
-        run: sudo diskutil eject tmp_aeron_dir
-      - name: Remove small temp file system (Windows)
-        if: always() && runner.os == 'Windows'
-        run: |
-          if (Test-Path "T:\tmp_aeron_dir")
-          {
-            Remove-Partition -DriveLetter T -Confirm:$false
-          }
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
         run: |
-          ${{ runner.os == 'Windows' && 'echo "file=build/distributions/test_logs.tbz2" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append' || 'echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT' }}
+          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: crash-logs-${{ matrix.os }}-java-${{ matrix.java }}
+          name: crash-logs-gcc-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
+
