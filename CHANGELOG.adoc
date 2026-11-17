@@ -6,6 +6,11 @@
 
 === Changelog
 
+* **[Client/C]** Stop polling for async resources if client conductor is being shutdown.
+(https://github.com/aeron-io/aeron/issues/2245[#2245])
+* **[Cluster]** Exit after invoking `EgressListenerExtension` when dealing with unknown schema messages in
+`Aeron#pollEgress`.
+* **[Cluster]** Fix `ClusterCounters.find` so that the last counter is also found.
 * **[Cluster]** Fix overlapping elections losing messages and leaving the cluster unavailable or in a diverged state.
 (https://github.com/aeron-io/aeron/pull/2212[#2212])
 * **Breaking:** **[aeron-test-support]** Remove `RemoteLauncherServer` and `RemoteLauncherClient` classes.
@@ -42,6 +47,16 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `jackson-dataformat-cbor` 3.3.0.
 * **[Java]** Upgrade to `jgit` 7.8.1.202611041320-r.
 * **[C]** Upgrade to `CMake` 4.4.5.
+
+== 1.54.3 (unreleased)
+
+* **[Client/C]** Stop polling for async resources if client conductor is being shutdown.
+(https://github.com/aeron-io/aeron/issues/2245[#2245])
+* **[Cluster]** Exit after invoking `EgressListenerExtension` when dealing with unknown schema messages in
+`Aeron#pollEgress`.
+* **[Cluster]** Fix `ClusterCounters.find` so that the last counter is also found.
+* **[Cluster]** Fix overlapping elections losing messages and leaving the cluster unavailable or in a diverged state.
+(https://github.com/aeron-io/aeron/pull/2212[#2212])
 
 == 1.54.2 (2026-11-11)
 
