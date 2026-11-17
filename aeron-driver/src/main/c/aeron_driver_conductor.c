@@ -6984,6 +6984,20 @@ void aeron_driver_conductor_free_aeron_async_re_resolve_cmd(
     aeron_free(async_cmd);
 }
 
+static void aeron_driver_conductor_log_address_resolution_failure(
+    aeron_driver_conductor_t *conductor, aeron_driver_command_re_resolve_t *async_cmd)
+{
+    char buf[512];
+    snprintf(
+        buf,
+        sizeof(buf),
+        "WARN - could not re-resolve: %s=%s",
+        async_cmd->async_resolve.uri_param_name,
+        async_cmd->async_resolve.endpoint_name);
+
+    aeron_driver_conductor_log_explicit_error(conductor, -AERON_ERROR_CODE_UNKNOWN_HOST, buf);
+}
+
 aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_re_resolve_endpoint(
     aeron_driver_conductor_t *conductor, aeron_driver_conductor_driver_command_t *cmd)
 {
@@ -6998,9 +7012,8 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_re_resolve
 
     if (AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_FAILED == state)
     {
-        aeron_driver_conductor_set_error_from_result(&async_cmd->resolution_result);
-        AERON_APPEND_ERR("%s", "");
-        return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_ERROR;
+        aeron_driver_conductor_log_address_resolution_failure(conductor, async_cmd);
+        return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_DONE;
     }
 
     aeron_send_channel_endpoint_t *endpoint = async_cmd->endpoint;
@@ -7072,9 +7085,8 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_re_resolve
 
     if (AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_FAILED == state)
     {
-        aeron_driver_conductor_set_error_from_result(&async_cmd->resolution_result);
-        AERON_APPEND_ERR("%s", "");
-        return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_ERROR;
+        aeron_driver_conductor_log_address_resolution_failure(conductor, async_cmd);
+        return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_DONE;
     }
 
     aeron_receive_channel_endpoint_t *endpoint = async_cmd->endpoint;

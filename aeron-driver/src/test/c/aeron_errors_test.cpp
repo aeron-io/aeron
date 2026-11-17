@@ -394,5 +394,5 @@ TEST_F(CErrorsTest, shouldRecordDistinctErrorCorrectlyOnReresolve)
     ASSERT_EQ(1, result) << aeron_errmsg();
 
     waitForErrorCounterIncrease();
-    verifyDistinctErrorLogContains(EXPECTED_RESOLVER_ERROR, 10000);
+    verifyDistinctErrorLogContains("WARN - could not re-resolve: endpoint=localhost:5656", 10000);
 }

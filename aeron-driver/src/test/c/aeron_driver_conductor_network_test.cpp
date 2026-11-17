@@ -970,6 +970,39 @@ TEST_F(DriverConductorNetworkTest, shouldReportControlAddressReResolutionErrorEv
 
     EXPECT_EQ(1, aeron_counter_get_acquire(driverErrorCounter));
     EXPECT_EQ(0, aeron_errcode());
+
+    typedef struct data_stct
+    {
+        int32_t observation_count;
+        char error[AERON_ERROR_MAX_TOTAL_LENGTH];
+    } data_t;
+
+    data_t data = {};
+    data.error[0] = '\0';
+
+    auto read_error_log_func = [](
+        int32_t observation_count,
+        int64_t first_observation_timestamp,
+        int64_t last_observation_timestamp,
+        const char *error,
+        size_t error_length,
+        void *clientd)
+    {
+        auto dat = (data_t *)clientd;
+        dat->observation_count = observation_count;
+        memcpy(dat->error, error, error_length);
+        dat->error[error_length] = '\0';
+    };
+    EXPECT_EQ(
+        1,
+        aeron_error_log_read(
+            m_conductor.m_conductor.error_log.buffer,
+            m_conductor.m_conductor.error_log.buffer_capacity,
+            read_error_log_func,
+            &data,
+                0));
+    EXPECT_EQ(1, data.observation_count);
+    EXPECT_STREQ("WARN - could not re-resolve: control=*#&(%#%&", data.error);
 }
 
 TEST_F(DriverConductorNetworkTest, shouldSkipEndpointAddressReResolutionIfEndpointIsNotActive)
@@ -1029,7 +1062,7 @@ TEST_F(DriverConductorNetworkTest, shouldReportEndpointAddressReResolutionErrorE
     m_conductor.m_conductor.context->sender_proxy = nullptr;
 
     aeron_command_re_resolve_t cmd;
-    cmd.endpoint_name = "*#&(%#%&";
+    cmd.endpoint_name = "abc%42";
     cmd.endpoint = &endpoint;
     cmd.destination = nullptr;
     memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
@@ -1046,4 +1079,37 @@ TEST_F(DriverConductorNetworkTest, shouldReportEndpointAddressReResolutionErrorE
 
     EXPECT_EQ(1, aeron_counter_get_acquire(driverErrorCounter));
     EXPECT_EQ(0, aeron_errcode());
+
+    typedef struct data_stct
+    {
+        int32_t observation_count;
+        char error[AERON_ERROR_MAX_TOTAL_LENGTH];
+    } data_t;
+
+    data_t data = {};
+    data.error[0] = '\0';
+
+    auto read_error_log_func = [](
+        int32_t observation_count,
+        int64_t first_observation_timestamp,
+        int64_t last_observation_timestamp,
+        const char *error,
+        size_t error_length,
+        void *clientd)
+    {
+        auto dat = (data_t *)clientd;
+        dat->observation_count = observation_count;
+        memcpy(dat->error, error, error_length);
+        dat->error[error_length] = '\0';
+    };
+    EXPECT_EQ(
+        1,
+        aeron_error_log_read(
+            m_conductor.m_conductor.error_log.buffer,
+            m_conductor.m_conductor.error_log.buffer_capacity,
+            read_error_log_func,
+            &data,
+                0));
+    EXPECT_EQ(1, data.observation_count);
+    EXPECT_STREQ("WARN - could not re-resolve: endpoint=abc%42", data.error);
 }
