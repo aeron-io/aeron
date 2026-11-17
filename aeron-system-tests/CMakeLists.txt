@@ -25,6 +25,7 @@ if (AERON_SYSTEM_TESTS)
                 -Daeron.test.system.aeronmd.path=$<TARGET_FILE:aeronmd>
                 :aeron-system-tests:cleanTest
                 :aeron-system-tests:test
+                --tests io.aeron.MultipleMulticastsSubscriptionsTest
                 --no-daemon
                 --console=plain)
     if (SANITISE_BUILD)
