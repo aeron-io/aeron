@@ -365,16 +365,19 @@ public:
         return messages;
     }
 
-    size_t readCounters(aeron_counters_reader_foreach_metadata_func_t callback)
+    int readCounters(aeron_counters_reader_foreach_metadata_func_t callback)
     {
         aeron_driver_context_t *ctx = m_context.m_context;
         aeron_counters_reader_t reader;
-        aeron_counters_reader_init(
+        if (aeron_counters_reader_init(
             &reader,
             ctx->counters_metadata_buffer,
             AERON_COUNTERS_METADATA_BUFFER_LENGTH(ctx->counters_values_buffer_length),
             ctx->counters_values_buffer,
-            ctx->counters_values_buffer_length);
+            ctx->counters_values_buffer_length) < 0)
+        {
+            return -1;
+        }
 
         aeron_counters_reader_foreach_metadata(
             reader.metadata, reader.metadata_length, callback, &m_mockCallbacks);

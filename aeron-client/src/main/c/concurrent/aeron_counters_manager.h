@@ -158,21 +158,12 @@ inline int64_t *aeron_counters_manager_addr(aeron_counters_manager_t *counters_m
     return (int64_t *)(counters_manager->values + AERON_COUNTER_OFFSET(counter_id));
 }
 
-inline int aeron_counters_reader_init(
+int aeron_counters_reader_init(
     aeron_counters_reader_t *reader,
     uint8_t *metadata_buffer,
     size_t metadata_length,
     uint8_t *values_buffer,
-    size_t values_length)
-{
-    reader->metadata = metadata_buffer;
-    reader->metadata_length = metadata_length;
-    reader->values = values_buffer;
-    reader->values_length = values_length;
-    reader->max_counter_id = (int32_t)((values_length / AERON_COUNTERS_MANAGER_VALUE_LENGTH) - 1);
-
-    return 0;
-}
+    size_t values_length);
 
 inline void aeron_counter_set_release(volatile int64_t *addr, int64_t value)
 {

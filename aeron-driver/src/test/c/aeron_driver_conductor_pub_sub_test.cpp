@@ -252,7 +252,7 @@ TEST_P(DriverConductorPubSubTest, shouldBeAbleToAddAndRemoveSinglePublication)
     EXPECT_CALL(m_mockCallbacks, onCounter(_, _, _, _, _, _)).Times(testing::AnyNumber());
     EXPECT_CALL(m_mockCallbacks, onCounter(counter_id, AERON_COUNTER_CLIENT_HEARTBEAT_TIMESTAMP_TYPE_ID, _, _, _, _)).
         With(IsIdCounter(client_id, std::string("client-heartbeat: id=0")));
-    readCounters(mock_counter_handler);
+    EXPECT_EQ(0, readCounters(mock_counter_handler)) << aeron_errmsg();
 
     ASSERT_EQ(removePublication(client_id, remove_correlation_id, pub_id), 0);
     doWorkUntilDone();

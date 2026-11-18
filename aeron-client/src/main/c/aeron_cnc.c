@@ -80,12 +80,17 @@ int aeron_cnc_init(aeron_cnc_t **aeron_cnc, const char *base_path, int64_t timeo
         }
     }
 
-    aeron_counters_reader_init(
+    if (aeron_counters_reader_init(
         &_aeron_cnc->counters_reader,
         aeron_cnc_counters_metadata_buffer(_aeron_cnc->metadata),
         _aeron_cnc->metadata->counter_metadata_buffer_length,
         aeron_cnc_counters_values_buffer(_aeron_cnc->metadata),
-        _aeron_cnc->metadata->counter_values_buffer_length);
+        _aeron_cnc->metadata->counter_values_buffer_length) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        aeron_unmap(&_aeron_cnc->cnc_mmap);
+        goto error;
+    }
 
     *aeron_cnc = _aeron_cnc;
     return 0;
