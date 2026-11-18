@@ -97,6 +97,9 @@ int aeron_receive_channel_endpoint_create(
     _endpoint->receiver_id = context->next_receiver_id++;
     _endpoint->receiver_proxy = context->receiver_proxy;
 
+    _endpoint->error_log = context->error_log;
+    _endpoint->errors_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_ERRORS);
+
     _endpoint->short_sends_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     _endpoint->possible_ttl_asymmetry_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_POSSIBLE_TTL_ASYMMETRY);
@@ -255,7 +258,9 @@ int aeron_receive_channel_endpoint_send(
     }
     else
     {
-        min_bytes_sent = sendmsg_result;
+        AERON_APPEND_ERR("%s", "");
+        aeron_udp_channel_transport_log_send_error(endpoint->error_log, endpoint->errors_counter, address);
+        min_bytes_sent = 0;
     }
 
     return (int)min_bytes_sent;

@@ -197,6 +197,13 @@ int aeron_udp_transport_poller_remove(aeron_udp_transport_poller_t *poller, aero
     return 0;
 }
 
+static void aeron_udp_transport_poller_log_error(aeron_udp_channel_transport_t *transport)
+{
+    aeron_distinct_error_log_record(transport->error_log, aeron_errcode(), aeron_errmsg());
+    aeron_counter_increment(transport->errors_counter);
+    aeron_err_clear();
+}
+
 int aeron_udp_transport_poller_poll(
     aeron_udp_transport_poller_t *poller,
     struct mmsghdr *msgvec,
@@ -219,7 +226,7 @@ int aeron_udp_transport_poller_poll(
                 if (recv_result < 0)
                 {
                     AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
-                    aeron_udp_channel_transport_log_error(transport);
+                    aeron_udp_transport_poller_log_error(transport);
                     break;
                 }
 
@@ -266,7 +273,7 @@ int aeron_udp_transport_poller_poll(
                         if (recv_result < 0)
                         {
                             AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
-                            aeron_udp_channel_transport_log_error(transport);
+                            aeron_udp_transport_poller_log_error(transport);
                             break;
                         }
 
@@ -308,7 +315,7 @@ int aeron_udp_transport_poller_poll(
                         if (recv_result < 0)
                         {
                             AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
-                            aeron_udp_channel_transport_log_error(transport);
+                            aeron_udp_transport_poller_log_error(transport);
                             break;
                         }
 

@@ -962,4 +962,5 @@ extern void *aeron_udp_channel_transport_get_interceptor_clientd(
 extern void aeron_udp_channel_transport_set_interceptor_clientd(
     aeron_udp_channel_transport_t *transport, int interceptor_index, void *clientd);
 
-extern void aeron_udp_channel_transport_log_error(aeron_udp_channel_transport_t *transport);
+extern void aeron_udp_channel_transport_log_send_error(
+    aeron_distinct_error_log_t *error_log, int64_t *errors_counter, struct sockaddr_storage *address);

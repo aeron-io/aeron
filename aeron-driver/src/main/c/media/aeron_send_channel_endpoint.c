@@ -404,6 +404,13 @@ int aeron_send_channel_send(
     {
         result = endpoint->data_paths->send_func(
             endpoint->data_paths, &endpoint->transport, &endpoint->current_data_addr, iov, iov_length, bytes_sent);
+        if (result < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            aeron_udp_channel_transport_log_send_error(
+                endpoint->transport.error_log, endpoint->transport.errors_counter, &endpoint->current_data_addr);
+            result = 0;
+        }
     }
     else
     {
@@ -426,8 +433,16 @@ int aeron_send_channel_send_endpoint_address(
         aeron_send_channel_apply_timestamps(endpoint, iov, iov_length);
     }
 
-    return endpoint->data_paths->send_func(
-            endpoint->data_paths, &endpoint->transport, endpoint_address, iov, iov_length, bytes_sent);
+    int result = endpoint->data_paths->send_func(
+        endpoint->data_paths, &endpoint->transport, endpoint_address, iov, iov_length, bytes_sent);
+    if (result < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        aeron_udp_channel_transport_log_send_error(
+            endpoint->transport.error_log, endpoint->transport.errors_counter, endpoint_address);
+        result = 0;
+    }
+    return result;
 }
 
 int aeron_send_channel_endpoint_add_publication(
