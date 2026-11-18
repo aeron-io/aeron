@@ -5189,13 +5189,13 @@ TEST_F(AeronCArchiveTest, shouldReleaseArchiveLockWhenPollingForRecordingSignals
 
 TEST_F(AeronArchiveNoArchiveTest, shouldFailContextConcludeIfClientInvokerFailsWithError)
 {
-    uint8_t cnc[8192];
+    uint8_t cnc[10240];
     memset(cnc, 0, sizeof(cnc));
 
     auto *cnc_metadata = reinterpret_cast<aeron_cnc_metadata_t *>(cnc);
     cnc_metadata->to_driver_buffer_length = 1024;
     cnc_metadata->to_clients_buffer_length = 1024 + AERON_BROADCAST_BUFFER_TRAILER_LENGTH;
-    cnc_metadata->counter_metadata_buffer_length = 1024;
+    cnc_metadata->counter_metadata_buffer_length = 4096;
     cnc_metadata->counter_values_buffer_length = 1024;
     cnc_metadata->error_log_buffer_length = 1024;
     cnc_metadata->client_liveness_timeout = static_cast<int64_t>(5) * 1000 * 1000 * 1000;
