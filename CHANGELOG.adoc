@@ -6,6 +6,7 @@
 
 === Changelog
 
+* **[Driver/C]** Log control/endpoint address re-resolution errors as warnings.
 * **[Client/Java]** Fix `BufferBuilder` limit validation to allow setting limit equal to capacity.
 (https://github.com/aeron-io/aeron/pull/2246[#2246])
 * **[Client/C]** Stop polling for async resources if client conductor is being shutdown.
@@ -52,6 +53,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.3 (unreleased)
 
+* **[Driver/C]** Log control/endpoint address re-resolution errors as warnings.
 * **[Client/Java]** Fix `BufferBuilder` limit validation to allow setting limit equal to capacity.
 (https://github.com/aeron-io/aeron/pull/2246[#2246])
 * **[Client/C]** Stop polling for async resources if client conductor is being shutdown.
