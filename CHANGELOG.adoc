@@ -6,6 +6,8 @@
 
 === Changelog
 
+* **[Archive/Java]** Only print the descriptor of non-`VALID` recordings in `ArchiveTool#dump`.
+(https://github.com/aeron-io/aeron/pull/2253[#2253])
 * **[Driver/C]** Log control/endpoint address re-resolution errors as warnings.
 * **[Client/Java]** Fix `BufferBuilder` limit validation to allow setting limit equal to capacity.
 (https://github.com/aeron-io/aeron/pull/2246[#2246])
@@ -53,6 +55,8 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.3 (unreleased)
 
+* **[Archive/Java]** Only print the descriptor of non-`VALID` recordings in `ArchiveTool#dump`.
+(https://github.com/aeron-io/aeron/pull/2253[#2253])
 * **[Driver/C]** Log control/endpoint address re-resolution errors as warnings.
 * **[Client/Java]** Fix `BufferBuilder` limit validation to allow setting limit equal to capacity.
 (https://github.com/aeron-io/aeron/pull/2246[#2246])
