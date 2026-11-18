@@ -23,6 +23,7 @@
 #include "concurrent/aeron_distinct_error_log.h"
 #include "concurrent/aeron_counters_manager.h"
 #include "util/aeron_error.h"
+#include "util/aeron_netutil.h"
 
 #define AERON_UDP_CHANNEL_TRANSPORT_MEDIA_RCV_TIMESTAMP_NONE (0x0)
 #define AERON_UDP_CHANNEL_TRANSPORT_MEDIA_RCV_TIMESTAMP_HW (0x1)
@@ -108,10 +109,22 @@ inline void aeron_udp_channel_transport_set_interceptor_clientd(
     transport->interceptor_clientds[interceptor_index] = clientd;
 }
 
-inline void aeron_udp_channel_transport_log_error(aeron_udp_channel_transport_t *transport)
+inline void aeron_udp_channel_transport_log_send_error(
+    aeron_distinct_error_log_t *error_log, int64_t *errors_counter, struct sockaddr_storage *address)
 {
-    aeron_distinct_error_log_record(transport->error_log, aeron_errcode(), aeron_errmsg());
-    aeron_counter_increment(transport->errors_counter);
+    char addr_str[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
+    aeron_format_source_identity(addr_str, sizeof(addr_str), address);
+
+    char err_msg[AERON_ERROR_MAX_TOTAL_LENGTH];
+    snprintf(
+        err_msg,
+        sizeof(err_msg),
+        "WARN - failed to send datagram to %s, cause: %s",
+        addr_str,
+        aeron_errmsg());
+
+    aeron_distinct_error_log_record(error_log, aeron_errcode(), err_msg);
+    aeron_counter_increment(errors_counter);
     aeron_err_clear();
 }
 
