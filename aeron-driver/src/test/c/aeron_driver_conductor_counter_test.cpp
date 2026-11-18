@@ -57,7 +57,7 @@ TEST_F(DriverConductorCounterTest, shouldBeAbleToAddSingleCounter)
         With(IsIdCounter(reg_id, m_label));
     EXPECT_CALL(m_mockCallbacks, onCounter(_, AERON_COUNTER_CLIENT_HEARTBEAT_TIMESTAMP_TYPE_ID, _, _, _, _)).
         With(IsIdCounter(client_id, std::string("client-heartbeat: id=66")));
-    readCounters(mock_counter_handler);
+    EXPECT_EQ(0, readCounters(mock_counter_handler)) << aeron_errmsg();
 }
 
 TEST_F(DriverConductorCounterTest, shouldRemoveSingleCounter)
@@ -111,7 +111,7 @@ TEST_F(DriverConductorCounterTest, shouldRemoveCounterOnClientTimeout)
 
     EXPECT_CALL(m_mockCallbacks, onCounter(_, _, _, _, _, _)).Times(testing::AnyNumber());
     EXPECT_CALL(m_mockCallbacks, onCounter(counter_id, _, _, _, _, _)).Times(0);
-    readCounters(mock_counter_handler);
+    EXPECT_EQ(0, readCounters(mock_counter_handler)) << aeron_errmsg();
 
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_CLIENT_TIMEOUT, _, _))
         .With(IsTimeout(client_id));
@@ -200,7 +200,7 @@ TEST_F(DriverConductorCounterTest, shouldNotRemoveCounterOnClientKeepalive)
 
     EXPECT_CALL(m_mockCallbacks, onCounter(_, _, _, _, _, _)).Times(testing::AnyNumber());
     EXPECT_CALL(m_mockCallbacks, onCounter(counter_id, _, _, _, _, _)).Times(1);
-    readCounters(mock_counter_handler);
+    EXPECT_EQ(0, readCounters(mock_counter_handler)) << aeron_errmsg();
 }
 
 TEST_F(DriverConductorCounterTest, shouldIncrementCounterOnConductorThresholdExceeded)

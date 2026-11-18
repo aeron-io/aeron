@@ -51,12 +51,17 @@ public:
             &m_cached_clock,
             REUSE_TIMEOUT);
 
-        aeron_counters_reader_init(
+        if (aeron_counters_reader_init(
             &m_reader,
             m_metadataBuffer.data(),
             m_metadataBuffer.size(),
             m_valuesBuffer.data(),
-            m_valuesBuffer.size());
+            m_valuesBuffer.size()) < 0)
+        {
+            std::string message = "aeron_counters_reader_init failed: ";
+            message += aeron_errmsg();
+            throw std::runtime_error(message);
+        }
     }
 
     ~CountersTest() override

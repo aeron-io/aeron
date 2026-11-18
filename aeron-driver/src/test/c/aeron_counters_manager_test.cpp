@@ -493,3 +493,27 @@ TEST_F(CountersManagerTest, shouldStoreMetaData)
 
     aeron_counters_reader_foreach_metadata(m_metadata.data(), m_metadata.size(), func_should_store_metadata, info);
 }
+
+TEST_F(CountersManagerTest, shouldMetadataNumberOfCountersNotBeSmallerThanValuesNumberOfCounters)
+{
+    size_t one_counter_metadata_length = 1 * AERON_COUNTERS_MANAGER_METADATA_LENGTH;
+    size_t ten_counters_value_length = 10 * AERON_COUNTERS_MANAGER_VALUE_LENGTH;
+
+    aeron_counters_manager_t temp_manager = {};
+    ASSERT_EQ(-1, aeron_counters_manager_init(
+        &temp_manager,
+        nullptr,
+        one_counter_metadata_length,
+        nullptr,
+        ten_counters_value_length,
+        nullptr,
+        0));
+
+    aeron_counters_reader_t temp_reader = {};
+    ASSERT_EQ(-1, aeron_counters_reader_init(
+        &temp_reader,
+        nullptr,
+        one_counter_metadata_length,
+        nullptr,
+        ten_counters_value_length));
+}

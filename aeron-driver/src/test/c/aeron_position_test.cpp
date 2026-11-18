@@ -208,12 +208,12 @@ TEST_F(PositionTest, streamCounterShouldEncodeChannelUriDirectly)
 
     int64_t owner_id;
     aeron_counters_reader_t countersReader = {};
-    aeron_counters_reader_init(
+    ASSERT_EQ(0, aeron_counters_reader_init(
         &countersReader,
         m_counters_manager.metadata,
         m_counters_manager.metadata_length,
         m_counters_manager.values,
-        m_counters_manager.values_length);
+        m_counters_manager.values_length));
     aeron_counters_reader_counter_owner_id(&countersReader, id, &owner_id);
     EXPECT_EQ(821, owner_id);
 }

@@ -34,7 +34,12 @@ class LocalSockaddrTest : public testing::Test
 protected:
     LocalSockaddrTest()
     {
-        aeron_counters_reader_init(&m_reader, m_metadata, sizeof(m_metadata), m_values, sizeof(m_values));
+        if (aeron_counters_reader_init(&m_reader, m_metadata, sizeof(m_metadata), m_values, sizeof(m_values)) < 0)
+        {
+            std::string message = "aeron_counters_reader_init failed: ";
+            message += aeron_errmsg();
+            throw std::runtime_error(message);
+        }
         allocate(CHANNEL_STATUS_ID, AERON_COUNTER_SEND_CHANNEL_STATUS_TYPE_ID, AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE);
     }
 

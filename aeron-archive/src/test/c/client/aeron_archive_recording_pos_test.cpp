@@ -40,7 +40,9 @@ protected:
         if (aeron_counters_reader_init(
             &m_reader, m_metadata, sizeof(m_metadata), m_values, sizeof(m_values)) < 0)
         {
-            throw std::runtime_error("aeron_counters_reader_init failed");
+            std::string message = "aeron_counters_reader_init failed: ";
+            message += aeron_errmsg();
+            throw std::runtime_error(message);
         }
         if (aeron_counters_manager_init(
             &m_counters_manager,

@@ -49,7 +49,7 @@ TEST_F(DriverConductorSpyTest, shouldBeAbleToAddSingleSubscription)
     EXPECT_CALL(m_mockCallbacks, onCounter(_, _, _, _, _, _)).Times(testing::AnyNumber());
     EXPECT_CALL(m_mockCallbacks, onCounter(_, AERON_COUNTER_CLIENT_HEARTBEAT_TIMESTAMP_TYPE_ID, _, _, _, _)).
         With(IsIdCounter(client_id, std::string("client-heartbeat: id=0")));
-    readCounters(mock_counter_handler);
+    EXPECT_EQ(0, readCounters(mock_counter_handler)) << aeron_errmsg();
 }
 
 TEST_F(DriverConductorSpyTest, shouldBeAbleToAddAndRemoveSingleSubscription)

@@ -106,12 +106,12 @@ protected:
             &m_cached_clock, 1000);
         aeron_system_counters_init(&resolver_fields->system_counters, &resolver_fields->counters);
 
-        aeron_counters_reader_init(
+        ASSERT_EQ(0, aeron_counters_reader_init(
             &resolver_fields->counters_reader,
             resolver_fields->counters.metadata,
             resolver_fields->counters.metadata_length,
             resolver_fields->counters.values,
-            resolver_fields->counters.values_length);
+            resolver_fields->counters.values_length)) << aeron_errmsg();
 
         aeron_distinct_error_log_init(
             &resolver_fields->error_log, resolver_fields->error_log_buffer, ERROR_LOG_LENGTH, aeron_epoch_clock);

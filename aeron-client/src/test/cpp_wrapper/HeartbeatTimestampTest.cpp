@@ -38,7 +38,12 @@ protected:
     // CountersReader captures the buffers on construction, so the C reader must be initialised first
     aeron_counters_reader_t *initReader()
     {
-        aeron_counters_reader_init(&m_cReader, m_metadata, sizeof(m_metadata), m_values, sizeof(m_values));
+        if (aeron_counters_reader_init(&m_cReader, m_metadata, sizeof(m_metadata), m_values, sizeof(m_values)) < 0)
+        {
+            std::string message = "aeron_counters_reader_init failed: ";
+            message += aeron_errmsg();
+            throw std::runtime_error(message);
+        }
         return &m_cReader;
     }
 
