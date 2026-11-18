@@ -1553,6 +1553,28 @@ class ArchiveToolTests
             " -> VALID is not allowed", exception.getMessage());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = RecordingState.class, mode = EnumSource.Mode.EXCLUDE, names = "VALID")
+    void dumpShouldPrintDescriptorButSkipDataOfRecordingWhichIsNotValid(final RecordingState state)
+    {
+        try (ArchiveMarkFile markFile = new ArchiveMarkFile(
+            new File(archiveDir, ArchiveMarkFile.FILENAME), 1024 * 1024, 8192, epochClock, 0))
+        {
+            markFile.signalReady(epochClock.time());
+        }
+        assertFalse(verify(out, archiveDir, emptySet(), null, epochClock, (file) -> false));
+        try (Catalog catalog = openCatalogReadWrite(archiveDir, epochClock, MIN_CAPACITY, null, null))
+        {
+            assertTrue(catalog.changeState(validRecording0, state));
+        }
+
+        dump(out, archiveDir, 1, (fragmentCount) -> false);
+
+        Mockito.verify(out).println("Recording " + validRecording0);
+        Mockito.verify(out).println("(recordingId=" + validRecording0 + ") skipping data: " + state);
+        Mockito.verify(out).println("Recording " + validRecording6);
+    }
+
     private static List<Arguments> verifyChecksumClassValidation()
     {
         final String testDir = validationDir.toAbsolutePath().toString();
