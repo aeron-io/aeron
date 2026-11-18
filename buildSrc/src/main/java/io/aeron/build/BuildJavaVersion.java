@@ -15,6 +15,7 @@
  */
 package io.aeron.build;
 
+import org.gradle.api.GradleException;
 import org.gradle.api.JavaVersion;
 
 /**
@@ -52,6 +53,7 @@ public final class BuildJavaVersion
      * Major version number of the build Java version.
      *
      * @return major version number of the build Java version.
+     * @throws GradleException if {@code BUILD_JAVA_VERSION} doesn't start with a major version number.
      */
     public static int major()
     {
@@ -67,6 +69,14 @@ public final class BuildJavaVersion
             version = version.substring(0, version.indexOf('-'));
         }
 
-        return Integer.parseInt(version);
+        try
+        {
+            return Integer.parseInt(version);
+        }
+        catch (final NumberFormatException ex)
+        {
+            throw new GradleException(
+                "BUILD_JAVA_VERSION='" + raw() + "' is not a Java version, expected e.g. 21, 21.0.2 or 26-ea", ex);
+        }
     }
 }
