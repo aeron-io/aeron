@@ -111,7 +111,7 @@ inline void aeron_udp_channel_transport_set_interceptor_clientd(
 }
 
 inline void aeron_udp_channel_transport_log_send_error(
-    aeron_distinct_error_log_t *error_log, volatile int64_t *errors_counter, struct sockaddr_storage *address)
+    aeron_udp_channel_transport_t *transport, struct sockaddr_storage *address)
 {
     char addr_str[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
     aeron_format_source_identity(addr_str, sizeof(addr_str), address);
@@ -124,8 +124,8 @@ inline void aeron_udp_channel_transport_log_send_error(
         addr_str,
         aeron_errmsg());
 
-    aeron_distinct_error_log_record(error_log, aeron_errcode(), err_msg);
-    aeron_counter_increment(errors_counter);
+    aeron_distinct_error_log_record(transport->error_log, aeron_errcode(), err_msg);
+    aeron_counter_increment(transport->errors_counter);
     aeron_err_clear();
 }
 

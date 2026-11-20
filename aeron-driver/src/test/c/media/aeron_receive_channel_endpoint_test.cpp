@@ -72,15 +72,16 @@ TEST_F(ReceiveChannelEndpointTest, shouldLogSendErrorAsWarning)
         return -1;
     };
     data_paths.send_func = sendFunc;
-    aeron_receive_destination_t destination = {};
-    destination.data_paths = &data_paths;
 
     int64_t errors = 0;
     int64_t shortSends = 0;
+    aeron_receive_destination_t destination = {};
+    destination.data_paths = &data_paths;
+    destination.transport.error_log = &m_error_log;
+    destination.transport.errors_counter = &errors;
+    destination.transport.short_sends_counter = &shortSends;
+
     aeron_receive_channel_endpoint_t endpoint = {};
-    endpoint.error_log = &m_error_log;
-    endpoint.errors_counter = &errors;
-    endpoint.short_sends_counter = &shortSends;
     sockaddr_storage address;
     initAddress(&address, "192.168.10.1", 5555);
     iovec iov = {};
@@ -127,15 +128,16 @@ TEST_F(ReceiveChannelEndpointTest, shouldIncementShortSends)
         return 3;
     };
     data_paths.send_func = sendFunc;
-    aeron_receive_destination_t destination = {};
-    destination.data_paths = &data_paths;
 
     int64_t errors = 0;
     int64_t shortSends = 0;
+    aeron_receive_destination_t destination = {};
+    destination.data_paths = &data_paths;
+    destination.transport.error_log = &m_error_log;
+    destination.transport.errors_counter = &errors;
+    destination.transport.short_sends_counter = &shortSends;
+
     aeron_receive_channel_endpoint_t endpoint = {};
-    endpoint.error_log = &m_error_log;
-    endpoint.errors_counter = &errors;
-    endpoint.short_sends_counter = &shortSends;
     sockaddr_storage address;
     initAddress(&address, "127.0.0.1", 9999);
     iovec iov = {};
@@ -163,15 +165,16 @@ TEST_F(ReceiveChannelEndpointTest, shouldReturnBytesSent)
         return static_cast<int>(iov_length);
     };
     data_paths.send_func = sendFunc;
-    aeron_receive_destination_t destination = {};
-    destination.data_paths = &data_paths;
 
     int64_t errors = 0;
     int64_t shortSends = 0;
+    aeron_receive_destination_t destination = {};
+    destination.data_paths = &data_paths;
+    destination.transport.error_log = &m_error_log;
+    destination.transport.errors_counter = &errors;
+    destination.transport.short_sends_counter = &shortSends;
+
     aeron_receive_channel_endpoint_t endpoint = {};
-    endpoint.error_log = &m_error_log;
-    endpoint.errors_counter = &errors;
-    endpoint.short_sends_counter = &shortSends;
     sockaddr_storage address;
     initAddress(&address, "127.0.0.1", 9999);
     iovec iov = {};

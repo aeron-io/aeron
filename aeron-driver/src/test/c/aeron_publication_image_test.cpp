@@ -258,7 +258,7 @@ TEST_F(PublicationImageTest, shouldSendControlMessagesToAllDestinations)
     aeron_publication_image_send_pending_status_message(image, 2000000000);
     ASSERT_EQ(2, bindings_state_dest1->sm_count);
     ASSERT_EQ(1, bindings_state_dest2->sm_count);
-    ASSERT_EQ(3, aeron_counter_get_plain(image->status_messages_sent_counter));
+    ASSERT_EQ(3, aeron_counter_get_plain(endpoint->status_messages_sent_counter));
 
     aeron_publication_image_on_gap_detected(image, 0, 0, 1);
     aeron_publication_image_send_pending_loss(image);

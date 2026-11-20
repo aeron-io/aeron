@@ -68,7 +68,6 @@ typedef struct aeron_receive_channel_endpoint_stct
     aeron_driver_receiver_proxy_t *receiver_proxy;
     aeron_udp_channel_transport_bindings_t *transport_bindings;
     aeron_clock_cache_t *cached_clock;
-    aeron_distinct_error_log_t *error_log;
 
     aeron_driver_nak_message_func_t send_nak_message;
 
@@ -81,10 +80,9 @@ typedef struct aeron_receive_channel_endpoint_stct
     }
     group_tag;
 
-    volatile int64_t *errors_counter;
-    volatile int64_t *short_sends_counter;
     volatile int64_t *possible_ttl_asymmetry_counter;
     volatile int64_t *errors_frames_sent_counter;
+    volatile int64_t *status_messages_sent_counter;
 
     const aeron_loss_generator_t *data_loss_generator;
     const aeron_loss_generator_t *control_loss_generator;

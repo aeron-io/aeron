@@ -113,9 +113,8 @@ int aeron_test_udp_channel_transport_send(
         }
     }
 
-    return 0;
+    return (int)iov_length;
 }
-
 
 int aeron_test_udp_channel_transport_get_so_rcvbuf(aeron_udp_channel_transport_t *transport, size_t *so_rcvbuf)
 {

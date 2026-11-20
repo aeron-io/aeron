@@ -419,7 +419,7 @@ int aeron_data_packet_dispatcher_on_data(
                 if (aeron_data_packet_dispatcher_elicit_setup_from_source(
                     dispatcher, stream_interest, endpoint, destination, addr, header->stream_id, session_id) < 0)
                 {
-                    AERON_APPEND_ERR("%s", "");
+                    AERON_APPEND_ERR("stream_id=%" PRIi32 " session_id=%" PRIi32, header->stream_id, session_id);
                     return -1;
                 }
 
@@ -642,18 +642,10 @@ int aeron_data_packet_dispatcher_elicit_setup_from_source(
     struct sockaddr_storage *control_addr = destination->conductor_fields.udp_channel->is_multicast ?
         &destination->conductor_fields.udp_channel->remote_control : addr;
 
-    if (aeron_receive_channel_endpoint_send_sm(
-        endpoint, destination, control_addr, stream_id, session_id, 0, 0, 0,
-        AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return -1;
-    }
-
     if (aeron_driver_receiver_add_pending_setup(
-        dispatcher->receiver, endpoint, destination, session_id, stream_id, NULL))
+        dispatcher->receiver, endpoint, destination, session_id, stream_id, control_addr, false))
     {
-        AERON_APPEND_ERR("%s", "");
+        AERON_APPEND_ERR("streamId=%" PRIi32 " session_id=%" PRIi32, stream_id, session_id);
         return -1;
     }
 

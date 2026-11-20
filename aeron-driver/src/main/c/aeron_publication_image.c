@@ -353,8 +353,6 @@ int aeron_publication_image_create(
         system_counters, AERON_SYSTEM_COUNTER_FLOW_CONTROL_UNDER_RUNS);
     _image->flow_control_over_runs_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_FLOW_CONTROL_OVER_RUNS);
-    _image->status_messages_sent_counter = aeron_system_counter_addr(
-        system_counters, AERON_SYSTEM_COUNTER_STATUS_MESSAGES_SENT);
     _image->nak_messages_sent_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_NAK_MESSAGES_SENT);
     _image->loss_gap_fills_counter = aeron_system_counter_addr(
@@ -912,28 +910,18 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
 
             if (aeron_publication_image_connection_is_alive(connection, now_ns))
             {
-                int send_response_setup_result = aeron_receive_channel_endpoint_send_response_setup(
+                if (0 != aeron_receive_channel_endpoint_send_response_setup(
                     image->endpoint,
                     connection->destination,
                     connection->control_addr,
                     image->stream_id,
                     image->session_id,
-                    response_session_id);
-
-                if (send_response_setup_result < 0)
+                    response_session_id))
                 {
-                    work_count = send_response_setup_result;
-                    break;
+                    work_count++;
                 }
-
-                work_count++;
             }
         }
-    }
-
-    if (work_count < 0)
-    {
-        return work_count;
     }
 
     if (change_number != image->last_sm_change_number || has_sm_timed_out)
@@ -961,7 +949,7 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
 
                 if (aeron_publication_image_connection_is_alive(connection, now_ns))
                 {
-                    int send_sm_result = aeron_receive_channel_endpoint_send_sm(
+                    if (0 != aeron_receive_channel_endpoint_send_sm(
                         image->endpoint,
                         connection->destination,
                         connection->control_addr,
@@ -970,17 +958,10 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
                         term_id,
                         term_offset,
                         receiver_window_length,
-                        flags);
-
-                    if (send_sm_result < 0)
+                        flags))
                     {
-                        AERON_APPEND_ERR("%s", "");
-                        work_count = send_sm_result;
-                        break;
+                        work_count++;
                     }
-
-                    work_count++;
-                    aeron_counter_increment_release(image->status_messages_sent_counter);
                 }
             }
 
@@ -1036,7 +1017,7 @@ int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
 
                     if (aeron_publication_image_connection_is_alive(connection, now_ns))
                     {
-                        int send_nak_result = aeron_receive_channel_endpoint_send_nak(
+                        if (0 != aeron_receive_channel_endpoint_send_nak(
                             image->endpoint,
                             connection->destination,
                             connection->control_addr,
@@ -1044,17 +1025,12 @@ int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
                             image->session_id,
                             term_id,
                             term_offset,
-                            (int32_t)length);
-
-                        if (send_nak_result < 0)
+                            (int32_t)length))
                         {
-                            work_count = send_nak_result;
-                            break;
+                            work_count++;
+                            aeron_counter_increment_release(image->nak_messages_sent_counter);
+                            aeron_counter_increment_release(image->rcv_naks_sent.value_addr);
                         }
-
-                        work_count++;
-                        aeron_counter_increment_release(image->nak_messages_sent_counter);
-                        aeron_counter_increment_release(image->rcv_naks_sent.value_addr);
                     }
                 }
             }
@@ -1068,7 +1044,7 @@ int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
                     aeron_counter_increment_release(image->loss_gap_fills_counter);
                 }
 
-                work_count = 1;
+                work_count++;
             }
 
             image->last_loss_change_number = change_number;

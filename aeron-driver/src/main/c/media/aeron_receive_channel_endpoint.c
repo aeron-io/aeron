@@ -97,13 +97,12 @@ int aeron_receive_channel_endpoint_create(
     _endpoint->receiver_id = context->next_receiver_id++;
     _endpoint->receiver_proxy = context->receiver_proxy;
 
-    _endpoint->error_log = context->error_log;
-    _endpoint->errors_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_ERRORS);
-    _endpoint->short_sends_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     _endpoint->possible_ttl_asymmetry_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_POSSIBLE_TTL_ASYMMETRY);
     _endpoint->errors_frames_sent_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT);
+    _endpoint->status_messages_sent_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_STATUS_MESSAGES_SENT);
 
     _endpoint->cached_clock = context->receiver_cached_clock;
 
@@ -254,13 +253,13 @@ int aeron_receive_channel_endpoint_send(
     if (sendmsg_result < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_udp_channel_transport_log_send_error(endpoint->error_log, endpoint->errors_counter, address);
+        aeron_udp_channel_transport_log_send_error(&destination->transport, address);
         return 0;
     }
 
     if (1 != sendmsg_result)
     {
-        aeron_counter_increment(endpoint->short_sends_counter);
+        aeron_counter_increment(destination->transport.short_sends_counter);
         return 0;
     }
 
@@ -268,15 +267,13 @@ int aeron_receive_channel_endpoint_send(
 }
 
 int aeron_receive_channel_endpoint_elicit_setup(
-    aeron_receive_channel_endpoint_t *endpoint,
-    int32_t stream_id,
-    int32_t session_id)
+    aeron_receive_channel_endpoint_t *endpoint, int32_t stream_id, int32_t session_id)
 {
     int work_count = 0;
     for (size_t i = 0, len = endpoint->destinations.length; i < len; i++)
     {
         aeron_receive_destination_t *destination = endpoint->destinations.array[i].destination;
-        int result = aeron_receive_channel_endpoint_send_sm(
+        if (0 != aeron_receive_channel_endpoint_send_sm(
             endpoint,
             destination,
             &destination->current_control_addr,
@@ -285,15 +282,10 @@ int aeron_receive_channel_endpoint_elicit_setup(
             0,
             0,
             0,
-            AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG);
-
-        if (result < 0)
+            AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG))
         {
-            AERON_APPEND_ERR("%s", "");
-            return -1;
+            work_count++;
         }
-
-        work_count += result;
     }
 
     return work_count;
@@ -336,7 +328,12 @@ int aeron_receive_channel_endpoint_send_sm(
     iov.iov_base = buffer;
     iov.iov_len = (size_t)frame_length;
 
-    return aeron_receive_channel_endpoint_send(endpoint, destination, control_addr, &iov);
+    int result = aeron_receive_channel_endpoint_send(endpoint, destination, control_addr, &iov);
+    if (0 != result)
+    {
+        aeron_counter_increment_release(endpoint->status_messages_sent_counter);
+    }
+    return result;
 }
 
 int aeron_receive_channel_endpoint_send_nak(
@@ -470,7 +467,7 @@ int aeron_receiver_channel_endpoint_send_error_frame(
     iov.iov_base = buffer;
     iov.iov_len = (unsigned long)frame_length;
     int bytes_sent = aeron_receive_channel_endpoint_send(channel_endpoint, destination, control_addr, &iov);
-    if ((int)iov.iov_len == bytes_sent)
+    if (0 != bytes_sent)
     {
         aeron_counter_increment(channel_endpoint->errors_frames_sent_counter);
     }
@@ -1105,17 +1102,9 @@ int aeron_receive_channel_endpoint_add_pending_setup_destination(
     if (destination->conductor_fields.udp_channel->has_explicit_control)
     {
         if (aeron_driver_receiver_add_pending_setup(
-            receiver, endpoint, destination, session_id, stream_id, &udp_channel->local_control) < 0)
+            receiver, endpoint, destination, session_id, stream_id, &udp_channel->local_control, true) < 0)
         {
-            AERON_APPEND_ERR("%s", "Failed to add pending setup for receiver");
-            return -1;
-        }
-
-        if (aeron_receive_channel_endpoint_send_sm(
-            endpoint, destination, &destination->current_control_addr, stream_id, session_id, 0, 0, 0,
-            AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG) < 0)
-        {
-            AERON_APPEND_ERR("%s", "Failed to send sm for receiver");
+            AERON_APPEND_ERR("streamId=%" PRIi32 " session_id=%" PRIi32, stream_id, session_id);
             return -1;
         }
 
