@@ -206,6 +206,11 @@ TEST_F(CLocalAddressesTest, shouldGetOriginalAddressWhenNoWildcardSpecified)
         subscription, uriWithResolvedEndpoint, sizeof(uriWithResolvedEndpoint)));
     ASSERT_STREQ(uri, uriWithResolvedEndpoint);
 
+    char uriTooSmall[5] = { 0 };
+    ASSERT_LT(0, aeron_subscription_try_resolve_channel_endpoint_port(
+        subscription, uriTooSmall, sizeof(uriTooSmall)));
+    ASSERT_STREQ(std::string(uri).substr(0, 4).c_str(), uriTooSmall);
+
     aeron_subscription_close(subscription, setFlagOnClose, &subscriptionClosedFlag);
 
     while (!subscriptionClosedFlag)
@@ -295,6 +300,12 @@ TEST_P(CLocalAddressesTestParameterized, shouldGetOriginalChannelWhenNoWildcardS
         subscription, uriWithResolvedEndpoint, sizeof(uriWithResolvedEndpoint));
     ASSERT_EQ(channel.length(), result);
     ASSERT_STREQ(channel.c_str(), uriWithResolvedEndpoint);
+
+    char uriTooSmall[5] = { 0 };
+    int result2 = aeron_subscription_try_resolve_channel_endpoint_port(
+        subscription, uriTooSmall, sizeof(uriTooSmall));
+    ASSERT_EQ(channel.length(), result2);
+    ASSERT_STREQ(channel.substr(0, 4).c_str(), uriTooSmall);
 
     aeron_subscription_close(subscription, setFlagOnClose, &subscriptionClosedFlag);
 

@@ -702,8 +702,11 @@ int aeron_subscription_try_resolve_channel_endpoint_port(
         }
         else
         {
-            strcpy(uri, subscription->channel);
-            result = (int)strlen(subscription->channel);
+            size_t channel_len = strlen(subscription->channel);
+            size_t to_copy = channel_len < uri_len - 1 ? channel_len : uri_len - 1;
+            memcpy(uri, subscription->channel, to_copy);
+            uri[to_copy] = '\0';
+            result = (int)channel_len;
         }
     }
 
