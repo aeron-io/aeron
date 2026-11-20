@@ -100,6 +100,9 @@ int aeron_send_channel_endpoint_create(
     _endpoint->transport_bindings = context->udp_channel_transport_bindings;
     _endpoint->data_paths = &context->sender_proxy->sender->data_paths;
     _endpoint->transport.data_paths = _endpoint->data_paths;
+    _endpoint->transport.error_log = context->error_log;
+    _endpoint->transport.errors_counter = aeron_counters_manager_addr(counters_manager, AERON_SYSTEM_COUNTER_ERRORS);
+    _endpoint->transport.short_sends_counter = aeron_counters_manager_addr(counters_manager, AERON_SYSTEM_COUNTER_SHORT_SENDS);
 
     if (context->sender_port_manager->get_managed_port(
         context->sender_port_manager->state,
@@ -379,8 +382,6 @@ int aeron_send_channel_send(
     size_t iov_length,
     int64_t *bytes_sent)
 {
-    int result;
-
     if (AERON_C_COND_EXPECT(NULL != endpoint->data_loss_generator, 0) &&
         aeron_loss_generator_should_drop_frame(
             endpoint->data_loss_generator,
@@ -402,23 +403,28 @@ int aeron_send_channel_send(
 
     if (NULL == endpoint->destination_tracker)
     {
-        result = endpoint->data_paths->send_func(
+        int result = endpoint->data_paths->send_func(
             endpoint->data_paths, &endpoint->transport, &endpoint->current_data_addr, iov, iov_length, bytes_sent);
         if (result < 0)
         {
             AERON_APPEND_ERR("%s", "");
             aeron_udp_channel_transport_log_send_error(
                 endpoint->transport.error_log, endpoint->transport.errors_counter, &endpoint->current_data_addr);
-            result = 0;
+            return 0;
         }
+
+        if (iov_length != (size_t)result)
+        {
+            aeron_counter_increment(endpoint->transport.short_sends_counter);
+        }
+
+        return result;
     }
     else
     {
-        result = aeron_udp_destination_tracker_send(
+        return aeron_udp_destination_tracker_send(
             endpoint->destination_tracker, &endpoint->transport, iov, iov_length, bytes_sent);
     }
-
-    return result;
 }
 
 int aeron_send_channel_send_endpoint_address(
@@ -440,8 +446,14 @@ int aeron_send_channel_send_endpoint_address(
         AERON_APPEND_ERR("%s", "");
         aeron_udp_channel_transport_log_send_error(
             endpoint->transport.error_log, endpoint->transport.errors_counter, endpoint_address);
-        result = 0;
+        return 0;
     }
+
+    if (iov_length != (size_t)result)
+    {
+        aeron_counter_increment(endpoint->transport.short_sends_counter);
+    }
+
     return result;
 }
 

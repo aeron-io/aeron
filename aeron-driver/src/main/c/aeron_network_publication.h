@@ -147,7 +147,6 @@ typedef struct aeron_network_publication_stct
         aeron_driver_publication_revoke_func_t publication_revoke;
     } log;
 
-    volatile int64_t *short_sends_counter;
     volatile int64_t *heartbeats_sent_counter;
     volatile int64_t *sender_flow_control_limits_counter;
     volatile int64_t *retransmits_sent_counter;

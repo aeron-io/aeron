@@ -297,7 +297,6 @@ int aeron_network_publication_create(
     _pub->has_sender_released = false;
     _pub->has_received_unicast_eos = false;
 
-    _pub->short_sends_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     _pub->heartbeats_sent_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_HEARTBEATS_SENT);
     _pub->sender_flow_control_limits_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_SENDER_FLOW_CONTROL_LIMITS);
@@ -377,12 +376,9 @@ static int aeron_network_publication_do_send(
     }
 }
 
-int aeron_network_publication_setup_message_check(
+void aeron_network_publication_setup_message_check(
     aeron_network_publication_t *publication, int64_t now_ns, int32_t active_term_id, int32_t term_offset)
 {
-    int result = 0;
-    int64_t bytes_sent = 0;
-
     if (now_ns > (publication->time_of_last_setup_ns + AERON_NETWORK_PUBLICATION_SETUP_TIMEOUT_NS))
     {
         uint8_t setup_buffer[sizeof(aeron_setup_header_t)];
@@ -422,13 +418,8 @@ int aeron_network_publication_setup_message_check(
                 *publication->snd_pos_position.value_addr);
         }
 
-        if (0 <= (result = aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent)))
-        {
-            if (bytes_sent < (int64_t)iov.iov_len)
-            {
-                aeron_counter_increment(publication->short_sends_counter);
-            }
-        }
+        int64_t bytes_sent = 0;
+        aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent);
 
         publication->time_of_last_setup_ns = now_ns;
 
@@ -439,8 +430,6 @@ int aeron_network_publication_setup_message_check(
             publication->is_setup_elicited = false;
         }
     }
-
-    return result;
 }
 
 int aeron_network_publication_heartbeat_message_check(
@@ -451,7 +440,6 @@ int aeron_network_publication_heartbeat_message_check(
     bool is_end_of_stream)
 {
     int result = 0;
-    int64_t bytes_sent = 0;
 
     if (publication->has_initial_connection &&
         now_ns > (publication->time_of_last_data_or_heartbeat_ns + AERON_NETWORK_PUBLICATION_HEARTBEAT_TIMEOUT_NS))
@@ -472,7 +460,6 @@ int aeron_network_publication_heartbeat_message_check(
 
         uint8_t heartbeat_buffer[sizeof(aeron_data_header_t)];
         aeron_data_header_t *data_header = (aeron_data_header_t *)heartbeat_buffer;
-        struct iovec iov;
 
         data_header->frame_header.frame_length = 0;
         data_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -484,17 +471,13 @@ int aeron_network_publication_heartbeat_message_check(
         data_header->term_id = active_term_id;
         data_header->reserved_value = 0l;
 
+        struct iovec iov;
         iov.iov_base = heartbeat_buffer;
         iov.iov_len = sizeof(aeron_data_header_t);
 
-        if (0 <= (result = aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent)))
-        {
-            result = (int)bytes_sent;
-            if (bytes_sent < (int64_t)iov.iov_len)
-            {
-                aeron_counter_increment(publication->short_sends_counter);
-            }
-        }
+        int64_t bytes_sent = 0;
+        aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent);
+        result = (int)bytes_sent;
 
         aeron_counter_increment_release(publication->heartbeats_sent_counter);
         publication->time_of_last_data_or_heartbeat_ns = now_ns;
@@ -508,7 +491,7 @@ int aeron_network_publication_send_data(
 {
     const int32_t term_length = publication->term_length_mask + 1;
     const size_t max_vlen = publication->max_messages_per_send;
-    int result = 0, vlen = 0;
+    int vlen = 0;
     int64_t bytes_sent = 0;
     int64_t available_window = aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos;
     int64_t highest_pos = snd_pos;
@@ -554,16 +537,12 @@ int aeron_network_publication_send_data(
 
     if (vlen > 0)
     {
-        result = aeron_network_publication_do_send(publication, iov, vlen, &bytes_sent);
-        if (result == vlen) /* assume that a partial send from a broken stack will also move the snd-pos */
+        int result = aeron_network_publication_do_send(publication, iov, vlen, &bytes_sent);
+        if (vlen == result) /* assume that a partial send from a broken stack will also move the snd-pos */
         {
             publication->time_of_last_data_or_heartbeat_ns = now_ns;
             publication->track_sender_limits = true;
             aeron_counter_set_release(publication->snd_pos_position.value_addr, highest_pos);
-        }
-        else if (result >= 0)
-        {
-            aeron_counter_increment(publication->short_sends_counter);
         }
     }
     else if (publication->track_sender_limits && available_window <= 0)
@@ -573,7 +552,7 @@ int aeron_network_publication_send_data(
         publication->track_sender_limits = false;
     }
 
-    return result < 0 ? result : (int)bytes_sent;
+    return (int)bytes_sent;
 }
 
 int aeron_network_publication_send(aeron_network_publication_t *publication, int64_t now_ns)
@@ -585,18 +564,10 @@ int aeron_network_publication_send(aeron_network_publication_t *publication, int
 
     if (!publication->has_initial_connection || publication->is_setup_elicited)
     {
-        if (aeron_network_publication_setup_message_check(publication, now_ns, active_term_id, term_offset) < 0)
-        {
-            return -1;
-        }
+        aeron_network_publication_setup_message_check(publication, now_ns, active_term_id, term_offset);
     }
 
     int bytes_sent = aeron_network_publication_send_data(publication, now_ns, snd_pos, term_offset);
-    if (bytes_sent < 0)
-    {
-        return -1;
-    }
-
     if (0 == bytes_sent)
     {
         bool is_end_of_stream;
@@ -604,10 +575,6 @@ int aeron_network_publication_send(aeron_network_publication_t *publication, int
 
         bytes_sent = aeron_network_publication_heartbeat_message_check(
             publication, now_ns, active_term_id, term_offset, is_end_of_stream);
-        if (bytes_sent < 0)
-        {
-            return -1;
-        }
 
         bool has_spies;
         AERON_GET_ACQUIRE(has_spies, publication->has_spies);
@@ -683,19 +650,8 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
             iov.iov_base = ptr;
             iov.iov_len = (uint32_t)available;
             int64_t msg_bytes_sent = 0;
-
-            int sendmsg_result = aeron_network_publication_do_send(publication, &iov, 1, &msg_bytes_sent);
-            if (0 <= sendmsg_result)
+            if (0 == aeron_network_publication_do_send(publication, &iov, 1, &msg_bytes_sent))
             {
-                if (msg_bytes_sent < (int64_t)iov.iov_len)
-                {
-                    aeron_counter_increment(publication->short_sends_counter);
-                    break;
-                }
-            }
-            else
-            {
-                result = -1;
                 break;
             }
 
@@ -894,8 +850,6 @@ void aeron_network_publication_on_rttm(
     {
         uint8_t rttm_reply_buffer[sizeof(aeron_rttm_header_t)];
         aeron_rttm_header_t *rttm_out_header = (aeron_rttm_header_t *)rttm_reply_buffer;
-        struct iovec iov;
-        int64_t bytes_sent;
 
         rttm_out_header->frame_header.frame_length = sizeof(aeron_rttm_header_t);
         rttm_out_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -907,16 +861,12 @@ void aeron_network_publication_on_rttm(
         rttm_out_header->reception_delta = 0;
         rttm_out_header->receiver_id = rttm_in_header->receiver_id;
 
+        struct iovec iov;
         iov.iov_base = rttm_reply_buffer;
         iov.iov_len = sizeof(aeron_rttm_header_t);
+        int64_t bytes_sent = 0;
 
-        if (0 <= aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent))
-        {
-            if (bytes_sent < (int64_t)iov.iov_len)
-            {
-                aeron_counter_increment(publication->short_sends_counter);
-            }
-        }
+        aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent);
     }
 }
 

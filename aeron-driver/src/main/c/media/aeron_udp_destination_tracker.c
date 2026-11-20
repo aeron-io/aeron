@@ -109,7 +109,7 @@ int aeron_udp_destination_tracker_send(
     int result = (int)iov_length;
     int to_be_removed = 0;
 
-    *bytes_sent = iov->iov_len;
+    *bytes_sent = 0;
 
     int starting_index = tracker->round_robin_index++;
     if (starting_index >= length)
@@ -126,16 +126,23 @@ int aeron_udp_destination_tracker_send(
         {
             to_be_removed++;
         }
-        else if (entry->addr.ss_family != AF_UNSPEC)
+        else if (AF_UNSPEC != entry->addr.ss_family)
         {
+            int64_t sendmsg_bytes_sent = 0;
             const int sendmsg_result = tracker->data_paths->send_func(
-                tracker->data_paths, transport, &entry->addr, iov, iov_length, bytes_sent);
+                tracker->data_paths, transport, &entry->addr, iov, iov_length, &sendmsg_bytes_sent);
             if (sendmsg_result < 0)
             {
                 AERON_APPEND_ERR("receiver_id=%" PRIi64, entry->receiver_id);
                 aeron_udp_channel_transport_log_send_error(transport->error_log, transport->errors_counter, &entry->addr);
                 result = 0;
             }
+            else if (iov_length != (size_t)sendmsg_result)
+            {
+                aeron_counter_increment(transport->short_sends_counter);
+                result = sendmsg_result;
+            }
+            *bytes_sent += sendmsg_bytes_sent;
         }
     }
 
@@ -147,16 +154,23 @@ int aeron_udp_destination_tracker_send(
         {
             to_be_removed++;
         }
-        else if (entry->addr.ss_family != AF_UNSPEC)
+        else if (AF_UNSPEC != entry->addr.ss_family)
         {
+            int64_t sendmsg_bytes_sent = 0;
             const int sendmsg_result = tracker->data_paths->send_func(
-                tracker->data_paths, transport, &entry->addr, iov, iov_length, bytes_sent);
+                tracker->data_paths, transport, &entry->addr, iov, iov_length, &sendmsg_bytes_sent);
             if (sendmsg_result < 0)
             {
                 AERON_APPEND_ERR("receiver_id=%" PRIi64, entry->receiver_id);
                 aeron_udp_channel_transport_log_send_error(transport->error_log, transport->errors_counter, &entry->addr);
                 result = 0;
             }
+            else if (iov_length != (size_t)sendmsg_result)
+            {
+                aeron_counter_increment(transport->short_sends_counter);
+                result = sendmsg_result;
+            }
+            *bytes_sent += sendmsg_bytes_sent;
         }
     }
 
