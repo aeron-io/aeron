@@ -6,6 +6,7 @@
 
 === Changelog
 
+* **[Driver/C]** Don’t enable SO_REUSEPORT socket option on Linux for multicast transport.
 * **[Driver/C]** Fix failed setup-eliciting status message leaves the session pending setup forever.
 (https://github.com/aeron-io/aeron/issues/2251[#2251])
 * **[Driver/C]** Do not increment `Short Sends` counter in case of a send error.
