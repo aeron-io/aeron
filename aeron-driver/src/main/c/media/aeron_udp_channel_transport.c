@@ -188,7 +188,7 @@ int aeron_udp_channel_transport_init(
         }
 #endif
 
-#if defined(SO_REUSEPORT)
+#if defined(SO_REUSEPORT) && !defined(__linux__)
         if (aeron_setsockopt(transport->recv_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) < 0)
         {
             AERON_SET_ERR(errno, "%s", "setsockopt(SO_REUSEPORT)");
