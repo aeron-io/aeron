@@ -277,7 +277,6 @@ inline void aeron_logbuffer_metadata_init(
 {
     aeron_logbuffer_metadata_t *log_meta_data = (aeron_logbuffer_metadata_t *)log_meta_data_buffer;
 
-    log_meta_data->end_of_stream_position = end_of_stream_position;
     log_meta_data->is_connected = is_connected;
     log_meta_data->active_transport_count = active_transport_count;
 
@@ -315,6 +314,8 @@ inline void aeron_logbuffer_metadata_init(
     log_meta_data->tether = tether;
     log_meta_data->is_publication_revoked = (uint8_t)false;
     log_meta_data->type = type;
+
+    AERON_SET_RELEASE(log_meta_data->end_of_stream_position, end_of_stream_position);
 }
 
 inline void aeron_logbuffer_apply_default_header(uint8_t *log_meta_data_buffer, uint8_t *buffer)
