@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 
+#include "aeron_counters.h"
 #include "FragmentAssembler.h"
 #include "client/archive/AeronArchive.h"
 #include "client/archive/CredentialsSupplier.h"
@@ -345,19 +346,32 @@ TEST_F(PersistentSubscriptionWrapperTest, shouldCycleThroughMultipleLiveReplayTr
         waitUntil("fast subscription has image",
             [&] { return fastSub->imageCount() > 0; });
 
-        // Flood 64 large messages — fast subscriber drains them, PS falls behind
-        std::vector<std::vector<uint8_t>> backPressureMessages = generateMessages(64, ONE_KB);
-        offerMessages(recordedPublication, backPressureMessages);
+        CountersReader &countersReader = aeron->countersReader();
+        const std::int32_t overRunsCounterId = countersReader.findByTypeIdAndRegistrationId(
+            AERON_COUNTER_SYSTEM_COUNTER_TYPE_ID, AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
+        ASSERT_NE(AERON_NULL_COUNTER_ID, overRunsCounterId);
+        const std::int64_t initialOverRuns = countersReader.getCounterValue(overRunsCounterId);
 
+        std::vector<std::vector<uint8_t>> backPressureMessages;
         std::size_t fastCount = 0;
         fragment_handler_t fastHandler = [&](const AtomicBuffer &, util::index_t, util::index_t, const Header &)
         {
             fastCount++;
         };
         FragmentAssembler fastAssembler(fastHandler);
-        executeUntil("fast sub receives 64",
-            [&] { return static_cast<int>(fastSub->poll(fastAssembler.handler(), 1)); },
-            [&] { return fastCount >= 64; });
+        for (int i = 0; i < 3; i++)
+        {
+            std::vector<std::vector<uint8_t>> batch = generateMessages(32, ONE_KB);
+            offerMessages(recordedPublication, batch);
+            backPressureMessages.insert(backPressureMessages.end(), batch.begin(), batch.end());
+
+            executeUntil("fast sub receives batch",
+                [&] { return static_cast<int>(fastSub->poll(fastAssembler.handler(), 1)); },
+                [&] { return fastCount >= backPressureMessages.size(); });
+        }
+
+        waitUntil("live image is over-run",
+            [&] { return countersReader.getCounterValue(overRunsCounterId) > initialOverRuns; });
 
         executeUntil("drops to replaying", poller, [&] { return persistentSubscription->isReplaying(); });
         ASSERT_EQ(cycle + 1, liveLeftCount);
