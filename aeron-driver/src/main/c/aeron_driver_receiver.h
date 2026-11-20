@@ -145,6 +145,7 @@ int aeron_driver_receiver_add_pending_setup(
     aeron_receive_destination_t *destination,
     int32_t session_id,
     int32_t stream_id,
-    struct sockaddr_storage *control_addr);
+    struct sockaddr_storage *control_addr,
+    bool is_periodic);
 
 #endif //AERON_DRIVER_RECEIVER_H

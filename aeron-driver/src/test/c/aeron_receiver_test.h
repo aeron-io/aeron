@@ -113,6 +113,7 @@ protected:
         m_context->error_log = &m_error_log;
         m_context->error_buffer = m_error_log_buffer.data();
         m_context->error_buffer_length = m_error_log_buffer.size();
+        m_context->system_counters = &m_system_counters;
     }
 
     void DoTearDown()

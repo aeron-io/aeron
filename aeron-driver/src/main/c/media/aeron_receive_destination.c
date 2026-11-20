@@ -45,6 +45,11 @@ int aeron_receive_destination_create(
     }
 
     _destination->transport.fd = -1;
+    _destination->transport.error_log = context->error_log;
+    _destination->transport.errors_counter =
+        aeron_system_counter_addr(context->system_counters, AERON_SYSTEM_COUNTER_ERRORS);
+    _destination->transport.short_sends_counter =
+        aeron_system_counter_addr(context->system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     _destination->data_paths = &context->receiver_proxy->receiver->data_paths;
     _destination->transport.data_paths = _destination->data_paths;
     _destination->local_sockaddr_indicator.counter_id = AERON_NULL_COUNTER_ID;

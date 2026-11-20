@@ -134,7 +134,7 @@ int aeron_udp_destination_tracker_send(
             if (sendmsg_result < 0)
             {
                 AERON_APPEND_ERR("receiver_id=%" PRIi64, entry->receiver_id);
-                aeron_udp_channel_transport_log_send_error(transport->error_log, transport->errors_counter, &entry->addr);
+                aeron_udp_channel_transport_log_send_error(transport, &entry->addr);
                 result = 0;
             }
             else if (iov_length != (size_t)sendmsg_result)
@@ -162,7 +162,7 @@ int aeron_udp_destination_tracker_send(
             if (sendmsg_result < 0)
             {
                 AERON_APPEND_ERR("receiver_id=%" PRIi64, entry->receiver_id);
-                aeron_udp_channel_transport_log_send_error(transport->error_log, transport->errors_counter, &entry->addr);
+                aeron_udp_channel_transport_log_send_error(transport, &entry->addr);
                 result = 0;
             }
             else if (iov_length != (size_t)sendmsg_result)

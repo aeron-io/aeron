@@ -199,7 +199,7 @@ static int aeron_driver_receiver_slow_tick_work(aeron_driver_receiver_t *receive
             }
             else if (aeron_receive_channel_endpoint_should_elicit_setup_message(entry->endpoint))
             {
-                if (aeron_receive_channel_endpoint_send_sm(
+                aeron_receive_channel_endpoint_send_sm(
                     entry->endpoint,
                     entry->destination,
                     &entry->control_addr,
@@ -208,13 +208,8 @@ static int aeron_driver_receiver_slow_tick_work(aeron_driver_receiver_t *receive
                     0,
                     0,
                     0,
-                    AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG) < 0)
-                {
-                    AERON_APPEND_ERR("%s", "receiver send periodic SM");
-                    aeron_driver_receiver_log_error(receiver);
-                }
-
-                entry->time_of_status_message_ns = now_ns;
+                    AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG);
+                entry->time_of_status_message_ns = now_ns; // throttle attempts even for failed sends
                 work_count++;
             }
         }
@@ -633,11 +628,11 @@ void aeron_driver_receiver_on_resolution_change(void *clientd, void *item)
             pending_setup->is_periodic)
         {
             memcpy(&pending_setup->control_addr, &cmd->new_addr, sizeof(pending_setup->control_addr));
-            aeron_counter_get_and_add_release(receiver->resolution_changes_counter, 1);
         }
     }
 
     aeron_receive_channel_endpoint_update_control_address(endpoint, destination, &cmd->new_addr);
+    aeron_counter_get_and_add_release(receiver->resolution_changes_counter, 1);
 }
 
 void aeron_driver_receiver_on_invalidate_image(void *clientd, void *item)
@@ -666,7 +661,8 @@ int aeron_driver_receiver_add_pending_setup(
     aeron_receive_destination_t *destination,
     int32_t session_id,
     int32_t stream_id,
-    struct sockaddr_storage *control_addr)
+    struct sockaddr_storage *control_addr,
+    bool is_periodic)
 {
     int ensure_capacity_result = 0;
     AERON_ARRAY_ENSURE_CAPACITY(
@@ -674,7 +670,7 @@ int aeron_driver_receiver_add_pending_setup(
 
     if (ensure_capacity_result < 0)
     {
-        AERON_APPEND_ERR("%s", "receiver add_pending_setup");
+        AERON_APPEND_ERR("%s", "failed to add entry to `receiver->pending_setups`");
         return ensure_capacity_result;
     }
 
@@ -685,12 +681,22 @@ int aeron_driver_receiver_add_pending_setup(
     entry->destination = destination;
     entry->session_id = session_id;
     entry->stream_id = stream_id;
-    entry->time_of_status_message_ns = aeron_clock_cached_nano_time(receiver->context->receiver_cached_clock);
-    entry->is_periodic = false;
-    if (NULL != control_addr)
+    entry->time_of_status_message_ns = 0;
+    entry->is_periodic = is_periodic;
+    memcpy(&entry->control_addr, control_addr, sizeof(entry->control_addr));
+
+    if (0 != aeron_receive_channel_endpoint_send_sm(
+        endpoint,
+        destination,
+        control_addr,
+        stream_id,
+        session_id,
+        0,
+        0,
+        0,
+        AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG))
     {
-        memcpy(&entry->control_addr, control_addr, sizeof(entry->control_addr));
-        entry->is_periodic = true;
+        entry->time_of_status_message_ns = aeron_clock_cached_nano_time(receiver->context->receiver_cached_clock);
     }
 
     return ensure_capacity_result;

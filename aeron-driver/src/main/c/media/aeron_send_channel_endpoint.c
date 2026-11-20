@@ -408,8 +408,7 @@ int aeron_send_channel_send(
         if (result < 0)
         {
             AERON_APPEND_ERR("%s", "");
-            aeron_udp_channel_transport_log_send_error(
-                endpoint->transport.error_log, endpoint->transport.errors_counter, &endpoint->current_data_addr);
+            aeron_udp_channel_transport_log_send_error(&endpoint->transport, &endpoint->current_data_addr);
             return 0;
         }
 
@@ -444,8 +443,7 @@ int aeron_send_channel_send_endpoint_address(
     if (result < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_udp_channel_transport_log_send_error(
-            endpoint->transport.error_log, endpoint->transport.errors_counter, endpoint_address);
+        aeron_udp_channel_transport_log_send_error(&endpoint->transport, endpoint_address);
         return 0;
     }
 

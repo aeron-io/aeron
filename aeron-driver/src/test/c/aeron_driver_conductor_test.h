@@ -281,6 +281,11 @@ struct TestDriverConductor
         m_destination.transport.fd = -1;
         m_destination.data_paths = &m_receiver.receiver_proxy.receiver->data_paths;
         m_destination.transport.data_paths = m_destination.data_paths;
+        m_destination.transport.error_log = context.m_context->error_log;
+        m_destination.transport.errors_counter =
+            aeron_system_counter_addr(context.m_context->system_counters, AERON_SYSTEM_COUNTER_ERRORS);
+        m_destination.transport.short_sends_counter =
+            aeron_system_counter_addr(context.m_context->system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     }
 
     virtual ~TestDriverConductor()
