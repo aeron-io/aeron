@@ -62,6 +62,7 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
@@ -100,8 +101,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 
@@ -754,6 +757,111 @@ class ArchiveTest
 
             // the archive marks itself terminated after closing its recordings
             Tests.await(() -> NULL_VALUE == archiveCtx.archiveMarkFile().activityTimestampVolatile());
+        }
+        finally
+        {
+            archiveCtx.deleteDirectory();
+            driverCtx.deleteDirectory();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "recorder", "replayer" })
+    @InterruptAfter(10)
+    void shouldTerminateWhenSessionWorkerThreadExitsUnexpectedly(final String sessionWorker)
+    {
+        final AtomicReference<Thread> recorderThread = new AtomicReference<>();
+        final AtomicReference<Thread> replayerThread = new AtomicReference<>();
+        final AtomicReference<Throwable> terminationException = new AtomicReference<>();
+        final MediaDriver.Context driverCtx = new MediaDriver.Context().dirDeleteOnStart(true);
+        final Archive.Context archiveCtx = TestContexts.localhostArchive()
+            .deleteArchiveOnStart(true)
+            .threadingMode(DEDICATED)
+            .recorderThreadFactory((runnable) -> newThread(runnable, recorderThread))
+            .replayerThreadFactory((runnable) -> newThread(runnable, replayerThread))
+            .errorHandler((throwable) ->
+            {
+                if (throwable instanceof AgentTerminationException)
+                {
+                    terminationException.compareAndSet(null, throwable);
+                }
+            });
+
+        try (ArchivingMediaDriver ignore = ArchivingMediaDriver.launch(driverCtx, archiveCtx))
+        {
+            final AtomicReference<Thread> workerThread =
+                "recorder".equals(sessionWorker) ? recorderThread : replayerThread;
+            Tests.await(() -> null != workerThread.get() && workerThread.get().isAlive());
+            workerThread.get().interrupt();
+
+            Tests.await(() -> NULL_VALUE == archiveCtx.archiveMarkFile().activityTimestampVolatile());
+            Tests.await(() -> null != terminationException.get());
+            assertEquals("unexpected " + sessionWorker + " termination", terminationException.get().getMessage());
+        }
+        finally
+        {
+            archiveCtx.deleteDirectory();
+            driverCtx.deleteDirectory();
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldStopActiveRecordingWhenRecorderThreadTerminatesWithError()
+    {
+        final AtomicBoolean failRecorder = new AtomicBoolean();
+        final AtomicReference<Throwable> terminationException = new AtomicReference<>();
+        final MediaDriver.Context driverCtx = new MediaDriver.Context().dirDeleteOnStart(true);
+        final Archive.Context archiveCtx = TestContexts.localhostArchive()
+            .deleteArchiveOnStart(true)
+            .threadingMode(DEDICATED)
+            .recorderIdleStrategySupplier(() -> new FailOnDemandIdleStrategy(failRecorder))
+            .recorderThreadFactory((runnable) ->
+            {
+                final Thread thread = new Thread(runnable);
+                thread.setUncaughtExceptionHandler((t, ex) -> {});
+                return thread;
+            })
+            .errorHandler((throwable) ->
+            {
+                if (throwable instanceof AgentTerminationException)
+                {
+                    terminationException.compareAndSet(null, throwable);
+                }
+            });
+
+        try
+        {
+            final long recordingId;
+            final long recordedPosition;
+
+            try (ArchivingMediaDriver ignore = ArchivingMediaDriver.launch(driverCtx, archiveCtx);
+                AeronArchive archive = AeronArchive.connect(TestContexts.localhostAeronArchive()))
+            {
+                final Publication publication = archive.addRecordedPublication("aeron:ipc", 7);
+                final CountersReader counters = archive.context().aeron().countersReader();
+                final int counterId = Tests.awaitRecordingCounterId(
+                    counters, publication.sessionId(), archive.archiveId());
+                recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+                final DirectBuffer buffer = new UnsafeBuffer("Hello World".getBytes(StandardCharsets.US_ASCII));
+                while (publication.offer(buffer) <= 0)
+                {
+                    Tests.yield();
+                }
+                recordedPosition = publication.position();
+                Tests.awaitPosition(counters, counterId, recordedPosition);
+                failRecorder.set(true);
+
+                Tests.await(() -> NULL_VALUE == archiveCtx.archiveMarkFile().activityTimestampVolatile());
+                Tests.await(() -> null != terminationException.get());
+                assertEquals("unexpected recorder termination", terminationException.get().getMessage());
+            }
+
+            try (Catalog catalog = openCatalog(archiveCtx.archiveDirectoryName()))
+            {
+                assertEquals(recordedPosition, catalog.stopPosition(recordingId));
+            }
         }
         finally
         {
@@ -1814,6 +1922,48 @@ class ArchiveTest
             true,
             null,
             intConsumer);
+    }
+
+    private static Thread newThread(final Runnable runnable, final AtomicReference<Thread> threadRef)
+    {
+        final Thread thread = new Thread(runnable);
+        threadRef.set(thread);
+        return thread;
+    }
+
+    private static final class FailOnDemandIdleStrategy implements IdleStrategy
+    {
+        private final AtomicBoolean shouldFail;
+
+        private FailOnDemandIdleStrategy(final AtomicBoolean shouldFail)
+        {
+            this.shouldFail = shouldFail;
+        }
+
+        @Override
+        public void idle(final int workCount)
+        {
+            if (shouldFail.get())
+            {
+                throw new Error("simulated recorder failure");
+            }
+
+            if (workCount <= 0)
+            {
+                Thread.yield();
+            }
+        }
+
+        @Override
+        public void idle()
+        {
+            idle(0);
+        }
+
+        @Override
+        public void reset()
+        {
+        }
     }
 
     static final class SubscriptionDescriptor
