@@ -426,6 +426,16 @@ cleanup:
     return -1;
 }
 
+int aeron_archive_async_connect_close(aeron_archive_async_connect_t *async)
+{
+    if (NULL != async)
+    {
+        aeron_archive_async_connect_delete(async);
+    }
+
+    return 0;
+}
+
 /* *********************** */
 
 int aeron_archive_check_and_setup_response_channel(aeron_archive_context_t *ctx, int64_t subscription_id)

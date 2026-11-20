@@ -525,6 +525,14 @@ int aeron_archive_async_connect(aeron_archive_async_connect_t **async, aeron_arc
 int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_archive_async_connect_t *async);
 
 /**
+ * Close and delete aeron_archive_async_connect_t struct.
+ *
+ * @param async to close and delete
+ * @return 0 for success and -1 for error.
+ */
+int aeron_archive_async_connect_close(aeron_archive_async_connect_t *async);
+
+/**
  * Connect to an Aeron Archive.
  *
  * @param aeron_archive aeron_archive_t that will be created/initialized upon successful connection

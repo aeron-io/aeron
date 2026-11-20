@@ -146,3 +146,37 @@ TEST(ArchiveAsyncConnectLeakTest, shouldNotLeakPendingAsyncOpsOnDelete)
 
     destroy_test_aeron_client(client, aeron_ctx);
 }
+
+TEST(ArchiveAsyncConnectLeakTest, shouldCloseAsyncConnect)
+{
+    const size_t cnc_len = aeron_cnc_computed_length(
+        TO_DRIVER_RING_BUFFER_LENGTH +
+        TO_CLIENTS_BUFFER_LENGTH +
+        COUNTER_VALUES_BUFFER_LENGTH +
+        COUNTER_METADATA_BUFFER_LENGTH +
+        ERROR_BUFFER_LENGTH,
+        FILE_PAGE_SIZE);
+
+    auto cnc_buf = std::unique_ptr<uint8_t[]>(new uint8_t[cnc_len]);
+
+    aeron_context_t *aeron_ctx = nullptr;
+    aeron_t *client = create_test_aeron_client(&aeron_ctx, cnc_buf.get(), cnc_len);
+    ASSERT_NE(nullptr, client) << aeron_errmsg();
+
+    aeron_archive_context_t *archive_ctx = nullptr;
+    ASSERT_EQ(0, aeron_archive_context_init(&archive_ctx)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_archive_context_set_control_request_channel(
+        archive_ctx, "aeron:udp?endpoint=localhost:8010")) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_archive_context_set_control_response_channel(
+        archive_ctx, "aeron:udp?endpoint=localhost:0|control-mode=response")) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_archive_context_set_aeron(archive_ctx, client)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_archive_context_set_owns_aeron_client(archive_ctx, false)) << aeron_errmsg();
+
+    aeron_archive_async_connect_t *async = nullptr;
+    ASSERT_EQ(0, aeron_archive_async_connect(&async, archive_ctx)) << aeron_errmsg();
+    ASSERT_NE(nullptr, async);
+
+    ASSERT_EQ(0, aeron_archive_async_connect_close(async)) << aeron_errmsg();
+    aeron_archive_context_close(archive_ctx);
+    destroy_test_aeron_client(client, aeron_ctx);
+}
