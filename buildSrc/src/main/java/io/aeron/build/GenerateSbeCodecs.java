@@ -102,6 +102,7 @@ public abstract class GenerateSbeCodecs extends JavaExec
     /**
      * {@inheritDoc}
      */
+    @Override
     @TaskAction
     public void exec()
     {

@@ -62,6 +62,7 @@ public abstract class GenerateConfigDoc extends JavaExec
     /**
      * {@inheritDoc}
      */
+    @Override
     @TaskAction
     public void exec()
     {
