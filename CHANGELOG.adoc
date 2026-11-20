@@ -6,7 +6,11 @@
 
 === Changelog
 
-* **[Client/C]** Fix aeron_logbuffer_metadata_init release semantics. (https://github.com/aeron-io/aeron/pull/2256[#2256])
+* **[Driver/C]** Fix failed setup-eliciting status message leaves the session pending setup forever.
+(https://github.com/aeron-io/aeron/issues/2251[#2251])
+* **[Driver/C]** Do not increment `Short Sends` counter in case of a send error.
+* **[Driver/C]** Sender/receiver now treat UDP send errors as warning just like Java does.
+* **[Client/C]** Fix `aeron_logbuffer_metadata_init` release semantics. (https://github.com/aeron-io/aeron/pull/2256[#2256])
 * **[Client/C]** Validate that the number of counters in metadata buffer contains at least the number of counters in
 values buffer for `aeron_counters_reader`. (https://github.com/aeron-io/aeron/issues/2252)
 * **[Archive/Java]** Only print the descriptor of non-`VALID` recordings in `ArchiveTool#dump`.
@@ -58,6 +62,13 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.3 (unreleased)
 
+* **[Driver/C]** Fix failed setup-eliciting status message leaves the session pending setup forever.
+(https://github.com/aeron-io/aeron/issues/2251[#2251])
+* **[Driver/C]** Do not increment `Short Sends` counter in case of a send error.
+* **[Driver/C]** Sender/receiver now treat UDP send errors as warning just like Java does.
+* **[Client/C]** Fix `aeron_logbuffer_metadata_init` release semantics. (https://github.com/aeron-io/aeron/pull/2256[#2256])
+* **[Client/C]** Validate that the number of counters in metadata buffer contains at least the number of counters in
+values buffer for `aeron_counters_reader`. (https://github.com/aeron-io/aeron/issues/2252)
 * **[Archive/Java]** Only print the descriptor of non-`VALID` recordings in `ArchiveTool#dump`.
 (https://github.com/aeron-io/aeron/pull/2253[#2253])
 * **[Driver/C]** Log control/endpoint address re-resolution errors as warnings.
