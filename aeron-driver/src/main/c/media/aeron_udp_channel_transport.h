@@ -55,7 +55,8 @@ typedef struct aeron_udp_channel_transport_stct
     void *destination_clientd;
     void *interceptor_clientds[AERON_UDP_CHANNEL_TRANSPORT_MAX_INTERCEPTORS];
     aeron_distinct_error_log_t *error_log;
-    int64_t *errors_counter;
+    volatile int64_t *errors_counter;
+    volatile int64_t *short_sends_counter;
     uint32_t timestamp_flags;
 }
 aeron_udp_channel_transport_t;
@@ -110,7 +111,7 @@ inline void aeron_udp_channel_transport_set_interceptor_clientd(
 }
 
 inline void aeron_udp_channel_transport_log_send_error(
-    aeron_distinct_error_log_t *error_log, int64_t *errors_counter, struct sockaddr_storage *address)
+    aeron_distinct_error_log_t *error_log, volatile int64_t *errors_counter, struct sockaddr_storage *address)
 {
     char addr_str[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
     aeron_format_source_identity(addr_str, sizeof(addr_str), address);

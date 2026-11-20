@@ -99,7 +99,6 @@ int aeron_receive_channel_endpoint_create(
 
     _endpoint->error_log = context->error_log;
     _endpoint->errors_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_ERRORS);
-
     _endpoint->short_sends_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     _endpoint->possible_ttl_asymmetry_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_POSSIBLE_TTL_ASYMMETRY);
@@ -236,7 +235,7 @@ int aeron_receive_channel_endpoint_send(
     struct sockaddr_storage *address,
     struct iovec *iov)
 {
-    int64_t min_bytes_sent = (int64_t)iov->iov_len;
+    int64_t target_bytes_sent = (int64_t)iov->iov_len;
     int64_t bytes_sent = 0;
 
     if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
@@ -246,24 +245,26 @@ int aeron_receive_channel_endpoint_send(
             (const uint8_t *)iov->iov_base,
             (int32_t)iov->iov_len))
     {
-        return (int)min_bytes_sent;
+        return (int)target_bytes_sent;
     }
 
     const int sendmsg_result = destination->data_paths->send_func(
         destination->data_paths, &destination->transport, address, iov, 1, &bytes_sent);
 
-    if (0 <= sendmsg_result)
-    {
-        min_bytes_sent = bytes_sent < min_bytes_sent ? bytes_sent : min_bytes_sent;
-    }
-    else
+    if (sendmsg_result < 0)
     {
         AERON_APPEND_ERR("%s", "");
         aeron_udp_channel_transport_log_send_error(endpoint->error_log, endpoint->errors_counter, address);
-        min_bytes_sent = 0;
+        return 0;
     }
 
-    return (int)min_bytes_sent;
+    if (1 != sendmsg_result)
+    {
+        aeron_counter_increment(endpoint->short_sends_counter);
+        return 0;
+    }
+
+    return (int)bytes_sent;
 }
 
 int aeron_receive_channel_endpoint_elicit_setup(
@@ -335,16 +336,7 @@ int aeron_receive_channel_endpoint_send_sm(
     iov.iov_base = buffer;
     iov.iov_len = (size_t)frame_length;
 
-    int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, control_addr, &iov);
-    if (bytes_sent != (int)iov.iov_len)
-    {
-        if (bytes_sent >= 0)
-        {
-            aeron_counter_increment(endpoint->short_sends_counter);
-        }
-    }
-
-    return bytes_sent;
+    return aeron_receive_channel_endpoint_send(endpoint, destination, control_addr, &iov);
 }
 
 int aeron_receive_channel_endpoint_send_nak(
@@ -375,13 +367,6 @@ int aeron_receive_channel_endpoint_send_nak(
     iov.iov_len = sizeof(aeron_nak_header_t);
 
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
-    if (bytes_sent != (int)iov.iov_len)
-    {
-        if (bytes_sent >= 0)
-        {
-            aeron_counter_increment(endpoint->short_sends_counter);
-        }
-    }
 
     aeron_driver_nak_message_func_t send_nak_message = endpoint->send_nak_message;
     if (NULL != send_nak_message)
@@ -427,16 +412,7 @@ int aeron_receive_channel_endpoint_send_rttm(
     iov.iov_base = buffer;
     iov.iov_len = sizeof(aeron_rttm_header_t);
 
-    int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
-    if (bytes_sent != (int)iov.iov_len)
-    {
-        if (bytes_sent >= 0)
-        {
-            aeron_counter_increment(endpoint->short_sends_counter);
-        }
-    }
-
-    return bytes_sent;
+    return aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
 }
 
 int aeron_receive_channel_endpoint_send_response_setup(
@@ -461,16 +437,7 @@ int aeron_receive_channel_endpoint_send_response_setup(
 
     iov.iov_base = buffer;
     iov.iov_len = sizeof(aeron_response_setup_header_t);
-    int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
-    if (bytes_sent != (int)iov.iov_len)
-    {
-        if (bytes_sent >= 0)
-        {
-            aeron_counter_increment(endpoint->short_sends_counter);
-        }
-    }
-
-    return bytes_sent;
+    return aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
 }
 
 int aeron_receiver_channel_endpoint_send_error_frame(
@@ -503,18 +470,10 @@ int aeron_receiver_channel_endpoint_send_error_frame(
     iov.iov_base = buffer;
     iov.iov_len = (unsigned long)frame_length;
     int bytes_sent = aeron_receive_channel_endpoint_send(channel_endpoint, destination, control_addr, &iov);
-    if (bytes_sent != (int)iov.iov_len)
-    {
-        if (bytes_sent >= 0)
-        {
-            aeron_counter_increment(channel_endpoint->short_sends_counter);
-        }
-    }
-    else
+    if ((int)iov.iov_len == bytes_sent)
     {
         aeron_counter_increment(channel_endpoint->errors_frames_sent_counter);
     }
-
     return bytes_sent;
 }
 

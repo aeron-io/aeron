@@ -81,10 +81,10 @@ typedef struct aeron_receive_channel_endpoint_stct
     }
     group_tag;
 
-    int64_t *errors_counter;
-    int64_t *short_sends_counter;
-    int64_t *possible_ttl_asymmetry_counter;
-    int64_t *errors_frames_sent_counter;
+    volatile int64_t *errors_counter;
+    volatile int64_t *short_sends_counter;
+    volatile int64_t *possible_ttl_asymmetry_counter;
+    volatile int64_t *errors_frames_sent_counter;
 
     const aeron_loss_generator_t *data_loss_generator;
     const aeron_loss_generator_t *control_loss_generator;

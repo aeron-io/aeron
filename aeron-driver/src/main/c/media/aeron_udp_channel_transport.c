@@ -116,6 +116,7 @@ int aeron_udp_channel_transport_init(
     transport->timestamp_flags = AERON_UDP_CHANNEL_TRANSPORT_MEDIA_RCV_TIMESTAMP_NONE;
     transport->error_log = context->error_log;
     transport->errors_counter = aeron_system_counter_addr(context->system_counters, AERON_SYSTEM_COUNTER_ERRORS);
+    transport->short_sends_counter = aeron_system_counter_addr(context->system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     for (size_t i = 0; i < AERON_UDP_CHANNEL_TRANSPORT_MAX_INTERCEPTORS; i++)
     {
         transport->interceptor_clientds[i] = NULL;
@@ -678,7 +679,6 @@ static int aeron_udp_channel_transport_send_connected(
     ssize_t send_result = aeron_send(transport->fd, iov->iov_base, iov->iov_len, 0);
     if (send_result < 0)
     {
-        *bytes_sent = 0;
         char addr[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
         aeron_format_source_identity(addr, sizeof(addr), transport->connected_address);
         AERON_APPEND_ERR("address=%s (protocol_family=%i)", addr, transport->connected_address->ss_family);
@@ -963,4 +963,4 @@ extern void aeron_udp_channel_transport_set_interceptor_clientd(
     aeron_udp_channel_transport_t *transport, int interceptor_index, void *clientd);
 
 extern void aeron_udp_channel_transport_log_send_error(
-    aeron_distinct_error_log_t *error_log, int64_t *errors_counter, struct sockaddr_storage *address);
+    aeron_distinct_error_log_t *error_log, volatile int64_t *errors_counter, struct sockaddr_storage *address);
