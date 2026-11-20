@@ -6,6 +6,7 @@
 
 === Changelog
 
+* **[Client/C]** Avoid buffer overflow in `aeron_subscription_try_resolve_channel_endpoint_port` if subscription channel larger than uri.
 * **[Driver/C]** Don’t enable SO_REUSEPORT socket option on Linux for multicast transport.
 * **[Driver/C]** Fix failed setup-eliciting status message leaves the session pending setup forever.
 (https://github.com/aeron-io/aeron/issues/2251[#2251])
