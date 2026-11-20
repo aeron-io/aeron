@@ -600,10 +600,10 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         }
     }
 
-    _context->resolver_name = getenv(AERON_DRIVER_RESOLVER_NAME_ENV_VAR);
-    _context->resolver_interface = getenv(AERON_DRIVER_RESOLVER_INTERFACE_ENV_VAR);
-    _context->resolver_bootstrap_neighbor = getenv(AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_ENV_VAR);
-    _context->name_resolver_init_args = getenv(AERON_NAME_RESOLVER_INIT_ARGS_ENV_VAR);
+    _context->resolver_name = AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_DRIVER_RESOLVER_NAME_ENV_VAR);
+    _context->resolver_interface = AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_DRIVER_RESOLVER_INTERFACE_ENV_VAR);
+    _context->resolver_bootstrap_neighbor = AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_ENV_VAR);
+    _context->name_resolver_init_args = AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_NAME_RESOLVER_INIT_ARGS_ENV_VAR);
 
     if (NULL != _context->resolver_interface)
     {
@@ -1544,6 +1544,10 @@ int aeron_driver_context_close(aeron_driver_context_t *context)
     aeron_free(context->shared_idle_strategy_init_args);
     aeron_free(context->shared_network_idle_strategy_init_args);
     aeron_free(context->native_resource_agent_idle_strategy_init_args);
+    aeron_free((void *)context->resolver_name);
+    aeron_free((void *)context->resolver_interface);
+    aeron_free((void *)context->resolver_bootstrap_neighbor);
+    aeron_free((void *)context->name_resolver_init_args);
     aeron_free(context->bindings_clientd_entries);
     aeron_free(context->cached_clock);
     aeron_free(context->sender_cached_clock);
@@ -2989,7 +2993,8 @@ int aeron_driver_context_set_resolver_name(aeron_driver_context_t *context, cons
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->resolver_name = value;
+    aeron_free((void *)context->resolver_name);
+    context->resolver_name = NULL == value ? NULL : aeron_strndup(value, AERON_MAX_PATH);
     return 0;
 }
 
@@ -3002,7 +3007,8 @@ int aeron_driver_context_set_resolver_interface(aeron_driver_context_t *context,
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->resolver_interface = value;
+    aeron_free((void *)context->resolver_interface);
+    context->resolver_interface = NULL == value ? NULL : aeron_strndup(value, AERON_MAX_PATH);
     return 0;
 }
 
@@ -3015,7 +3021,8 @@ int aeron_driver_context_set_resolver_bootstrap_neighbor(aeron_driver_context_t 
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->resolver_bootstrap_neighbor = value;
+    aeron_free((void *)context->resolver_bootstrap_neighbor);
+    context->resolver_bootstrap_neighbor = NULL == value ? NULL : aeron_strndup(value, AERON_MAX_PATH);
     return 0;
 }
 
@@ -3043,7 +3050,8 @@ int aeron_driver_context_set_name_resolver_init_args(aeron_driver_context_t *con
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
-    context->name_resolver_init_args = value;
+    aeron_free((void *)context->name_resolver_init_args);
+    context->name_resolver_init_args = NULL == value ? NULL : aeron_strndup(value, AERON_MAX_PATH);
     return 0;
 }
 
