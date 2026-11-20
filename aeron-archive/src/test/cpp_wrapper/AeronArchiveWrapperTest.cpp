@@ -465,6 +465,13 @@ TEST_F(AeronArchiveWrapperTest, shouldAsyncConnectToArchive)
     EXPECT_EQ(42, aeronArchive->archiveId());
 }
 
+TEST_F(AeronArchiveWrapperTest, shouldCloseAsyncConnect)
+{
+    std::shared_ptr<AeronArchive::AsyncConnect> asyncConnect = AeronArchive::asyncConnect(m_context);
+    std::shared_ptr<AeronArchive> aeronArchive = asyncConnect->poll();
+    ASSERT_EQ(nullptr, aeronArchive);
+}
+
 TEST_F(AeronArchiveWrapperTest, shouldAsyncConnectToArchiveWithPrebuiltAeron)
 {
     aeron::Context aeronCtx;

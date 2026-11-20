@@ -252,6 +252,7 @@ public:
 
             if (aeron_archive_async_connect_poll(&aeron_archive, m_async) < 0)
             {
+                m_async = nullptr;
                 ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
             }
 
@@ -270,6 +271,12 @@ public:
                     m_errorHandler,
                     m_delegatingInvoker,
                     m_maxErrorMessageLength));
+        }
+
+        ~AsyncConnect()
+        {
+            aeron_archive_async_connect_close(m_async);
+            m_async = nullptr;
         }
 
     private:
