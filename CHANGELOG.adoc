@@ -58,7 +58,7 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.2[Agrona 2.7.2].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.1[SBE 1.42.1].
-* **[Java]** Upgrade to `Gradle` 9.9.1.
+* **[Java]** Upgrade to `Gradle` 9.9.2.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
 * **[Java]** Upgrade to `ASM` 9.11.1.
