@@ -55,8 +55,8 @@ callback. (https://github.com/aeron-io/aeron/issues/2226[#2226])
 encounters an unrecoverable error, i.e. prevent infinite polling loops while waiting for resources that will never
 arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Driver/C]** include a couple missing files from aeron client in `aeron_driver_static`.
-* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.1[Agrona 2.7.1].
-* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.0[SBE 1.42.0].
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.2[Agrona 2.7.2].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.1[SBE 1.42.1].
 * **[Java]** Upgrade to `Gradle` 9.9.1.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.17.
 * **[Java]** Upgrade to `Versions` 0.67.0.
@@ -86,6 +86,8 @@ values buffer for `aeron_counters_reader`. (https://github.com/aeron-io/aeron/is
 * **[Cluster]** Fix `ClusterCounters.find` so that the last counter is also found.
 * **[Cluster]** Fix overlapping elections losing messages and leaving the cluster unavailable or in a diverged state.
 (https://github.com/aeron-io/aeron/pull/2212[#2212])
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.7.2[Agrona 2.7.2].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.42.1[SBE 1.42.1].
 
 == 1.54.2 (2026-11-11)
 
