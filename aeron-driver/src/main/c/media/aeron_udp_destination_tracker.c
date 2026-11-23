@@ -140,9 +140,12 @@ int aeron_udp_destination_tracker_send(
             else if (iov_length != (size_t)sendmsg_result)
             {
                 aeron_counter_increment(transport->short_sends_counter);
-                result = sendmsg_result;
+                result = 0;
             }
-            *bytes_sent += sendmsg_bytes_sent;
+            else
+            {
+                *bytes_sent += sendmsg_bytes_sent;
+            }
         }
     }
 
@@ -168,9 +171,12 @@ int aeron_udp_destination_tracker_send(
             else if (iov_length != (size_t)sendmsg_result)
             {
                 aeron_counter_increment(transport->short_sends_counter);
-                result = sendmsg_result;
+                result = 0;
             }
-            *bytes_sent += sendmsg_bytes_sent;
+            else
+            {
+                *bytes_sent += sendmsg_bytes_sent;
+            }
         }
     }
 
