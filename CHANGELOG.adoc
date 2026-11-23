@@ -6,6 +6,7 @@
 
 === Changelog
 
+* **[Archive Client/C{plus}{plus} Wrapper]** Delete ArchiveContext, AsyncConnect, and AeronArchive copy/move constructor and assignment.
 * **[Archive Client/C{plus}{plus} Wrapper]** Delete ReplayMerge copy constructor and assignment. Add `ReplayMerge` move
 constructor and assignment.
 * **[Archive Client/C{plus}{plus} Wrapper]** Introduce AeronArchive AsyncConnect destructor to close and delete

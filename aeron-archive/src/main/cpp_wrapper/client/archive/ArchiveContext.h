@@ -89,6 +89,11 @@ public:
         m_aeron_archive_ctx_t = nullptr;
     }
 
+    Context(const Context&) = delete;
+    Context& operator=(const Context&) = delete;
+    Context(Context&&) =delete;
+    Context& operator=(Context&&) =delete;
+
     inline Context &aeron(std::shared_ptr<Aeron> aeron)
     {
         if (aeron_archive_context_set_aeron(m_aeron_archive_ctx_t,aeron->aeron()) < 0)

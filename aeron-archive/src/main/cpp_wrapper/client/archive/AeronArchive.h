@@ -279,6 +279,11 @@ public:
             m_async = nullptr;
         }
 
+        AsyncConnect(const AsyncConnect&) =delete;
+        AsyncConnect& operator=(const AsyncConnect&) =delete;
+        AsyncConnect(AsyncConnect&&) =delete;
+        AsyncConnect& operator=(AsyncConnect&&) =delete;
+
     private:
         explicit AsyncConnect(
             Context &ctx) :
@@ -357,6 +362,11 @@ public:
 
         aeron_archive_close(m_aeron_archive_t);
     }
+
+    AeronArchive(const AeronArchive&) =delete;
+    AeronArchive& operator=(const AeronArchive&) =delete;
+    AeronArchive(AeronArchive&&) =delete;
+    AeronArchive& operator=(AeronArchive&&) =delete;
 
     /**
      * Get the Context used to connect this archive client.
