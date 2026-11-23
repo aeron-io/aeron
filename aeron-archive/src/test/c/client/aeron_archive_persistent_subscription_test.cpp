@@ -154,15 +154,6 @@ static auto hasFailed(aeron_archive_persistent_subscription_t *ps)
     return [ps] { return aeron_archive_persistent_subscription_has_failed(ps); };
 }
 
-static int64_t *findFlowControlOverRunsCounter(aeron_t *aeron)
-{
-    aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron);
-    const int32_t counter_id = aeron_counters_reader_find_by_type_id_and_registration_id(
-        counters_reader, AERON_COUNTER_SYSTEM_COUNTER_TYPE_ID, AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
-
-    return AERON_NULL_COUNTER_ID == counter_id ? nullptr : aeron_counters_reader_addr(counters_reader, counter_id);
-}
-
 static auto makeUncontrolledPoller(
     aeron_archive_persistent_subscription_t *ps,
     MessageCapturingFragmentHandler &handler,
@@ -1556,9 +1547,9 @@ TEST_P(AeronArchivePersistentSubscriptionCatchupTest, shouldCatchupOnReplayBefor
 // A publisher publishes messages on an MDC channel which are recorded by the archive.
 // A persistent subscriber replays the recorded messages and then joins the live stream.
 // Once live, a second fast subscriber (on a separate media driver) joins the same MDC channel.
-// The publisher floods 64 large messages. Only the fast subscriber is polled during
-// this time — the persistent subscriber is not polled and falls behind, causing
-// its live image to be closed.
+// The publisher floods 1.5 terms (3 batches of 32 one-KB messages). Only the fast
+// subscriber is polled during this time — the persistent subscriber is not polled
+// and falls behind, causing its live image to be closed.
 // The persistent subscriber drops back to replay to catch up on the missed messages,
 // then rejoins the live stream.
 // All messages must be received exactly once and in order.
@@ -1662,8 +1653,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
             [&] { return 0; },
             [&] { return aeron_subscription_image_count(fast_subscription) > 0; });
 
-        const int64_t *over_runs = findFlowControlOverRunsCounter(aeron.aeron());
-        ASSERT_NE(nullptr, over_runs);
+        const int64_t *over_runs = aeron_counters_reader_addr(
+            aeron_counters_reader(aeron.aeron()), AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
         const int64_t initial_over_runs = *over_runs;
 
         std::vector<std::vector<uint8_t>> back_pressure_messages;
@@ -1860,8 +1851,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canFallbackToReplayAfterStartingF
             [&] { return 0; },
             [&] { return aeron_subscription_image_count(fast_subscription) > 0; });
 
-        const int64_t *over_runs = findFlowControlOverRunsCounter(aeron.aeron());
-        ASSERT_NE(nullptr, over_runs);
+        const int64_t *over_runs = aeron_counters_reader_addr(
+            aeron_counters_reader(aeron.aeron()), AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
         const int64_t initial_over_runs = *over_runs;
 
         std::vector<std::vector<uint8_t>> back_pressure_messages;

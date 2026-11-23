@@ -347,10 +347,8 @@ TEST_F(PersistentSubscriptionWrapperTest, shouldCycleThroughMultipleLiveReplayTr
             [&] { return fastSub->imageCount() > 0; });
 
         CountersReader &countersReader = aeron->countersReader();
-        const std::int32_t overRunsCounterId = countersReader.findByTypeIdAndRegistrationId(
-            AERON_COUNTER_SYSTEM_COUNTER_TYPE_ID, AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
-        ASSERT_NE(AERON_NULL_COUNTER_ID, overRunsCounterId);
-        const std::int64_t initialOverRuns = countersReader.getCounterValue(overRunsCounterId);
+        const std::int64_t initialOverRuns =
+            countersReader.getCounterValue(AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
 
         std::vector<std::vector<uint8_t>> backPressureMessages;
         std::size_t fastCount = 0;
@@ -371,7 +369,10 @@ TEST_F(PersistentSubscriptionWrapperTest, shouldCycleThroughMultipleLiveReplayTr
         }
 
         waitUntil("live image is over-run",
-            [&] { return countersReader.getCounterValue(overRunsCounterId) > initialOverRuns; });
+            [&]
+            {
+                return countersReader.getCounterValue(AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS) > initialOverRuns;
+            });
 
         executeUntil("drops to replaying", poller, [&] { return persistentSubscription->isReplaying(); });
         ASSERT_EQ(cycle + 1, liveLeftCount);
