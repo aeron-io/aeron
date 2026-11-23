@@ -627,7 +627,7 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
         size_t index = aeron_logbuffer_index_by_position(resend_position, publication->position_bits_to_shift);
         size_t remaining_bytes = length;
         int32_t bytes_sent = 0;
-        int32_t total_bytes_sent = 0;
+        int64_t total_bytes_sent = 0;
         int32_t offset = term_offset;
 
         do
@@ -656,8 +656,8 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
             }
 
             bytes_sent = available + padding;
-            total_bytes_sent += bytes_sent;
             remaining_bytes -= bytes_sent;
+            total_bytes_sent += msg_bytes_sent;
         }
         while (remaining_bytes > 0);
 
