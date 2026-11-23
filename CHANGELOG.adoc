@@ -6,12 +6,17 @@
 
 === Changelog
 
-* **[Archive Client/C{plus}{plus} Wrapper]** Delete ReplayMerge copy constructor and assignment. Add ReplayMerge move constructor and assignment.
-* **[Archive Client/C{plus}{plus} Wrapper]** Introduce AeronArchive AsyncConnect destructor to close and delete aeron_archive_async_connect_t that has not completed.
-* **[Archive Client/C]** Introduce `aeron_archive_async_connect_close` to have ability to close and delete aeron_archive_async_connect_t that has not completed.
-* **[Driver/C]** Make aeron driver context keep own copy of resolver_name, resolver_interface, resolver_bootstrap_neighbor, name_resolver_init_args.
-* **[Client/C]** Avoid buffer overflow in `aeron_subscription_try_resolve_channel_endpoint_port` if subscription channel larger than uri.
-* **[Driver/C]** Don’t enable SO_REUSEPORT socket option on Linux for multicast transport.
+* **[Archive Client/C{plus}{plus} Wrapper]** Delete ReplayMerge copy constructor and assignment. Add `ReplayMerge` move
+constructor and assignment.
+* **[Archive Client/C{plus}{plus} Wrapper]** Introduce AeronArchive AsyncConnect destructor to close and delete
+`aeron_archive_async_connect_t` that has not completed.
+* **[Archive Client/C]** Introduce `aeron_archive_async_connect_close` to have ability to close and delete
+`aeron_archive_async_connect_t` that has not completed.
+* **[Driver/C]** Make aeron driver context keep own copy of `resolver_name`, `resolver_interface`,
+`resolver_bootstrap_neighbor`, `name_resolver_init_args`.
+* **[Client/C]** Avoid buffer overflow in `aeron_subscription_try_resolve_channel_endpoint_port` if subscription
+channel larger than uri.
+* **[Driver/C]** Don’t enable `SO_REUSEPORT` socket option on Linux for multicast transport.
 * **[Driver/C]** Fix failed setup-eliciting status message leaves the session pending setup forever.
 (https://github.com/aeron-io/aeron/issues/2251[#2251])
 * **[Driver/C]** Do not increment `Short Sends` counter in case of a send error.
@@ -68,6 +73,13 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 
 == 1.54.3 (unreleased)
 
+* **[Client/Java]** Clear nak-delay, untethered timeouts and spies-simulate-connection in `ChannelUriStringBuilder`.
+(https://github.com/aeron-io/aeron/pull/2258[#2258])
+* **[Driver/C]** Make aeron driver context keep own copy of `resolver_name`, `resolver_interface`,
+`resolver_bootstrap_neighbor`, `name_resolver_init_args`.
+* **[Client/C]** Avoid buffer overflow in `aeron_subscription_try_resolve_channel_endpoint_port` if subscription
+channel larger than uri.
+* **[Driver/C]** Don’t enable `SO_REUSEPORT` socket option on Linux for multicast transport.
 * **[Driver/C]** Fix failed setup-eliciting status message leaves the session pending setup forever.
 (https://github.com/aeron-io/aeron/issues/2251[#2251])
 * **[Driver/C]** Do not increment `Short Sends` counter in case of a send error.
