@@ -60,6 +60,7 @@ import static io.aeron.driver.media.SendChannelEndpoint.DESTINATION_TIMEOUT;
 import static io.aeron.driver.media.UdpChannelTransport.onSendError;
 import static io.aeron.driver.status.SystemCounterDescriptor.ERROR_FRAMES_RECEIVED;
 import static io.aeron.driver.status.SystemCounterDescriptor.NAK_MESSAGES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
 import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_RECEIVED;
 import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_REJECTED;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
@@ -85,6 +86,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
     private final AtomicCounter nakMessagesReceived;
     private final AtomicCounter statusIndicator;
     private final AtomicCounter errorMessagesReceived;
+    private final AtomicCounter shortSends;
     private final boolean isChannelSendTimestampEnabled;
     private final EpochNanoClock sendTimestampClock;
     private final UnsafeBuffer sendTimestampBuffer = new UnsafeBuffer();
@@ -113,6 +115,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
         statusMessagesReceived = context.systemCounters().get(STATUS_MESSAGES_RECEIVED);
         statusMessagesRejected = context.systemCounters().get(STATUS_MESSAGES_REJECTED);
         errorMessagesReceived = context.systemCounters().get(ERROR_FRAMES_RECEIVED);
+        shortSends = context.systemCounters().get(SHORT_SENDS);
         this.statusIndicator = statusIndicator;
 
         MultiSndDestination multiSndDestination = null;
@@ -299,6 +302,11 @@ public class SendChannelEndpoint extends UdpChannelTransport
                     if (sendDatagramChannel.isConnected())
                     {
                         bytesSent = sendDatagramChannel.write(buffer);
+                        if (bytesToSend != bytesSent)
+                        {
+                            incrementShortSends();
+                            return 0;
+                        }
                     }
                 }
                 catch (final PortUnreachableException ignore)
@@ -339,8 +347,14 @@ public class SendChannelEndpoint extends UdpChannelTransport
         {
             try
             {
+                final int bytesToSend = buffer.remaining();
                 sendHook(buffer, endpointAddress);
                 bytesSent = sendDatagramChannel.send(buffer, endpointAddress);
+                if (bytesToSend != bytesSent)
+                {
+                    incrementShortSends();
+                    return 0;
+                }
             }
             catch (final PortUnreachableException ignore)
             {
@@ -702,6 +716,11 @@ public class SendChannelEndpoint extends UdpChannelTransport
     {
         return udpChannel.matchesTag(super.udpChannel, null, connectAddress);
     }
+
+    final void incrementShortSends()
+    {
+        shortSends.increment();
+    }
 }
 
 abstract class MultiSndDestinationLhsPadding
@@ -791,6 +810,11 @@ abstract class MultiSndDestination extends MultiSndDestinationRhsPadding
                 buffer.position(position);
                 channelEndpoint.sendHook(buffer, destination);
                 bytesSent = datagramChannel.send(buffer, destination);
+                if (bytesToSend != bytesSent)
+                {
+                    channelEndpoint.incrementShortSends();
+                    return 0;
+                }
             }
         }
         catch (final PortUnreachableException ignore)
@@ -861,9 +885,9 @@ class ManualSndMultiDestination extends MultiSndDestination
 
             final int bytesSent = send(
                 channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
-            if (bytesSent < bytesToSend)
+            if (0 == bytesSent)
             {
-                result = bytesSent;
+                result = 0;
             }
         }
 
@@ -873,13 +897,13 @@ class ManualSndMultiDestination extends MultiSndDestination
 
             final int bytesSent = send(
                 channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
-            if (bytesSent < bytesToSend)
+            if (0 == bytesSent)
             {
-                result = bytesSent;
+                result = 0;
             }
         }
 
-        return result;
+        return result * length;
     }
 
     void addDestination(final ChannelUri channelUri, final InetSocketAddress address, final long registrationId)
@@ -1046,9 +1070,9 @@ class DynamicSndMultiDestination extends MultiSndDestination
             {
                 final int bytesSent = send(
                     channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
-                if (bytesSent < bytesToSend)
+                if (0 == bytesSent)
                 {
-                    result = bytesSent;
+                    result = 0;
                 }
             }
             else
@@ -1065,9 +1089,9 @@ class DynamicSndMultiDestination extends MultiSndDestination
             {
                 final int bytesSent = send(
                     channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
-                if (bytesSent < bytesToSend)
+                if (0 == bytesSent)
                 {
-                    result = bytesSent;
+                    result = 0;
                 }
             }
             else
@@ -1081,7 +1105,7 @@ class DynamicSndMultiDestination extends MultiSndDestination
             removeInactiveDestinations(nowNs);
         }
 
-        return result;
+        return result * (length - inactiveDestinationCount);
     }
 
     private void add(final Destination destination)

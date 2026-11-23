@@ -222,8 +222,14 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             {
                 if (sendDatagramChannel.isOpen())
                 {
+                    final int bytesToSend = buffer.remaining();
                     sendHook(buffer, remoteAddress);
                     bytesSent = sendDatagramChannel.send(buffer, remoteAddress);
+                    if (bytesToSend != bytesSent)
+                    {
+                        shortSends.increment();
+                        return 0;
+                    }
                 }
             }
         }
@@ -1008,13 +1014,13 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
      */
     protected void send(final ByteBuffer buffer, final int length, final ImageConnection[] imageConnections)
     {
-        final int bytesSent = null == multiRcvDestination ?
-            sendTo(buffer, imageConnections[0].controlAddress) :
-            multiRcvDestination.sendToAll(imageConnections, buffer, length, cachedNanoClock.nanoTime());
-
-        if (length != bytesSent)
+        if (null == multiRcvDestination)
         {
-            shortSends.increment();
+            sendTo(buffer, imageConnections[0].controlAddress);
+        }
+        else
+        {
+            multiRcvDestination.sendToAll(imageConnections, buffer, shortSends, length, cachedNanoClock.nanoTime());
         }
     }
 
@@ -1029,13 +1035,14 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     protected void send(
         final ByteBuffer buffer, final int length, final int transportIndex, final InetSocketAddress remoteAddress)
     {
-        final int bytesSent = null == multiRcvDestination ?
-            sendTo(buffer, remoteAddress) :
-            MultiRcvDestination.sendTo(multiRcvDestination.transport(transportIndex), buffer, remoteAddress);
-
-        if (length != bytesSent)
+        if (null == multiRcvDestination)
         {
-            shortSends.increment();
+            sendTo(buffer, remoteAddress);
+        }
+        else
+        {
+            MultiRcvDestination.sendTo(
+                multiRcvDestination.transport(transportIndex), buffer, remoteAddress, shortSends, length);
         }
     }
 
