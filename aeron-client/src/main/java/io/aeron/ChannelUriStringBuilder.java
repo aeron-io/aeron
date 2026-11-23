@@ -184,11 +184,16 @@ public final class ChannelUriStringBuilder
         sessionId = null;
         groupTag = null;
         linger = null;
+        nakDelay = null;
+        untetheredWindowLimitTimeoutNs = null;
+        untetheredLingerTimeoutNs = null;
+        untetheredRestingTimeoutNs = null;
         sparse = null;
         eos = null;
         tether = null;
         group = null;
         rejoin = null;
+        ssc = null;
         isSessionIdTagged = false;
         socketRcvbufLength = null;
         socketSndbufLength = null;

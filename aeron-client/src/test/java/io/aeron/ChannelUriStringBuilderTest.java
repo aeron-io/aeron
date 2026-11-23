@@ -264,6 +264,24 @@ class ChannelUriStringBuilderTest
     }
 
     @Test
+    void shouldNotRetainNakDelayAndUntetheredTimeoutsAfterClear()
+    {
+        final ChannelUriStringBuilder builder = new ChannelUriStringBuilder()
+            .media("udp")
+            .endpoint("localhost:9999")
+            .nakDelay(1000L)
+            .untetheredWindowLimitTimeoutNs(2000L)
+            .untetheredLingerTimeoutNs(3000L)
+            .untetheredRestingTimeoutNs(4000L)
+            .spiesSimulateConnection(true);
+
+        builder.clear();
+        builder.media("udp").endpoint("localhost:9999");
+
+        assertEquals("aeron:udp?endpoint=localhost:9999", builder.build());
+    }
+
+    @Test
     void shouldRejectInvalidOffsets()
     {
         assertThrows(
