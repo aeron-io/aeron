@@ -20,6 +20,7 @@ import io.aeron.driver.DriverConductorProxy;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
 import org.agrona.collections.ArrayUtil;
+import org.agrona.concurrent.status.AtomicCounter;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -141,12 +142,15 @@ final class MultiRcvDestination
         }
     }
 
-    int sendToAll(
-        final ImageConnection[] imageConnections, final ByteBuffer buffer, final int bytesToSend, final long nowNs)
+    void sendToAll(
+        final ImageConnection[] imageConnections,
+        final ByteBuffer buffer,
+        final AtomicCounter shortSends,
+        final int bytesToSend,
+        final long nowNs)
     {
+        final int position = buffer.position();
         final ReceiveDestinationTransport[] transports = this.transports;
-        int minBytesSent = bytesToSend;
-
         for (int lastIndex = imageConnections.length - 1, i = lastIndex; i >= 0; i--)
         {
             final ImageConnection connection = imageConnections[i];
@@ -156,25 +160,30 @@ final class MultiRcvDestination
                 final UdpChannelTransport transport = transports[i];
                 if (null != transport && ((connection.timeOfLastActivityNs + DESTINATION_ADDRESS_TIMEOUT) - nowNs > 0))
                 {
-                    buffer.position(0);
-                    minBytesSent = Math.min(minBytesSent, sendTo(transport, buffer, connection.controlAddress));
+                    buffer.position(position);
+                    sendTo(transport, buffer, connection.controlAddress, shortSends, bytesToSend);
                 }
             }
         }
-
-        return minBytesSent;
     }
 
-    static int sendTo(
-        final UdpChannelTransport transport, final ByteBuffer buffer, final InetSocketAddress remoteAddress)
+    static void sendTo(
+        final UdpChannelTransport transport,
+        final ByteBuffer buffer,
+        final InetSocketAddress remoteAddress,
+        final AtomicCounter shortSends,
+        final int bytesToSend)
     {
-        int bytesSent = 0;
         try
         {
             if (null != transport && null != transport.sendDatagramChannel && transport.sendDatagramChannel.isOpen())
             {
                 transport.sendHook(buffer, remoteAddress);
-                bytesSent = transport.sendDatagramChannel.send(buffer, remoteAddress);
+                final int bytesSent = transport.sendDatagramChannel.send(buffer, remoteAddress);
+                if (bytesToSend != bytesSent)
+                {
+                    shortSends.increment();
+                }
             }
         }
         catch (final PortUnreachableException ignore)
@@ -184,8 +193,6 @@ final class MultiRcvDestination
         {
             onSendError(ex, remoteAddress, transport.errorHandler);
         }
-
-        return bytesSent;
     }
 
     /**

@@ -52,7 +52,6 @@ import static io.aeron.driver.status.SystemCounterDescriptor.HEARTBEATS_SENT;
 import static io.aeron.driver.status.SystemCounterDescriptor.RETRANSMITS_SENT;
 import static io.aeron.driver.status.SystemCounterDescriptor.RETRANSMITTED_BYTES;
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_FLOW_CONTROL_LIMITS;
-import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.logbuffer.LogBufferDescriptor.activeTermCount;
@@ -205,7 +204,6 @@ public final class NetworkPublication
     private final AtomicCounter senderFlowControlLimits;
     private final AtomicCounter senderBpe;
     private final AtomicCounter senderNaksReceived;
-    private final AtomicCounter shortSends;
     private final AtomicCounter unblockedPublications;
     private final AtomicCounter publicationsRevoked;
     private final ReceiverLivenessTracker livenessTracker = new ReceiverLivenessTracker();
@@ -271,7 +269,6 @@ public final class NetworkPublication
 
         final SystemCounters systemCounters = ctx.systemCounters();
         heartbeatsSent = systemCounters.get(HEARTBEATS_SENT);
-        shortSends = systemCounters.get(SHORT_SENDS);
         retransmitsSent = systemCounters.get(RETRANSMITS_SENT);
         retransmittedBytes = systemCounters.get(RETRANSMITTED_BYTES);
         senderFlowControlLimits = systemCounters.get(SENDER_FLOW_CONTROL_LIMITS);
@@ -608,11 +605,7 @@ public final class NetworkPublication
                 .streamId(streamId)
                 .flags((short)0x0);
 
-            final int bytesSent = doSend(rttMeasurementBuffer);
-            if (RttMeasurementFlyweight.HEADER_LENGTH != bytesSent)
-            {
-                shortSends.increment();
-            }
+            doSend(rttMeasurementBuffer);
         }
 
         // handling of RTT measurements would be done in an else clause here.
@@ -673,15 +666,15 @@ public final class NetworkPublication
 
                 sendBuffer.limit(offset + available).position(offset);
 
-                if (available != doSend(sendBuffer))
+                final int networkBytes = doSend(sendBuffer);
+                if (0 == networkBytes)
                 {
-                    shortSends.increment();
-                    break;
+                    break; // short sends or error
                 }
 
                 bytesSent = available + padding(scanOutcome);
                 remainingBytes -= bytesSent;
-                totalBytesSent += bytesSent;
+                totalBytesSent += networkBytes;
             }
             while (remainingBytes > 0);
 
@@ -887,17 +880,14 @@ public final class NetworkPublication
                 final ByteBuffer sendBuffer = sendBuffers[activeIndex];
                 sendBuffer.limit(termOffset + available).position(termOffset);
 
-                if (available == doSend(sendBuffer))
+                bytesSent = doSend(sendBuffer);
+                if (0 != bytesSent)
                 {
                     timeOfLastDataOrHeartbeatNs = nowNs;
                     trackSenderLimits = true;
 
-                    bytesSent = available + padding(scanOutcome);
-                    this.senderPosition.setRelease(senderPosition + bytesSent);
-                }
-                else
-                {
-                    shortSends.increment();
+                    final long nextSndPosition = senderPosition + available + padding(scanOutcome);
+                    this.senderPosition.setRelease(nextSndPosition);
                 }
             }
             else if (available < 0)
@@ -947,10 +937,7 @@ public final class NetworkPublication
                 flowControl.onSetup(setupHeader, senderLimit.get(), senderPosition.get(), positionBitsToShift, nowNs);
             }
 
-            if (SetupFlyweight.HEADER_LENGTH != doSend(setupBuffer))
-            {
-                shortSends.increment();
-            }
+            doSend(setupBuffer);
 
             if (isSetupElicited && hasReceivers)
             {
@@ -990,10 +977,6 @@ public final class NetworkPublication
                 .flags(flags);
 
             bytesSent = doSend(heartbeatBuffer);
-            if (DataHeaderFlyweight.HEADER_LENGTH != bytesSent)
-            {
-                shortSends.increment();
-            }
 
             timeOfLastDataOrHeartbeatNs = nowNs;
             heartbeatsSent.incrementRelease();
