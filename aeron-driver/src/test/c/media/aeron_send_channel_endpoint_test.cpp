@@ -137,7 +137,7 @@ TEST_F(SendChannelEndpointTest, shouldIncementShortSendsInSendFunction)
     iovec iov = {};
     int64_t byteSent = 0;
 
-    EXPECT_EQ(3, aeron_send_channel_send(&endpoint, &iov, 1, &byteSent));
+    EXPECT_EQ(0, aeron_send_channel_send(&endpoint, &iov, 1, &byteSent));
     EXPECT_EQ(100, byteSent);
     EXPECT_EQ(0, aeron_errcode());
     EXPECT_EQ(0, aeron_distinct_error_log_num_observations(&m_error_log));
@@ -228,7 +228,7 @@ TEST_F(SendChannelEndpointTest, shouldIncementShortSendsInSendWithAddress)
     iovec iov = {};
     int64_t byteSent = 0;
 
-    EXPECT_EQ(1, aeron_send_channel_send_endpoint_address(&endpoint, &addr, &iov, 8, &byteSent));
+    EXPECT_EQ(0, aeron_send_channel_send_endpoint_address(&endpoint, &addr, &iov, 8, &byteSent));
     EXPECT_EQ(555, byteSent);
     EXPECT_EQ(0, aeron_errcode());
     EXPECT_EQ(0, aeron_distinct_error_log_num_observations(&m_error_log));
@@ -304,8 +304,8 @@ TEST_F(SendChannelEndpointTest, shouldDelegateSendToDestinationTracker)
     iovec iov = {};
     int64_t byteSent = 0;
 
-    EXPECT_EQ(1, aeron_send_channel_send(&endpoint, &iov, 5, &byteSent));
-    EXPECT_EQ(1024 + 99 + 99, byteSent);
+    EXPECT_EQ(0, aeron_send_channel_send(&endpoint, &iov, 5, &byteSent));
+    EXPECT_EQ(1024, byteSent);
     EXPECT_EQ(0, aeron_errcode());
     EXPECT_EQ(1, aeron_distinct_error_log_num_observations(&m_error_log));
     EXPECT_EQ(1, errors);
@@ -334,8 +334,8 @@ TEST_F(SendChannelEndpointTest, shouldDelegateSendToDestinationTracker)
 
     errors = shortSends = 0;
     byteSent = 0;
-    EXPECT_EQ(1, aeron_send_channel_send(&endpoint, &iov, 5, &byteSent));
-    EXPECT_EQ(1024 + 99 + 99, byteSent);
+    EXPECT_EQ(0, aeron_send_channel_send(&endpoint, &iov, 5, &byteSent));
+    EXPECT_EQ(1024, byteSent);
     EXPECT_EQ(0, errors);
     EXPECT_EQ(2, shortSends);
 

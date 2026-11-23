@@ -415,6 +415,7 @@ int aeron_send_channel_send(
         if (iov_length != (size_t)result)
         {
             aeron_counter_increment(endpoint->transport.short_sends_counter);
+            return 0;
         }
 
         return result;
@@ -450,6 +451,7 @@ int aeron_send_channel_send_endpoint_address(
     if (iov_length != (size_t)result)
     {
         aeron_counter_increment(endpoint->transport.short_sends_counter);
+        return 0;
     }
 
     return result;
