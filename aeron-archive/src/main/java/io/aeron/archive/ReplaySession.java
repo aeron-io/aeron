@@ -15,6 +15,7 @@
  */
 package io.aeron.archive;
 
+import io.aeron.ChannelUri;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
@@ -37,6 +38,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.EnumSet;
 
+import static io.aeron.CommonContext.EOS_PARAM_NAME;
 import static io.aeron.archive.Archive.segmentFileName;
 import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
 import static io.aeron.logbuffer.FrameDescriptor.frameLength;
@@ -212,7 +214,7 @@ class ReplaySession implements Session, AutoCloseable
 
         if (isAborted)
         {
-            revokePublication = true;
+            revokePublication = signalsEndOfStream(publication);
             state(State.INACTIVE, "replay aborted");
         }
 
@@ -527,6 +529,20 @@ class ReplaySession implements Session, AutoCloseable
         while (byteBuffer.remaining() > 0);
 
         return limit;
+    }
+
+    /**
+     * A replay whose channel asks not to signal the end of stream ({@code eos=false}), as a cluster's catch-up replay
+     * does, is closed when aborted rather than revoked: a revoke signals the end of stream regardless, and its
+     * subscribers' images are dropped before they have read what was sent to them.
+     *
+     * @param publication of the replay.
+     * @return true if the replay's end of stream is signalled, so an aborted replay is revoked.
+     */
+    private static boolean signalsEndOfStream(final Publication publication)
+    {
+        final String channel = publication.channel();
+        return null == channel || !"false".equals(ChannelUri.parse(channel).get(EOS_PARAM_NAME));
     }
 
     private void raiseError(final String errorMessage, final int errorCode, final Throwable cause)

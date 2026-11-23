@@ -42,7 +42,7 @@ import static io.aeron.test.cluster.TestCluster.awaitElectionState;
 /**
  * A follower whose service stands still while it catches up, its consensus module reading on: the service must
  * still join the log where the module does once the catch-up is cut short, by the module giving it up for want of
- * progress, by the leader going, or by the leader's archive revoking the catch-up replay.
+ * progress, by the leader going, or by the leader's archive stopping a catch-up replay the follower still reads.
  * <p>
  * The service stands still on the test service's pause message, which only the follower's service acts on, sent
  * while the follower is down: the follower meets it in its catch-up. The messages sent after it are more than the
@@ -180,14 +180,18 @@ class StalledServiceCatchupClusterTest
      * As a three-member cluster under random faults had it on Aeron 1.54.0: the follower's first catch-up stalls and
      * it canvasses again; the leader's archive is slow to stop the first catch-up replay, so the follower's second
      * catch-up subscription, on the same endpoint for the same session, reads on from it, the leader's new replay to
-     * that endpoint clashing with it; then the replay is stopped, which revokes its publication, and the follower's
-     * driver drops the image while the follower's service, behind its module, has not read all of it.
+     * that endpoint clashing with it; then the replay is stopped. Were its publication revoked, the follower's driver
+     * would drop the image while the follower's service, behind its module, has not read all of it.
      */
     @Test
     @InterruptAfter(60)
-    void shouldJoinTheLogWhenAStaleCatchupReplayIsRevokedBeforeTheServiceReadsIt()
+    void shouldJoinTheLogWhenAStaleCatchupReplayIsStoppedBeforeTheServiceReadsIt()
     {
-        revokeAStaleCatchupReplay(true);
+        // The leader's new catch-up replay is refused while the stale one, to the same endpoint for the same
+        // session, is still open.
+        systemTestWatcher.ignoreErrorsMatching(
+            (error) -> error.contains("existing publication has clashing sessionId"));
+        stopAStaleCatchupReplay(true);
     }
 
     /**
@@ -196,12 +200,12 @@ class StalledServiceCatchupClusterTest
      */
     @Test
     @InterruptAfter(60)
-    void shouldJoinTheLogWhenAStaleCatchupReplayIsRevokedOnAPortNoLongerUsed()
+    void shouldJoinTheLogWhenAStaleCatchupReplayIsStoppedOnAPortNoLongerUsed()
     {
-        revokeAStaleCatchupReplay(false);
+        stopAStaleCatchupReplay(false);
     }
 
-    private void revokeAStaleCatchupReplay(final boolean fixedCatchupEndpoint)
+    private void stopAStaleCatchupReplay(final boolean fixedCatchupEndpoint)
     {
         FixedCatchupEndpoint.fixed = fixedCatchupEndpoint;
         final TestCluster cluster = aCluster().withStaticNodes(3).start();
