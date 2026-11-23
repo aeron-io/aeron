@@ -6,6 +6,7 @@
 
 === Changelog
 
+* **[Archive Client/C{plus}{plus} Wrapper]** Delete ReplayMerge copy constructor and assignment. Add ReplayMerge move constructor and assignment.
 * **[Archive Client/C{plus}{plus} Wrapper]** Introduce AeronArchive AsyncConnect destructor to close and delete aeron_archive_async_connect_t that has not completed.
 * **[Archive Client/C]** Introduce `aeron_archive_async_connect_close` to have ability to close and delete aeron_archive_async_connect_t that has not completed.
 * **[Driver/C]** Make aeron driver context keep own copy of resolver_name, resolver_interface, resolver_bootstrap_neighbor, name_resolver_init_args.

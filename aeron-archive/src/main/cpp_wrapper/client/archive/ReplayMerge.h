@@ -60,6 +60,45 @@ public:
     {
         m_image = nullptr;
         aeron_archive_replay_merge_close(m_replay_merge_t);
+        m_replay_merge_t = nullptr;
+    }
+
+    ReplayMerge(const ReplayMerge&) = delete;
+    ReplayMerge& operator=(const ReplayMerge&) = delete;
+
+    ReplayMerge(ReplayMerge &&other) noexcept :
+        m_subscription(std::move(other.m_subscription)), m_archive(std::move(other.m_archive)), m_replay_merge_t(other.m_replay_merge_t), m_image(std::move(other.m_image))
+    {
+        other.m_subscription = nullptr;
+        other.m_archive = nullptr;
+        other.m_replay_merge_t = nullptr;
+        other.m_image = nullptr;
+    }
+
+    ReplayMerge& operator=(ReplayMerge &&other) noexcept
+    {
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        if (nullptr != m_replay_merge_t)
+        {
+            m_image = nullptr;
+            aeron_archive_replay_merge_close(m_replay_merge_t);
+        }
+
+        m_subscription = std::move(other.m_subscription);
+        m_archive = std::move(other.m_archive);
+        m_replay_merge_t = other.m_replay_merge_t;
+        m_image = std::move(other.m_image);
+
+        other.m_subscription = nullptr;
+        other.m_archive = nullptr;
+        other.m_replay_merge_t = nullptr;
+        other.m_image = nullptr;
+
+        return *this;
     }
 
     inline int doWork()
