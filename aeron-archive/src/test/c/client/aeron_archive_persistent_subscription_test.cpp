@@ -1547,9 +1547,9 @@ TEST_P(AeronArchivePersistentSubscriptionCatchupTest, shouldCatchupOnReplayBefor
 // A publisher publishes messages on an MDC channel which are recorded by the archive.
 // A persistent subscriber replays the recorded messages and then joins the live stream.
 // Once live, a second fast subscriber (on a separate media driver) joins the same MDC channel.
-// The publisher floods 64 large messages. Only the fast subscriber is polled during
-// this time — the persistent subscriber is not polled and falls behind, causing
-// its live image to be closed.
+// The publisher floods 1.5 terms (3 batches of 32 one-KB messages). Only the fast
+// subscriber is polled during this time — the persistent subscriber is not polled
+// and falls behind, causing its live image to be closed.
 // The persistent subscriber drops back to replay to catch up on the missed messages,
 // then rejoins the live stream.
 // All messages must be received exactly once and in order.
@@ -1653,24 +1653,35 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
             [&] { return 0; },
             [&] { return aeron_subscription_image_count(fast_subscription) > 0; });
 
-        const std::vector<std::vector<uint8_t>> back_pressure_messages = generateFixedMessages(64, ONE_KB_MESSAGE_SIZE);
-        persistent_publication.offer(back_pressure_messages);
+        const int64_t *over_runs = aeron_counters_reader_addr(
+            aeron_counters_reader(aeron.aeron()), AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
+        const int64_t initial_over_runs = *over_runs;
 
+        std::vector<std::vector<uint8_t>> back_pressure_messages;
         size_t fast_count = 0;
-        executeUntil(
-            "fast subscription receives 64 messages",
-            [&]
-            {
-                return aeron_subscription_poll(
-                    fast_subscription,
-                    [](void *clientd, const uint8_t *, size_t, aeron_header_t *)
-                    {
-                        (*static_cast<size_t *>(clientd))++;
-                    },
-                    &fast_count,
-                    1);
-            },
-            [&] { return fast_count == 64; });
+        for (int i = 0; i < 3; i++)
+        {
+            const std::vector<std::vector<uint8_t>> batch = generateFixedMessages(32, ONE_KB_MESSAGE_SIZE);
+            persistent_publication.offer(batch);
+            back_pressure_messages.insert(back_pressure_messages.end(), batch.begin(), batch.end());
+
+            executeUntil(
+                "fast subscription receives batch",
+                [&]
+                {
+                    return aeron_subscription_poll(
+                        fast_subscription,
+                        [](void *clientd, const uint8_t *, size_t, aeron_header_t *)
+                        {
+                            (*static_cast<size_t *>(clientd))++;
+                        },
+                        &fast_count,
+                        1);
+                },
+                [&] { return fast_count == back_pressure_messages.size(); });
+        }
+
+        waitUntil("live image is over-run", [&] { return *over_runs > initial_over_runs; });
 
         // Phase 6: persistent subscription drops back to replay
         executeUntil(
@@ -1840,24 +1851,35 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canFallbackToReplayAfterStartingF
             [&] { return 0; },
             [&] { return aeron_subscription_image_count(fast_subscription) > 0; });
 
-        const std::vector<std::vector<uint8_t>> back_pressure_messages = generateFixedMessages(64, ONE_KB_MESSAGE_SIZE);
-        persistent_publication.offer(back_pressure_messages);
+        const int64_t *over_runs = aeron_counters_reader_addr(
+            aeron_counters_reader(aeron.aeron()), AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
+        const int64_t initial_over_runs = *over_runs;
 
+        std::vector<std::vector<uint8_t>> back_pressure_messages;
         size_t fast_count = 0;
-        executeUntil(
-            "fast sub drains",
-            [&]
-            {
-                return aeron_subscription_poll(
-                    fast_subscription,
-                    [](void *clientd, const uint8_t *, size_t, aeron_header_t *)
-                    {
-                        (*static_cast<size_t *>(clientd))++;
-                    },
-                    &fast_count,
-                    1);
-            },
-            [&] { return fast_count == back_pressure_messages.size(); });
+        for (int i = 0; i < 3; i++)
+        {
+            const std::vector<std::vector<uint8_t>> batch = generateFixedMessages(32, ONE_KB_MESSAGE_SIZE);
+            persistent_publication.offer(batch);
+            back_pressure_messages.insert(back_pressure_messages.end(), batch.begin(), batch.end());
+
+            executeUntil(
+                "fast sub drains batch",
+                [&]
+                {
+                    return aeron_subscription_poll(
+                        fast_subscription,
+                        [](void *clientd, const uint8_t *, size_t, aeron_header_t *)
+                        {
+                            (*static_cast<size_t *>(clientd))++;
+                        },
+                        &fast_count,
+                        1);
+                },
+                [&] { return fast_count == back_pressure_messages.size(); });
+        }
+
+        waitUntil("live image is over-run", [&] { return *over_runs > initial_over_runs; });
 
         executeUntil(
             "drops to replaying",
