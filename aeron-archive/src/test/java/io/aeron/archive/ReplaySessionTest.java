@@ -393,6 +393,38 @@ class ReplaySessionTest
     }
 
     @Test
+    void shouldRevokePublicationWhenAborted()
+    {
+        when(mockReplayPub.channel()).thenReturn("aeron:udp?endpoint=localhost:5555");
+
+        final ReplaySession replaySession = replaySession(
+            RECORDING_POSITION, 1024L, 1L, mockReplayPub, mockControlSession, recordingPositionCounter, null);
+        replaySession.abort("stop replay");
+        replaySession.doWork();
+        assertEquals(ReplaySession.State.DONE, replaySession.state());
+
+        replaySession.close();
+        verify(mockReplayPub).revoke();
+        verify(mockReplayPub, never()).close();
+    }
+
+    @Test
+    void shouldClosePublicationRatherThanRevokeItWhenAbortedWithoutEndOfStream()
+    {
+        when(mockReplayPub.channel()).thenReturn("aeron:udp?endpoint=localhost:5555|eos=false");
+
+        final ReplaySession replaySession = replaySession(
+            RECORDING_POSITION, 1024L, 1L, mockReplayPub, mockControlSession, recordingPositionCounter, null);
+        replaySession.abort("stop replay");
+        replaySession.doWork();
+        assertEquals(ReplaySession.State.DONE, replaySession.state());
+
+        replaySession.close();
+        verify(mockReplayPub).close();
+        verify(mockReplayPub, never()).revoke();
+    }
+
+    @Test
     void shouldReplayFromActiveRecording() throws IOException
     {
         final UnsafeBuffer termBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(4096));
