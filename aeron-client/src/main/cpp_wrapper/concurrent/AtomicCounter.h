@@ -17,13 +17,11 @@
 #define AERON_CONCURRENT_ATOMIC_COUNTER_H
 
 #include <cstdint>
-#include <memory>
 
+extern "C"
+{
 #include "aeronc.h"
-
-#include "util/Index.h"
-#include "concurrent/AtomicBuffer.h"
-#include "concurrent/CountersReader.h"
+}
 
 namespace aeron { namespace concurrent {
 

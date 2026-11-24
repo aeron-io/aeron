@@ -19,10 +19,13 @@
 #include <functional>
 
 #include "util/Exceptions.h"
-#include "util/BitUtil.h"
 #include "concurrent/AtomicBuffer.h"
 
+extern "C"
+{
 #include "aeronc.h"
+#include "concurrent/aeron_counters_manager.h"
+}
 
 namespace aeron { namespace concurrent {
 
@@ -147,7 +150,7 @@ public:
     {
         validateCounterId(id);
         std::int64_t *counter_addr = getCounterAddress(id);
-        return *counter_addr;
+        return aeron_counter_get_acquire(counter_addr);
     }
 
     /// @cond HIDDEN_SYMBOLS
