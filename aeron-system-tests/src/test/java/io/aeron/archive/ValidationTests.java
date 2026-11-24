@@ -247,17 +247,13 @@ class ValidationTests
             Tests.sleep(1);
         }
 
-        assertNotEquals(
-            NULL_VALUE, aeronArchive.extendRecording(recordingId, recordChannel, streamId, LOCAL, true));
-
         assertEquals(10, aeronArchive.truncateRecording(recordingId, truncatePosition));
 
-        epochClock.advance(1);
-        archive.invoker().invoke();
-
-        final String error = aeronArchive.pollForErrorResponse();
+        final ArchiveException exception = assertThrowsExactly(
+            ArchiveException.class,
+            () -> aeronArchive.extendRecording(recordingId, recordChannel, streamId, LOCAL, true));
         assertThat(
-            error,
+            exception.getMessage(),
             containsString("cannot extend recording " + recordingId + " due to an outstanding delete operation"));
     }
 
