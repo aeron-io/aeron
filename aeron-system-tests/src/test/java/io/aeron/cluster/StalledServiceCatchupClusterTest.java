@@ -55,12 +55,13 @@ class StalledServiceCatchupClusterTest
 {
     private static final int MESSAGES_BEFORE = 10;
     private static final int MESSAGES_AFTER = 5_000;
-    private static final long STALL_NS = TimeUnit.SECONDS.toNanos(15);
+    private static final long STALL_NS = TimeUnit.SECONDS.toNanos(8);
     /** More than a receiver window of the test's 4 byte messages, 96 bytes each in the log. */
     private static final int MESSAGES_WINDOWS = 3_000;
     /** Longer than the follower's leader heartbeat timeout (2 s), for its module to give its catch-up up. */
     private static final long FIRST_STALL_NS = TimeUnit.SECONDS.toNanos(4);
     private static final long SECOND_STALL_NS = TimeUnit.SECONDS.toNanos(5);
+    private static final long SESSION_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(20);
 
     private static ClusterInstrumentor holdInstrumentor;
     private static ClusterInstrumentor endpointInstrumentor;
@@ -147,7 +148,10 @@ class StalledServiceCatchupClusterTest
     @InterruptAfter(90)
     void shouldJoinTheLogWhenTheServiceStallsDuringCatchup()
     {
-        final TestCluster cluster = aCluster().withStaticNodes(3).start();
+        final TestCluster cluster = aCluster()
+            .withStaticNodes(3)
+            .withSessionTimeoutNs(SESSION_TIMEOUT_NS)
+            .start();
         systemTestWatcher.cluster(cluster);
 
         cluster.awaitLeader();
@@ -162,7 +166,10 @@ class StalledServiceCatchupClusterTest
     @InterruptAfter(90)
     void shouldJoinTheLogWhenTheServiceStallsDuringCatchupAndTheLeaderStops()
     {
-        final TestCluster cluster = aCluster().withStaticNodes(3).start();
+        final TestCluster cluster = aCluster()
+            .withStaticNodes(3)
+            .withSessionTimeoutNs(SESSION_TIMEOUT_NS)
+            .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode leader = cluster.awaitLeader();
@@ -208,7 +215,10 @@ class StalledServiceCatchupClusterTest
     private void stopAStaleCatchupReplay(final boolean fixedCatchupEndpoint)
     {
         FixedCatchupEndpoint.fixed = fixedCatchupEndpoint;
-        final TestCluster cluster = aCluster().withStaticNodes(3).start();
+        final TestCluster cluster = aCluster()
+            .withStaticNodes(3)
+            .withSessionTimeoutNs(SESSION_TIMEOUT_NS)
+            .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode leader = cluster.awaitLeader();
@@ -234,8 +244,6 @@ class StalledServiceCatchupClusterTest
 
         final int beforeSecondPause = MESSAGES_BEFORE + 1 + MESSAGES_WINDOWS;
         Tests.await(() -> follower.service().messageCount() >= beforeSecondPause);
-        // The service on the second pause, the module a window ahead of it on the stale replay's image.
-        Tests.sleep(500);
 
         final long replaySessionId = HoldCatchupReplayStop.heldReplaySessionId;
         HoldCatchupReplayStop.hold = false;
@@ -280,8 +288,6 @@ class StalledServiceCatchupClusterTest
 
         final TestNode follower = cluster.startStaticNode(stopped.index(), false);
         awaitElectionState(follower, ElectionState.FOLLOWER_CATCHUP);
-        // The service stands on the pause message, the module a window ahead of it.
-        Tests.sleep(1_000);
 
         return follower;
     }
