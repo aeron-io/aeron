@@ -1145,6 +1145,11 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
     private boolean checkForClockTick(final long nowNs)
     {
+        if (null != aeronAgentInvoker)
+        {
+            aeronAgentInvoker.invoke();
+        }
+
         if (isAbort || aeron.isClosed())
         {
             isAbort = true;
@@ -1154,16 +1159,6 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         if (nowNs - lastSlowTickNs > ONE_MILLISECOND_NS)
         {
             lastSlowTickNs = nowNs;
-
-            if (null != aeronAgentInvoker)
-            {
-                aeronAgentInvoker.invoke();
-                if (isAbort || aeron.isClosed())
-                {
-                    isAbort = true;
-                    throw new AgentTerminationException("unexpected Aeron close");
-                }
-            }
 
             if (null != commitPosition && commitPosition.isClosed())
             {
