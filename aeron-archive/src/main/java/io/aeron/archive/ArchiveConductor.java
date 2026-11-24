@@ -289,6 +289,22 @@ abstract class ArchiveConductor
     protected abstract void closeSessionWorkers();
 
     /**
+     * Check that the {@code SessionWorker} agents are still running and throw an {@link AgentTerminationException}
+     * if one has terminated unexpectedly. Called from {@link #doWork()} at most once per millisecond.
+     */
+    void checkSessionWorkers()
+    {
+    }
+
+    /**
+     * @return true if the conductor has been aborted.
+     */
+    final boolean isAbort()
+    {
+        return isAbort;
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -380,6 +396,7 @@ abstract class ArchiveConductor
         {
             cachedEpochClock.update(nowMs);
             workCount += invokeAeronInvoker();
+            checkSessionWorkers();
 
             if (nowMs >= markFileUpdateDeadlineMs)
             {
