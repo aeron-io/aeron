@@ -1250,7 +1250,8 @@ final class Catalog implements AutoCloseable
 
     static boolean fragmentStraddlesPageBoundary(final int fragmentOffset, final int fragmentLength)
     {
-        return (fragmentOffset / PAGE_SIZE) != ((fragmentOffset + (fragmentLength - 1)) / PAGE_SIZE);
+        return fragmentLength > 0 &&
+            (fragmentOffset / PAGE_SIZE) != ((fragmentOffset + (fragmentLength - 1)) / PAGE_SIZE);
     }
 
     private void unmapAndCloseChannel()
