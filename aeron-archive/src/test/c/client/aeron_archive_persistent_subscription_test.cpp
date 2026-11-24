@@ -1653,9 +1653,9 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
             [&] { return 0; },
             [&] { return aeron_subscription_image_count(fast_subscription) > 0; });
 
-        const int64_t *over_runs = aeron_counters_reader_addr(
+        int64_t *over_runs = aeron_counters_reader_addr(
             aeron_counters_reader(aeron.aeron()), AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
-        const int64_t initial_over_runs = *over_runs;
+        const int64_t initial_over_runs = aeron_counter_get_acquire(over_runs);
 
         std::vector<std::vector<uint8_t>> back_pressure_messages;
         size_t fast_count = 0;
@@ -1681,7 +1681,12 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
                 [&] { return fast_count == back_pressure_messages.size(); });
         }
 
-        waitUntil("live image is over-run", [&] { return *over_runs > initial_over_runs; });
+        waitUntil(
+            "live image is over-run",
+            [&]
+            {
+                return aeron_counter_get_acquire(over_runs) > initial_over_runs;
+            });
 
         // Phase 6: persistent subscription drops back to replay
         executeUntil(
@@ -1851,9 +1856,9 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canFallbackToReplayAfterStartingF
             [&] { return 0; },
             [&] { return aeron_subscription_image_count(fast_subscription) > 0; });
 
-        const int64_t *over_runs = aeron_counters_reader_addr(
+        int64_t *over_runs = aeron_counters_reader_addr(
             aeron_counters_reader(aeron.aeron()), AERON_SYSTEM_COUNTER_ID_FLOW_CONTROL_OVER_RUNS);
-        const int64_t initial_over_runs = *over_runs;
+        const int64_t initial_over_runs = aeron_counter_get_acquire(over_runs);
 
         std::vector<std::vector<uint8_t>> back_pressure_messages;
         size_t fast_count = 0;
@@ -1879,7 +1884,12 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canFallbackToReplayAfterStartingF
                 [&] { return fast_count == back_pressure_messages.size(); });
         }
 
-        waitUntil("live image is over-run", [&] { return *over_runs > initial_over_runs; });
+        waitUntil(
+            "live image is over-run",
+            [&]
+            {
+                return aeron_counter_get_acquire(over_runs) > initial_over_runs;
+            });
 
         executeUntil(
             "drops to replaying",
