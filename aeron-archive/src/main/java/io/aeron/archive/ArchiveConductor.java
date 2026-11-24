@@ -379,7 +379,6 @@ abstract class ArchiveConductor
         if (cachedEpochClock.time() != nowMs)
         {
             cachedEpochClock.update(nowMs);
-            workCount += invokeAeronInvoker();
 
             if (nowMs >= markFileUpdateDeadlineMs)
             {
@@ -391,6 +390,7 @@ abstract class ArchiveConductor
         workCount += controlSessionAdapter.poll();
 
         workCount += checkReplayTokens(nowNs);
+        workCount += invokeAeronInvoker();
         workCount += invokeDriverConductor();
         workCount += runTasks(taskQueue);
 
@@ -409,17 +409,12 @@ abstract class ArchiveConductor
 
     final int invokeAeronInvoker()
     {
-        int workCount = 0;
+        final int workCount = aeronAgentInvoker.invoke();
 
-        if (null != aeronAgentInvoker)
+        if (isAbort || aeronAgentInvoker.isClosed())
         {
-            workCount += aeronAgentInvoker.invoke();
-
-            if (isAbort || aeronAgentInvoker.isClosed())
-            {
-                isAbort = true;
-                throw new AgentTerminationException("unexpected Aeron close");
-            }
+            isAbort = true;
+            throw new AgentTerminationException("unexpected Aeron close");
         }
 
         return workCount;
