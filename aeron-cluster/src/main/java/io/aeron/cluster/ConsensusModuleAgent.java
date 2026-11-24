@@ -412,6 +412,12 @@ final class ConsensusModuleAgent
         {
             try
             {
+                workCount += aeronClientInvoker.invoke();
+                if (aeron.isClosed())
+                {
+                    throw new AgentTerminationException("unexpected Aeron close");
+                }
+
                 if (nowNs >= slowTickDeadlineNs)
                 {
                     final int slowTickWorkCount = slowTickWork(nowNs);
@@ -2419,12 +2425,7 @@ final class ConsensusModuleAgent
     @SuppressWarnings("methodlength")
     private int slowTickWork(final long nowNs)
     {
-        int workCount = aeronClientInvoker.invoke();
-        if (aeron.isClosed())
-        {
-            throw new AgentTerminationException("unexpected Aeron close");
-        }
-        else if (ConsensusModule.State.CLOSED == state)
+        if (ConsensusModule.State.CLOSED == state)
         {
             unexpectedTermination("State.CLOSED == state");
         }
@@ -2435,7 +2436,7 @@ final class ConsensusModuleAgent
             markFile.updateActivityTimestamp(clusterClock.timeMillis());
         }
 
-        workCount += pollArchiveEvents();
+        int workCount = pollArchiveEvents();
 
         workCount += sessionManager.sendRedirects(leadershipTermId, leaderMember.id(), nowNs);
         workCount += sessionManager.sendRejections(leadershipTermId, leaderMember.id(), nowNs);
