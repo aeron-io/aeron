@@ -241,6 +241,7 @@ int aeron_archive_context_duplicate(aeron_archive_context_t **dest_p, aeron_arch
     if (aeron_archive_context_set_control_request_channel(_ctx, src->control_request_channel) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_free(_ctx);
         return -1;
     }
 
@@ -248,6 +249,8 @@ int aeron_archive_context_duplicate(aeron_archive_context_t **dest_p, aeron_arch
     if(aeron_archive_context_set_control_response_channel(_ctx, src->control_response_channel) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_free(_ctx->control_request_channel);
+        aeron_free(_ctx);
         return -1;
     }
 
@@ -255,6 +258,9 @@ int aeron_archive_context_duplicate(aeron_archive_context_t **dest_p, aeron_arch
     if (aeron_archive_context_set_recording_events_channel(_ctx, src->recording_events_channel) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_free(_ctx->control_request_channel);
+        aeron_free(_ctx->control_response_channel);
+        aeron_free(_ctx);
         return -1;
     }
 
