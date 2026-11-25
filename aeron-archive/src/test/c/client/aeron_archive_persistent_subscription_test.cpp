@@ -18,6 +18,9 @@
 #include <cinttypes>
 #include <random>
 #include <climits>
+#include <fstream>
+#include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -597,6 +600,32 @@ std::string to_hex(const std::vector<unsigned char>& vector)
     }
     return s;
 }
+
+
+#if defined(__linux__)
+static bool isLogBufferMapped(const int64_t registration_id)
+{
+    std::ifstream maps("/proc/self/maps");
+    if (!maps.is_open())
+    {
+        throw std::runtime_error("failed to open /proc/self/maps");
+    }
+
+    const std::string suffix =
+        "publications/" + std::to_string(registration_id) + ".logbuffer";
+
+    std::string line;
+    while (std::getline(maps, line))
+    {
+        if (line.find(suffix) != std::string::npos)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+#endif
 
 testing::AssertionResult MessagesEq(
     const std::vector<std::vector<uint8_t>>& expected,
@@ -4526,3 +4555,92 @@ TEST_P(AeronArchivePersistentSubscriptionAllReplayChannelTypesTest, shouldCloseC
             [&] { return *state == close_state; });
     }
 }
+
+#if defined(__linux__)
+TEST_F(
+    AeronArchivePersistentSubscriptionTest,
+    shouldReleaseUnavailableLiveImageAfterPublisherCloses)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+    AeronResource aeron(m_aeronDir);
+
+    for (int iteration = 0; iteration < 3; iteration++)
+    {
+        std::unique_ptr<PersistentPublication> publication(
+            new PersistentPublication(m_aeronDir, IPC_CHANNEL, STREAM_ID));
+
+        const std::vector<std::vector<uint8_t>> payloads =
+            generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
+        publication->persist(payloads);
+
+        aeron_publication_constants_t publication_constants = {};
+        ASSERT_EQ(
+            0,
+            aeron_exclusive_publication_constants(
+                publication->publication(), &publication_constants))
+            << aeron_errmsg();
+
+        const int64_t registration_id = publication_constants.registration_id;
+
+        aeron_archive_context_t *archive_ctx = createArchiveContext();
+        ArchiveContextGuard archive_ctx_guard(archive_ctx);
+
+        aeron_archive_persistent_subscription_context_t *context =
+            createDefaultPersistentSubscriptionContext(
+                aeron.aeron(), archive_ctx, publication->recordingId());
+
+        PersistentSubscriptionContextGuard context_guard(context);
+
+        aeron_archive_persistent_subscription_t *persistent_subscription = nullptr;
+        ASSERT_EQ(
+            0,
+            aeron_archive_persistent_subscription_create(
+                &persistent_subscription, context))
+            << aeron_errmsg();
+
+        context_guard.release();
+        PersistentSubscriptionGuard ps_guard(persistent_subscription);
+
+        MessageCapturingFragmentHandler handler;
+        auto poller = makeControlledPoller(persistent_subscription, handler);
+
+        executeUntil(
+            "persistent subscription becomes live",
+            poller,
+            isLive(persistent_subscription));
+
+        ASSERT_TRUE(isLogBufferMapped(registration_id))
+            << "expected the publisher log buffer to be mapped while the image is live";
+
+        ASSERT_EQ(
+            0,
+            aeron_exclusive_publication_close(
+                publication->publication(), nullptr, nullptr))
+            << aeron_errmsg();
+
+        publication.reset();
+
+        ASSERT_TRUE(isLogBufferMapped(registration_id))
+            << "expected the persistent subscription to retain its image until it observes unavailability";
+
+        executeUntil(
+            "persistent subscription observes unavailable live image",
+            poller,
+            [&] { return !aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+        waitUntil(
+            "publisher log buffer mapping is released while persistent subscription remains open",
+            [&] { return !isLogBufferMapped(registration_id); },
+            10);
+
+        ps_guard.release();
+        ASSERT_EQ(
+            0,
+            aeron_archive_persistent_subscription_close(persistent_subscription))
+            << aeron_errmsg();
+
+        archive_ctx_guard.release();
+        aeron_archive_context_close(archive_ctx);
+    }
+}
+#endif
