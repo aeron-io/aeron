@@ -373,8 +373,13 @@ if (BUILD_AERON_ARCHIVE_API)
     add_subdirectory(${AERON_C_ARCHIVE_SOURCE_PATH})
     set(AERON_ALL_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-all/build/libs/aeron-all-${AERON_VERSION_TXT}.jar")
 
-    file(GLOB_RECURSE AERON_ALL_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}}/aeron-archive/src/main/java/*.java")
+    set(AERON_ALL_SOURCE_GLOBS)
+    foreach (AERON_ALL_MODULE aeron-annotations aeron-client aeron-driver aeron-archive aeron-cluster aeron-samples)
+        list(APPEND AERON_ALL_SOURCE_GLOBS
+            "${CMAKE_CURRENT_SOURCE_DIR}/${AERON_ALL_MODULE}/src/main/java/*"
+            "${CMAKE_CURRENT_SOURCE_DIR}/${AERON_ALL_MODULE}/src/main/resources/*")
+    endforeach ()
+    file(GLOB_RECURSE AERON_ALL_SOURCES CONFIGURE_DEPENDS ${AERON_ALL_SOURCE_GLOBS})
 
     add_custom_command(OUTPUT ${AERON_ALL_JAR}
         COMMAND ${CMAKE_COMMAND}
