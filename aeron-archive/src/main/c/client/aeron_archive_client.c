@@ -643,6 +643,7 @@ int aeron_archive_add_recorded_publication(
 
     aeron_async_add_publication_t *async;
     aeron_publication_t *_publication = NULL;
+    char *recording_channel = NULL;
 
     int rc = -1;
 
@@ -654,12 +655,6 @@ int aeron_archive_add_recorded_publication(
     {
         AERON_APPEND_ERR("%s", "");
         aeron_archive_context_check_for_fatal_error(aeron_archive);
-        goto unlock;
-    }
-
-    if (aeron_async_add_publication_poll(&_publication, async) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
         goto unlock;
     }
 
@@ -686,12 +681,15 @@ int aeron_archive_add_recorded_publication(
     {
         // not original
         AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "publication already added for channel=%s streamId=%" PRIi32, channel, stream_id);
-        goto unlock;
+        goto error;
     }
 
-    char *recording_channel;
     size_t recording_channel_len = strlen(channel) + 50; // add enough space for an additional session id
-    aeron_alloc((void **)&recording_channel, recording_channel_len);
+    if (aeron_alloc((void **)&recording_channel, recording_channel_len) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        goto error;
+    }
 
     if (aeron_archive_channel_with_session_id(
         recording_channel,
@@ -700,7 +698,7 @@ int aeron_archive_add_recorded_publication(
         constants.session_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        goto cleanup;
+        goto error;
     }
 
     if (aeron_archive_start_recording(
@@ -712,30 +710,24 @@ int aeron_archive_add_recorded_publication(
         false) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        goto cleanup;
+        goto error;
     }
 
     *publication_p = _publication;
     rc = 0;
 
-cleanup:
-    aeron_free(recording_channel);
-
 unlock:
-    if (rc < 0 && NULL != _publication)
-    {
-        const int errcode = aeron_errcode();
-        char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
-        snprintf(errmsg, sizeof(errmsg), "%s", aeron_errmsg());
-
-        if (aeron_publication_close(_publication, NULL, NULL) < 0)
-        {
-            AERON_SET_ERR(errcode, "%s", errmsg);
-        }
-    }
-
     aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
+
+error:
+    aeron_mutex_unlock(&aeron_archive->lock);
+    aeron_free(recording_channel);
+    if (_publication)
+    {
+        aeron_publication_close(_publication, NULL, NULL);
+    }
+    return -1;
 }
 
 int aeron_archive_add_recorded_exclusive_publication(
@@ -748,6 +740,7 @@ int aeron_archive_add_recorded_exclusive_publication(
 
     aeron_async_add_exclusive_publication_t *async;
     aeron_exclusive_publication_t *_exclusive_publication = NULL;
+    char *recording_channel = NULL;
     int rc = -1;
 
     if (aeron_async_add_exclusive_publication(
@@ -758,12 +751,6 @@ int aeron_archive_add_recorded_exclusive_publication(
     {
         AERON_APPEND_ERR("%s", "");
         aeron_archive_context_check_for_fatal_error(aeron_archive);
-        goto unlock;
-    }
-
-    if (aeron_async_add_exclusive_publication_poll(&_exclusive_publication, async) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
         goto unlock;
     }
 
@@ -787,9 +774,12 @@ int aeron_archive_add_recorded_exclusive_publication(
     aeron_publication_constants_t constants;
     aeron_exclusive_publication_constants(_exclusive_publication, &constants);
 
-    char *recording_channel;
     size_t recording_channel_len = strlen(channel) + 50; // add enough space for an additional session id
-    aeron_alloc((void **)&recording_channel, recording_channel_len);
+    if (aeron_alloc((void **)&recording_channel, recording_channel_len) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        goto error;
+    }
 
     if (aeron_archive_channel_with_session_id(
         recording_channel,
@@ -798,7 +788,7 @@ int aeron_archive_add_recorded_exclusive_publication(
         constants.session_id) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        goto cleanup;
+        goto error;
     }
 
     if (aeron_archive_start_recording(
@@ -810,30 +800,24 @@ int aeron_archive_add_recorded_exclusive_publication(
         false) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        goto cleanup;
+        goto error;
     }
 
     *exclusive_publication_p = _exclusive_publication;
     rc = 0;
 
-cleanup:
-    aeron_free(recording_channel);
-
 unlock:
-    if (rc < 0 && NULL != _exclusive_publication)
-    {
-        const int errcode = aeron_errcode();
-        char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
-        snprintf(errmsg, sizeof(errmsg), "%s", aeron_errmsg());
-
-        if (aeron_exclusive_publication_close(_exclusive_publication, NULL, NULL) < 0)
-        {
-            AERON_SET_ERR(errcode, "%s", errmsg);
-        }
-    }
-
     aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
+
+error:
+    aeron_mutex_unlock(&aeron_archive->lock);
+    aeron_free(recording_channel);
+    if (NULL != _exclusive_publication)
+    {
+        aeron_exclusive_publication_close(_exclusive_publication, NULL, NULL);
+    }
+    return -1;
 }
 
 int aeron_archive_start_recording(
