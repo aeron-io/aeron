@@ -6,6 +6,14 @@
 
 === Changelog
 
+* **[Archive/C]** Release images retained by `aeron_archive_persistent_subscription_t` upon close/clean up.
+(https://github.com/aeron-io/aeron/issues/2264[#2264])
+* **[Archive]** Ignore empty fragments when checking for page straddle.
+(https://github.com/aeron-io/aeron/pull/2263[#2263], fixes https://github.com/aeron-io/aeron/issues/2261[#2261])
+* **[Archive/C]** Fix leak in `aeron_archive_context_duplicate` on error.
+(https://github.com/aeron-io/aeron/pull/2265[#2265]).
+* **[Archive/C]** Close publication when `add_recorded_publication/aeron_archive_add_recorded_exclusive_publication`
+fails. (https://github.com/aeron-io/aeron/pull/2266[#2266]).
 * **[Cluster]** Invoke `Aeron.conductorAgentInvoker` on every duty cycle of `ConsensusModuleAgent/ClusteredServiceAgent`
 to minimize latency (e.g. ingress connect).
 * **[Archive]** Invoke `Aeron.conductorAgentInvoker` on every duty cycle of `ArchiveConductor` to minimize connect latency.
@@ -80,8 +88,16 @@ arrive. (https://github.com/aeron-io/aeron/issues/2224[#2224])
 * **[Java]** Upgrade to `jgit` 7.8.1.202611041320-r.
 * **[C]** Upgrade to `CMake` 4.4.5.
 
-== 1.54.3 (2026-11-24)
+== 1.54.3 (2026-11-25)
 
+* **[Archive/C]** Release images retained by `aeron_archive_persistent_subscription_t` upon close/clean up.
+(https://github.com/aeron-io/aeron/issues/2264[#2264])
+* **[Archive]** Ignore empty fragments when checking for page straddle.
+(https://github.com/aeron-io/aeron/pull/2263[#2263], fixes https://github.com/aeron-io/aeron/issues/2261[#2261])
+* **[Archive/C]** Fix leak in `aeron_archive_context_duplicate` on error.
+(https://github.com/aeron-io/aeron/pull/2265[#2265]).
+* **[Archive/C]** Close publication when `add_recorded_publication/aeron_archive_add_recorded_exclusive_publication`
+fails. (https://github.com/aeron-io/aeron/pull/2266[#2266]).
 * **[Cluster]** Invoke `Aeron.conductorAgentInvoker` on every duty cycle of `ConsensusModuleAgent/ClusteredServiceAgent`
 to minimize latency (e.g. ingress connect).
 * **[Archive]** Invoke `Aeron.conductorAgentInvoker` on every duty cycle of `ArchiveConductor` to minimize connect latency.
