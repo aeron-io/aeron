@@ -651,6 +651,25 @@ class CatalogTest
         assertThat(exception.getMessage(), containsString(segmentFile.getAbsolutePath()));
     }
 
+    @Test
+    void shouldRecoverRecordingWithNoFrameAfterPageAlignedStart() throws Exception
+    {
+        // A recording started on a page boundary inside its first segment, the process gone before any frame was
+        // written: there is no fragment to verify, and the recording stops where it started.
+        final int termLength = 64 * 1024;
+        final long recordingId = newRecording(PAGE_SIZE, termLength);
+        final File segmentFile = new File(archiveDir, segmentFileName(recordingId, 0));
+        try (FileChannel log = FileChannel.open(segmentFile.toPath(), READ, WRITE, CREATE))
+        {
+            setSegmentLength(log, termLength);
+        }
+
+        try (Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, null, segmentFileBuffer))
+        {
+            assertEquals(PAGE_SIZE, catalog.stopPosition(recordingId));
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = { false, true })
     void shouldDetectTornLastFragmentWhenRecordingStartsInsideAPage(final boolean withChecksum) throws Exception
@@ -1595,6 +1614,7 @@ class CatalogTest
             Arguments.of(PAGE_SIZE - 1, 1, false),
             Arguments.of(PAGE_SIZE * 7 + 32, 256, false),
             Arguments.of(PAGE_SIZE * 3 + 111, PAGE_SIZE - 111, false),
+            Arguments.of(PAGE_SIZE, 0, false),
             Arguments.of(0, PAGE_SIZE + 1, true),
             Arguments.of(PAGE_SIZE - 1, 2, true),
             Arguments.of(PAGE_SIZE * 4 + 11, PAGE_SIZE - 10, true));
