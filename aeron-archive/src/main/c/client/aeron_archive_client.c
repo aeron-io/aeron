@@ -722,6 +722,18 @@ cleanup:
     aeron_free(recording_channel);
 
 unlock:
+    if (rc < 0 && NULL != _publication)
+    {
+        const int errcode = aeron_errcode();
+        char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
+        snprintf(errmsg, sizeof(errmsg), "%s", aeron_errmsg());
+
+        if (aeron_publication_close(_publication, NULL, NULL) < 0)
+        {
+            AERON_SET_ERR(errcode, "%s", errmsg);
+        }
+    }
+
     aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
 }
@@ -808,6 +820,18 @@ cleanup:
     aeron_free(recording_channel);
 
 unlock:
+    if (rc < 0 && NULL != _exclusive_publication)
+    {
+        const int errcode = aeron_errcode();
+        char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
+        snprintf(errmsg, sizeof(errmsg), "%s", aeron_errmsg());
+
+        if (aeron_exclusive_publication_close(_exclusive_publication, NULL, NULL) < 0)
+        {
+            AERON_SET_ERR(errcode, "%s", errmsg);
+        }
+    }
+
     aeron_mutex_unlock(&aeron_archive->lock);
     return rc;
 }
