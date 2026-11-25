@@ -748,6 +748,11 @@ static void aeron_archive_persistent_subscription_clean_up_replay_subscription(
 
     if (NULL != persistent_subscription->replay_subscription)
     {
+        if (NULL != persistent_subscription->replay_image)
+        {
+            aeron_subscription_image_release(
+                persistent_subscription->replay_subscription, persistent_subscription->replay_image);
+        }
         aeron_subscription_close(persistent_subscription->replay_subscription, NULL, NULL);
     }
 
@@ -768,6 +773,11 @@ static void aeron_archive_persistent_subscription_clean_up_live_subscription(
 
     if (NULL != persistent_subscription->live_subscription)
     {
+        if (NULL != persistent_subscription->live_image)
+        {
+            aeron_subscription_image_release(
+                persistent_subscription->live_subscription, persistent_subscription->live_image);
+        }
         aeron_subscription_close(persistent_subscription->live_subscription, NULL, NULL);
     }
 
@@ -2195,6 +2205,8 @@ static int aeron_archive_persistent_subscription_await_live(
         {
             aeron_image_t *image = aeron_subscription_image_at_index(persistent_subscription->live_subscription, 0);
             int64_t live_position = aeron_image_position(image);
+            persistent_subscription->live_image = image;
+
             aeron_archive_persistent_subscription_advance_last_observed_live_position(persistent_subscription, live_position);
 
             if (persistent_subscription->position >= 0)
@@ -2226,7 +2238,6 @@ static int aeron_archive_persistent_subscription_await_live(
                 }
             }
 
-            persistent_subscription->live_image = image;
             persistent_subscription->position = live_position;
             aeron_archive_persistent_subscription_set_join_difference(persistent_subscription, 0);
             aeron_archive_persistent_subscription_transition(persistent_subscription, LIVE);

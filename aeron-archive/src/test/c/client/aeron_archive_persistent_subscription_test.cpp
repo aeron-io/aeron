@@ -31,6 +31,8 @@ extern "C"
 {
 #include "aeron_common.h"
 #include "aeron_counters.h"
+#include "aeron_subscription.h"
+#include "aeron_image.h"
 #include "concurrent/aeron_logbuffer_descriptor.h"
 #include "client/aeron_archive.h"
 #include "client/aeron_archive_persistent_subscription.h"
@@ -814,6 +816,42 @@ private:
     std::uniform_int_distribution<> m_lengthGenerator = std::uniform_int_distribution<>(0, 2048);
     std::uniform_int_distribution<unsigned short> m_byteGenerator = std::uniform_int_distribution<unsigned short>(0, UINT8_MAX);
 };
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldReleaseImagesUponClose)
+{
+    aeron_archive_persistent_subscription_t *persistent_subscription = nullptr;
+    ASSERT_EQ(0, aeron_alloc((void **)&persistent_subscription, sizeof(aeron_archive_persistent_subscription_t)));
+    ASSERT_NE(nullptr, persistent_subscription);
+
+    aeron_subscription_t live_subscription = {};
+    live_subscription.is_closed = true;
+    aeron_image_t live_image = {};
+    live_image.refcnt = 1;
+    aeron_subscription_t replay_subscription = {};
+    replay_subscription.is_closed = true;
+    aeron_image_t replay_image = {};
+    replay_image.refcnt = 1;
+    persistent_subscription->add_live_subscription = nullptr;
+    persistent_subscription->live_subscription = &live_subscription;
+    persistent_subscription->live_image = &live_image;
+    persistent_subscription->add_replay_subscription = nullptr;
+    persistent_subscription->replay_subscription = &replay_subscription;
+    persistent_subscription->replay_image = &replay_image;
+    persistent_subscription->context = nullptr;
+    persistent_subscription->owns_context = false;
+    persistent_subscription->uncontrolled_assembler = nullptr;
+    persistent_subscription->assembler = nullptr;
+    persistent_subscription->archive = nullptr;
+    persistent_subscription->add_request_publication = nullptr;
+    persistent_subscription->request_publication = nullptr;
+    persistent_subscription->response_channel_archive_proxy = nullptr;
+    persistent_subscription->replay_session_id = AERON_NULL_VALUE;
+
+    aeron_archive_persistent_subscription_close(persistent_subscription);
+
+    EXPECT_EQ(0, live_image.refcnt);
+    EXPECT_EQ(0, replay_image.refcnt);
+}
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldAutoAllocateCounters)
 {
