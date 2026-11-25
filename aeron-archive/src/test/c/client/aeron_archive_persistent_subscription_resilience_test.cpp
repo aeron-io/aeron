@@ -651,12 +651,12 @@ testing::AssertionResult MessagesEq(
     return testing::AssertionFailure() << description;
 }
 
-class AeronArchivePersistentSubscriptionTest : public testing::Test
+class AeronArchivePersistentSubscriptionResilienceTest : public testing::Test
 {
 protected:
     const std::string m_aeronDir;
 
-    AeronArchivePersistentSubscriptionTest()
+    AeronArchivePersistentSubscriptionResilienceTest()
         : m_aeronDir(defaultAeronDir())
     {
     }
@@ -834,7 +834,7 @@ private:
 // Expects the subscription to first replay all 3 messages from the archive,
 // then transition to live. Once live, 3 further messages are published and
 // the subscription is expected to receive them.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveRestartDuringReplay)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRecoverFromArchiveRestartDuringReplay)
 {
     const std::string aeron_dir = m_aeronDir;
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "standalone";
@@ -920,6 +920,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveRestartDu
 
     ASSERT_EQ(messages, handler.messages());
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 struct FragmentLimitAndChannel
@@ -941,7 +942,7 @@ static const std::string SPY_PREFIX = "aeron-spy:";
 
 // Verifies that the persistent subscription continues consuming from live even when the
 // archive becomes unavailable.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldContinueConsumingFromLiveWhileArchiveIsUnavailable)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldContinueConsumingFromLiveWhileArchiveIsUnavailable)
 {
     const std::string aeron_dir = m_aeronDir;
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "standalone";
@@ -1000,9 +1001,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldContinueConsumingFromLiveWh
     all_messages.insert(all_messages.end(), second_batch.begin(), second_batch.end());
     ASSERT_EQ(all_messages, handler.messages());
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRetryAndRecoverWhenArchiveIsNotAvailableDuringStartUp)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRetryAndRecoverWhenArchiveIsNotAvailableDuringStartUp)
 {
     const std::string aeron_dir = m_aeronDir;
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "restart";
@@ -1110,7 +1112,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRetryAndRecoverWhenArchiveI
 
 // Verifies that the PS leaves LIVE when the publication is closed and the remote driver
 // is killed. The live image closes after the liveness timeout (~10s default).
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldLeaveLiveWhenPublicationClosesAndDriverDies)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldLeaveLiveWhenPublicationClosesAndDriverDies)
 {
     static const std::string REMOTE_CONTROL_CHANNEL = "aeron:udp?endpoint=localhost:8011";
 
@@ -1235,7 +1237,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldLeaveLiveWhenPublicationClo
     aeron_archive_context_close(remote_archive_ctx);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReconnectToTheArchiveAfterArchiveRestart)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReconnectToTheArchiveAfterArchiveRestart)
 {
     static const std::string REMOTE_CONTROL_CHANNEL = "aeron:udp?endpoint=localhost:8011";
 
@@ -1441,17 +1443,17 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReconnectToTheArchiveAfterA
     aeron_archive_context_close(persistent_subscription_archive_ctx);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldHandleReplayImageBecomingUnavailableDuringReplay)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldHandleReplayImageBecomingUnavailableDuringReplay)
 {
     shouldHandleReplayImageBecomingUnavailable(80);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldHandleReplayImageBecomingUnavailableDuringAttemptSwitch)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldHandleReplayImageBecomingUnavailableDuringAttemptSwitch)
 {
     shouldHandleReplayImageBecomingUnavailable(12);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCloseArchiveConnectionOnFailureInCaseApplicationKeepsPolling)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCloseArchiveConnectionOnFailureInCaseApplicationKeepsPolling)
 {
     TestArchive archive = createArchive(m_aeronDir);
 
@@ -1490,6 +1492,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCloseArchiveConnectionOnFai
         poller,
         [&] { return *session_counter == 1; });
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 /*
  * Embedded C media driver that installs loss generators on endpoints via the
@@ -1753,7 +1756,7 @@ private:
     std::int64_t m_killed_archive_id = 0;
 };
 
-void AeronArchivePersistentSubscriptionTest::shouldHandleReplayImageBecomingUnavailable(
+void AeronArchivePersistentSubscriptionResilienceTest::shouldHandleReplayImageBecomingUnavailable(
     const int replayableMessageCount)
 {
     aeron_loss_generator_t *loss_gen = nullptr;
@@ -1811,6 +1814,8 @@ void AeronArchivePersistentSubscriptionTest::shouldHandleReplayImageBecomingUnav
         isLive(persistent_subscription));
 
     EXPECT_TRUE(MessagesEq(messages, handler.messages()));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Composite loss generator for tests that need to compose two child generators
@@ -1996,7 +2001,7 @@ static void reset_predicate_state()
     g_replay_drop_stream_id.store(0, std::memory_order_relaxed);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithModerateReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReceiveAllMessagesWithModerateReplayLoss)
 {
     aeron_loss_generator_t *loss_gen = nullptr;
     ASSERT_EQ(0, aeron_stream_id_frame_data_loss_generator_create(&loss_gen));
@@ -2048,6 +2053,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithModer
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2055,7 +2061,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithModer
  *  The driver's NAK/retransmit mechanism must work hard to deliver all data.
  *  Verifies all messages are received with no duplicates.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithHeavyReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReceiveAllMessagesWithHeavyReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "heavy_replay_loss";
 
@@ -2105,6 +2111,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithHeavy
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2112,7 +2119,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithHeavy
  *  additional messages while the PS is still replaying. The PS must catch up
  *  through the lossy replay, transition to live, and receive everything.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionToLiveThroughLossyReplayWhilePublishing)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTransitionToLiveThroughLossyReplayWhilePublishing)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "lossy_replay_transition";
 
@@ -2181,6 +2188,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionToLiveThroughLoss
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2188,7 +2196,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionToLiveThroughLoss
  *  messages arrive over a lossy live MDC channel. Retransmission on the live
  *  channel should deliver all messages.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithLossOnLiveChannel)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReceiveAllMessagesWithLossOnLiveChannel)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "live_channel_loss";
 
@@ -2258,6 +2266,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithLossO
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2265,7 +2274,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithLossO
  *  the PS starts, so the PS must replay through the lossy replay channel and
  *  then join live on the lossy live channel. Verifies all messages received.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithLossOnBothChannels)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReceiveAllMessagesWithLossOnBothChannels)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "dual_channel_loss";
 
@@ -2325,6 +2334,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithLossO
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2332,7 +2342,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithLossO
  *  then toggles total loss on the replay stream on/off in bursts while
  *  the PS is replaying. The PS should eventually receive all messages.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromIntermittentReplayStreamLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRecoverFromIntermittentReplayStreamLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "intermittent_replay_loss";
 
@@ -2413,6 +2423,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromIntermittentRepl
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2421,7 +2432,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromIntermittentRepl
  *  to replay. When loss is disabled, the PS should recover to live again.
  *  All messages should be received.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldFallbackAndRecoverWhenLiveStreamExperiencesIntermittentLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldFallbackAndRecoverWhenLiveStreamExperiencesIntermittentLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "live_fallback_loss";
 
@@ -2512,6 +2523,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldFallbackAndRecoverWhenLiveS
     all_messages.insert(all_messages.end(), batch4.begin(), batch4.end());
     ASSERT_TRUE(MessagesEq(all_messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2520,7 +2532,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldFallbackAndRecoverWhenLiveS
  *  loss, this predicate-based approach lets us verify the runtime loss
  *  toggle mechanism with partial (not total) loss.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithRuntimePartialReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReceiveAllMessagesWithRuntimePartialReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "runtime_partial_loss";
 
@@ -2570,6 +2582,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithRunti
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2578,7 +2591,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithRunti
  *  ATTEMPT_SWITCH -> LIVE transition. When that frame is dropped, the PS must
  *  retransmit it and still complete the transition cleanly.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverAllMessagesWhenLastReplayFrameBeforeCutoverIsLost)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldDeliverAllMessagesWhenLastReplayFrameBeforeCutoverIsLost)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "last_replay_frame_loss";
     const int message_count = 10;
@@ -2627,6 +2640,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverAllMessagesWhenLastR
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2634,7 +2648,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverAllMessagesWhenLastR
  *  first new DATA frame published after the join is dropped. The driver's
  *  NAK/retransmit must recover it. All messages should be delivered.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverAllMessagesWhenFirstLiveFrameAfterJoinIsLost)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldDeliverAllMessagesWhenFirstLiveFrameAfterJoinIsLost)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "first_live_frame_loss";
 
@@ -2695,6 +2709,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverAllMessagesWhenFirst
     all_messages.insert(all_messages.end(), live_messages.begin(), live_messages.end());
     ASSERT_TRUE(MessagesEq(all_messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2703,7 +2718,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverAllMessagesWhenFirst
  *  loss is enabled on the replay stream to drop the first frame of the new
  *  replay. The retransmission mechanism must recover it.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverFirstReplayFrameAfterFallbackFromLive)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldDeliverFirstReplayFrameAfterFallbackFromLive)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "first_replay_after_fallback";
 
@@ -2799,6 +2814,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverFirstReplayFrameAfte
     all_messages.insert(all_messages.end(), batch4.begin(), batch4.end());
     ASSERT_TRUE(MessagesEq(all_messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2807,7 +2823,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverFirstReplayFrameAfte
  *  dropped during this critical catchup phase, retransmission must fill
  *  in the gaps and the PS must still cleanly transition to LIVE.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionToLiveWhenReplayFramesAreLostDuringAttemptSwitch)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTransitionToLiveWhenReplayFramesAreLostDuringAttemptSwitch)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "loss_during_attempt_switch";
 
@@ -2881,6 +2897,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionToLiveWhenReplayF
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2888,7 +2905,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionToLiveWhenReplayF
  *  dropped repeatedly (every-other-frame predicate). The PS must still
  *  eventually receive that one message and transition to live.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverSingleMessageRecordingWithReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldDeliverSingleMessageRecordingWithReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "single_msg_loss";
 
@@ -2938,6 +2955,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverSingleMessageRecordi
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -2946,7 +2964,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverSingleMessageRecordi
  *  replay_position != live_position, so the PS uses the catchup handlers to
  *  read live data ahead and advance the replay to meet it.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapDuringAttemptSwitchWithReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCatchupLiveGapDuringAttemptSwitchWithReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "catchup_live_gap";
 
@@ -3020,6 +3038,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapDuringAttempt
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3028,7 +3047,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapDuringAttempt
  *  close. The PS detects this and falls back to REPLAY. After loss clears,
  *  the PS recovers to LIVE.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverWhenLiveImageClosesDuringAttemptSwitch)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRecoverWhenLiveImageClosesDuringAttemptSwitch)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "live_closed_attempt_switch";
 
@@ -3098,6 +3117,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverWhenLiveImageClosesD
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
     ASSERT_TRUE(killed_live_during_switch) << "loss should have been enabled during ATTEMPT_SWITCH";
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3106,7 +3126,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverWhenLiveImageClosesD
  * the deadline-breach error handler fires. Once loss clears, the live image
  * appears and the PS transitions to LIVE.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReportDeadlineBreachAndRecoverWhenLiveImageIsDelayedByLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReportDeadlineBreachAndRecoverWhenLiveImageIsDelayedByLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "live_deadline_breach";
 
@@ -3203,9 +3223,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReportDeadlineBreachAndReco
         << "PS reported additional errors after successful LIVE recovery";
     ASSERT_EQ(live_joined_at_recovery, listener.live_joined_count)
         << "PS reported additional live_joined callbacks after successful LIVE recovery";
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithUncontrolledPollAndReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReceiveAllMessagesWithUncontrolledPollAndReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "uncontrolled_poll_loss";
 
@@ -3255,6 +3277,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithUncon
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Exercises the uncontrolled-poll catchup machinery in ATTEMPT_SWITCH: PS replays under
@@ -3264,7 +3287,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithUncon
 // Driver 1 (m_aeronDir) hosts the publisher and Java archive with no loss. Driver 2 hosts
 // only PS, with the combined predicate scoping both the SETUP-frame drop and the replay
 // DATA-frame drop to PS's receive endpoints — the archive's recording is unaffected.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapWithUncontrolledPollAndReplayLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCatchupLiveGapWithUncontrolledPollAndReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "uncontrolled_catchup";
 
@@ -3378,6 +3401,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapWithUncontrol
     all_messages.insert(all_messages.end(), initial_messages.begin(), initial_messages.end());
     all_messages.insert(all_messages.end(), drip_messages.begin(), drip_messages.end());
     ASSERT_TRUE(MessagesEq(all_messages, handler.messages()));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3389,7 +3414,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapWithUncontrol
  *
  *   Coverage targets: add_live_subscription (0%), await_live (0%)
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveAndRecoverFromInitialLiveChannelLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldStartFromLiveAndRecoverFromInitialLiveChannelLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "from_live_loss";
 
@@ -3452,6 +3477,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveAndRecoverFrom
 
     ASSERT_TRUE(MessagesEq(live_messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3459,7 +3485,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveAndRecoverFrom
  *
  *   Coverage targets: live_catchup_fragment_handler (0%)
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldInvokeLiveCatchupHandlerWhenPublishingDuringAttemptSwitch)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldInvokeLiveCatchupHandlerWhenPublishingDuringAttemptSwitch)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "live_catchup_handler";
 
@@ -3543,6 +3569,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldInvokeLiveCatchupHandlerWhe
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3550,7 +3577,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldInvokeLiveCatchupHandlerWhe
  *
  *   Coverage targets: on_archive_disconnected (0%), on_archive_error (0%)
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDuringLossyReplay)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRecoverFromArchiveKillDuringLossyReplay)
 {
     aeron_loss_generator_t *loss_gen = nullptr;
     ASSERT_EQ(0, aeron_stream_id_frame_data_loss_generator_create(&loss_gen));
@@ -3614,6 +3641,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
     ASSERT_GE(listener.live_joined_count, 1);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3633,7 +3661,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
  * either (a) lose the buffered start of the message, or (b) leak the partial
  * buffer across sessions. Either manifests as corruption or data loss.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverMultiFragmentMessageAcrossReplayImageCloseMidReassembly)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldDeliverMultiFragmentMessageAcrossReplayImageCloseMidReassembly)
 {
     aeron_loss_generator_t *loss_gen = nullptr;
     ASSERT_EQ(0, aeron_stream_id_frame_data_loss_generator_create(&loss_gen));
@@ -3714,6 +3742,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverMultiFragmentMessage
     ASSERT_EQ(3u, handler.messageCount());
     ASSERT_EQ(expected, handler.messages())
         << "Multi-fragment message corrupted or lost across replay image close";
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3723,7 +3753,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDeliverMultiFragmentMessage
  *     await_request_publication (0%), send_replay_token_request (0%),
  *     await_replay_token (0%)
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayOverResponseChannelWithLoss)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReplayOverResponseChannelWithLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "response_channel_loss";
 
@@ -3777,6 +3807,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayOverResponseChannelWi
 
     aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3786,7 +3817,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayOverResponseChannelWi
  *     aeron_counter_increment_release (0%),
  *     context_set_{state,join_difference,live_left,live_joined}_counter (0%)
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldUpdateUserProvidedCountersDuringLossInducedTransitions)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldUpdateUserProvidedCountersDuringLossInducedTransitions)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "user_counters_loss";
 
@@ -3870,6 +3901,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldUpdateUserProvidedCountersD
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3879,7 +3911,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldUpdateUserProvidedCountersD
  *  connection (dead), and transitions to AWAIT_ARCHIVE_CONNECTION.
  *  After archive restart the PS recovers.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDuringAwaitListRecording)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRecoverFromArchiveKillDuringAwaitListRecording)
 {
     const std::string aeron_dir = m_aeronDir;
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "kill_await_list";
@@ -3948,6 +3980,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -3955,7 +3988,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
  *  response-channel setup flow, triggering timeout and disconnect paths
  *  in the token request and replay request states.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDuringResponseChannelSetup)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRecoverFromArchiveKillDuringResponseChannelSetup)
 {
     const std::string aeron_dir = m_aeronDir;
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "kill_response_channel";
@@ -4041,6 +4074,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+
 }
 
 /*
@@ -4050,7 +4085,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
  *  timeout path resets state to REQUEST_MAX_POSITION. After restoring the
  *  normal timeout, the PS retries and eventually goes LIVE.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerMaxRecordedPositionTimeoutViaTimeoutManipulation)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTriggerMaxRecordedPositionTimeoutViaTimeoutManipulation)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "max_pos_timeout_manip";
 
@@ -4117,6 +4152,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerMaxRecordedPositionT
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -4125,7 +4161,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerMaxRecordedPositionT
  *  PS retries (line 1208: transition to SEND_LIST_RECORDING_REQUEST).
  *  After a few retries, the timeout is restored and the PS proceeds normally.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerListRecordingTimeoutViaTimeoutManipulation)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTriggerListRecordingTimeoutViaTimeoutManipulation)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "list_recording_timeout_manip";
 
@@ -4187,6 +4223,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerListRecordingTimeout
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -4195,7 +4232,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerListRecordingTimeout
  *  AWAIT_REPLAY_TOKEN, the timeout is reduced to 1ns. The deadline fires,
  *  the PS checks archive connection (still connected), and retries.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerReplayTokenTimeoutViaTimeoutManipulation)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTriggerReplayTokenTimeoutViaTimeoutManipulation)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "replay_token_timeout_manip";
 
@@ -4276,6 +4313,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerReplayTokenTimeoutVi
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -4284,7 +4322,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerReplayTokenTimeoutVi
  *  subsequent payloads. The list-recording response and replay response
  *  are dropped, causing their deadlines to fire.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnListRecordingAndReplayResponseWhenResponsesDropped)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTimeoutOnListRecordingAndReplayResponseWhenResponsesDropped)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "list_replay_resp_drop";
 
@@ -4312,7 +4350,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnListRecordingAndRe
     g_payload_seq.store(0, std::memory_order_relaxed);
     g_pass_payload_threshold.store(2, std::memory_order_relaxed);
 
-    aeron_stream_id_frame_data_loss_generator_enable(loss_gen, 
+    aeron_stream_id_frame_data_loss_generator_enable(loss_gen,
         CONTROL_RESPONSE_STREAM_ID, drop_payloads_after_threshold, nullptr);
 
     PersistentSubscriptionContextGuard context_guard(context);
@@ -4349,6 +4387,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnListRecordingAndRe
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -4369,7 +4408,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnListRecordingAndRe
  * set_up_replay since heartbeats keep the archive "connected". With loss
  * disabled later, the retry succeeds and PS goes LIVE.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnReplayResponseSelectively)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTimeoutOnReplayResponseSelectively)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "replay_resp_selective_drop";
 
@@ -4432,9 +4471,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnReplayResponseSele
         [&] { return handler.messageCount() == messages.size(); }, 30);
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnMaxRecordedPositionWhenResponsesDropped)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTimeoutOnMaxRecordedPositionWhenResponsesDropped)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "max_pos_resp_drop";
 
@@ -4463,7 +4504,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnMaxRecordedPositio
     g_payload_seq.store(0, std::memory_order_relaxed);
     g_pass_payload_threshold.store(4, std::memory_order_relaxed);
 
-    aeron_stream_id_frame_data_loss_generator_enable(loss_gen, 
+    aeron_stream_id_frame_data_loss_generator_enable(loss_gen,
         CONTROL_RESPONSE_STREAM_ID, drop_payloads_after_threshold, nullptr);
 
     PersistentSubscriptionContextGuard context_guard(context);
@@ -4503,9 +4544,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnMaxRecordedPositio
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnReplayTokenWhenResponsesDropped)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTimeoutOnReplayTokenWhenResponsesDropped)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "replay_token_resp_drop";
 
@@ -4539,7 +4581,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnReplayTokenWhenRes
     g_payload_seq.store(0, std::memory_order_relaxed);
     g_pass_payload_threshold.store(3, std::memory_order_relaxed);
 
-    aeron_stream_id_frame_data_loss_generator_enable(loss_gen, 
+    aeron_stream_id_frame_data_loss_generator_enable(loss_gen,
         CONTROL_RESPONSE_STREAM_ID, drop_payloads_after_threshold, nullptr);
 
     PersistentSubscriptionContextGuard context_guard(context);
@@ -4576,6 +4618,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnReplayTokenWhenRes
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -4586,7 +4629,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTimeoutOnReplayTokenWhenRes
  *     The next timeout check finds is_connected=false, hitting the "not
  *     connected" branches
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldHitNotConnectedTimeoutBranchesViaTwoPhaseResponseDrop)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldHitNotConnectedTimeoutBranchesViaTwoPhaseResponseDrop)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "two_phase_resp_drop";
 
@@ -4620,7 +4663,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldHitNotConnectedTimeoutBranc
     g_payload_seq.store(0, std::memory_order_relaxed);
     g_pass_payload_threshold.store(2, std::memory_order_relaxed);
 
-    aeron_stream_id_frame_data_loss_generator_enable(frame_data_gen, 
+    aeron_stream_id_frame_data_loss_generator_enable(frame_data_gen,
         CONTROL_RESPONSE_STREAM_ID, drop_payloads_after_threshold, nullptr);
 
     PersistentSubscriptionContextGuard context_guard(context);
@@ -4679,9 +4722,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldHitNotConnectedTimeoutBranc
 
     ASSERT_TRUE(MessagesEq(messages, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerLiveCatchupAbortByFreezingReplayDuringSwitch)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldTriggerLiveCatchupAbortByFreezingReplayDuringSwitch)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "live_catchup_abort";
 
@@ -4790,12 +4834,13 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerLiveCatchupAbortByFr
 
     ASSERT_TRUE(MessagesEq(all_published, handler.messages()));
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Controlled-poll variant of shouldCatchupLiveGapWithUncontrolledPollAndReplayLoss. Same
 // cross-driver scaffolding and combined predicate; uses fragment_limit=1 so ATTEMPT_SWITCH
 // spans many polls and asserts message order with strict equality.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupReplayToLiveDuringAttemptSwitch)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCatchupReplayToLiveDuringAttemptSwitch)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "catchup";
 
@@ -4909,6 +4954,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupReplayToLiveDuringAt
     all_messages.insert(all_messages.end(), initial_messages.begin(), initial_messages.end());
     all_messages.insert(all_messages.end(), drip_messages.begin(), drip_messages.end());
     ASSERT_EQ(all_messages, handler.messages());
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -4917,7 +4964,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupReplayToLiveDuringAt
  *  clean_up_replay_subscription which finds add_replay_subscription
  *  non-NULL and cancels the pending async add.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingAsyncOpsOnCloseDuringReplaySubscriptionSetup)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCancelPendingAsyncOpsOnCloseDuringReplaySubscriptionSetup)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "cancel_async_replay_sub";
 
@@ -4968,9 +5015,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingAsyncOpsOnClos
         std::this_thread::yield(); // let conductor process cancel
     }
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingRequestPublicationOnCloseDuringResponseChannelSetup)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCancelPendingRequestPublicationOnCloseDuringResponseChannelSetup)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "cancel_async_req_pub";
 
@@ -5027,6 +5075,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingRequestPublica
         std::this_thread::yield(); // let conductor process cancel
     }
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 /*
@@ -5036,7 +5085,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingRequestPublica
  *  callback returns early without cleanup. The PS continues
  *  consuming from the live publication.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReturnEarlyFromDisconnectCallbackWhenLive)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReturnEarlyFromDisconnectCallbackWhenLive)
 {
     const std::string aeron_dir = m_aeronDir;
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "disconnect_while_live";
@@ -5095,6 +5144,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReturnEarlyFromDisconnectCa
         std::this_thread::yield();
     }
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+
     ps_guard.release();
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
     std::this_thread::yield(); // let conductor process cancel
@@ -5108,7 +5159,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReturnEarlyFromDisconnectCa
  *  stopping conductor invocations after the PS queues an async add,
  *  the add stays pending. Closing the PS then cancels it.
  */
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingLiveSubscriptionOnCloseFromLiveEntry)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldCancelPendingLiveSubscriptionOnCloseFromLiveEntry)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "cancel_live_sub";
 
@@ -5166,6 +5217,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingLiveSubscripti
         std::this_thread::yield(); // let conductor process cancel
     }
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Per-endpoint supplier used by shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume.
@@ -5201,7 +5253,7 @@ static void installSetupAtPositionLossGenerator(
 // `snd_pos` has advanced past the offers we issued, the SETUP no longer matches the drop
 // filter, and PS's image is created with `join_position > stop_0` — triggering the
 // refresh path.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume)
 {
     aeron_setup_at_position_loss_config_t loss_config;
     aeron_setup_at_position_loss_config_init(&loss_config);
@@ -5397,7 +5449,7 @@ static void installDataInRangeLossGenerator(
 // preserved so PS still sees the EOS+REVOKE flag when publisher B is revoked. After
 // revoke, PS's image closes and the bytes the loss generator dropped can never be
 // recovered via NAK retransmits — PS must replay the full catchup from the recording.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition)
+TEST_F(AeronArchivePersistentSubscriptionResilienceTest, shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition)
 {
     aeron_data_in_range_loss_config_t loss_config;
     aeron_data_in_range_loss_config_init(&loss_config);
