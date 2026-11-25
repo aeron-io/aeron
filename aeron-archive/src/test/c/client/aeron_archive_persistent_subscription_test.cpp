@@ -26,6 +26,8 @@
 #include "TestMediaDriver.h"
 #include "TestStandaloneArchive.h"
 #include "ArchiveClientTestUtils.h"
+#include "client/aeron_archive_client.h"
+#include "client/aeron_archive_context.h"
 
 extern "C"
 {
@@ -1181,6 +1183,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWithNoInitialR
         poller,
         [&] { return handler.messageCount() == live_messages.size(); });
     ASSERT_EQ(live_messages, handler.messages());
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Verifies that a persistent subscription transitions immediately to live when there
@@ -1351,6 +1355,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotReplayOldMessagesWhenSta
         [&] { return handler.messageCount() == new_messages.size(); });
 
     ASSERT_EQ(new_messages, handler.messages());
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayFromSpecificMidRecordingPosition)
@@ -1407,6 +1413,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayFromSpecificMidRecord
         isLive(persistent_subscription));
     ASSERT_EQ(remaining_messages.size(), handler.messageCount());
     ASSERT_TRUE(MessagesEq(remaining_messages, handler.messages()));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // This test verifies that a persistent subscription can catchup from archive and then continues
@@ -1471,6 +1479,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionFromReplayToLiveW
         isLive(persistent_subscription));
 
     ASSERT_FALSE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 class AeronArchivePersistentSubscriptionCatchupTest
@@ -2009,6 +2019,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldAssembleMessages)
         [&] { return handler.messageCount() == 2; });
 
     ASSERT_EQ((std::vector<std::vector<uint8_t>>{{ payload0, payload1 }}), handler.messages());
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 struct ReplayChannelAndStream
@@ -2289,6 +2301,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingStreamDoesN
 
     ASSERT_EQ(1, listener.error_count);
     ASSERT_NE(std::string::npos, listener.last_error_message.find("stream"));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfLiveStreamPositionGoesBackwards)
@@ -2445,6 +2459,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfStartPositionIsAfter
 
     ASSERT_EQ(1, listener.error_count);
     ASSERT_NE(std::string::npos, listener.last_error_message.find("position"));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldFailIfLiveChannelIsInvalid)
@@ -2478,6 +2494,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldFailIfLiveChannelIsInvalid)
         poller,
         hasFailed(persistent_subscription));
     EXPECT_THAT(aeron_errmsg(), testing::HasSubstr("failed to add live subscription"));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 
     ps_guard.release();
     EXPECT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
@@ -2582,6 +2600,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canStartAtRecordingStopPositionWh
         [&] { return handler.messages().size() == liveMessages.size(); });
 
     ASSERT_EQ(0, listener.error_count);
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 
     ps_guard.release();
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
@@ -3087,6 +3107,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfStartPositionIsAfter
         hasFailed(persistent_subscription));
 
     ASSERT_EQ(1, listener.error_count);
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Verifies that a persistent subscription can start from live when the recording has been stopped.
@@ -3133,6 +3155,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, canStartFromLiveWhenRecordingHasS
     executeUntil("receives live messages", poller,
         [&] { return handler.messageCount() == second_batch.size(); });
     ASSERT_EQ(second_batch, handler.messages());
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 // Verifies that a persistent subscription replays a stopped recording, waits for the live
@@ -3813,6 +3837,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCloseCleanlyDuringReplay)
 
     ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
     ASSERT_LT(handler.messageCount(), messages.size());
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldCloseCleanlyDuringAwaitArchiveConnection)
@@ -3837,6 +3863,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCloseCleanlyDuringAwaitArch
     PersistentSubscriptionGuard ps_guard(persistent_subscription);
 
     // Close immediately without polling
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldStayOnReplayWhenLiveCannotConnect)
@@ -4255,6 +4283,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCloseContextWhenClosingSubs
     context_guard.release();
     PersistentSubscriptionGuard ps_guard(persistent_subscription);
 
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+
     // Close the persistent subscription
     ps_guard.release();
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
@@ -4451,6 +4481,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndSwitchToLiveWithUn
     std::vector<std::vector<uint8_t>> all_messages = messages;
     all_messages.insert(all_messages.end(), live_messages.begin(), live_messages.end());
     ASSERT_TRUE(MessagesEq(all_messages, handler.messages()));
+
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 }
 
 class AeronArchivePersistentSubscriptionAllReplayChannelTypesTest
