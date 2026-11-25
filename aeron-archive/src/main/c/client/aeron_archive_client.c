@@ -712,6 +712,7 @@ int aeron_archive_add_recorded_publication(
         AERON_APPEND_ERR("%s", "");
         goto error;
     }
+    aeron_free(recording_channel);
 
     *publication_p = _publication;
     rc = 0;
@@ -802,6 +803,7 @@ int aeron_archive_add_recorded_exclusive_publication(
         AERON_APPEND_ERR("%s", "");
         goto error;
     }
+    aeron_free(recording_channel);
 
     *exclusive_publication_p = _exclusive_publication;
     rc = 0;
