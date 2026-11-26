@@ -3225,6 +3225,11 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
                 goto malformed_command;
             }
 
+            if (command->token_length < 0 || length < sizeof(aeron_terminate_driver_command_t) + command->token_length)
+            {
+                goto malformed_command;
+            }
+
             result = aeron_driver_conductor_on_terminate_driver(conductor, command);
 
             break;
