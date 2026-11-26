@@ -340,15 +340,18 @@ void aeron_counters_reader_foreach_counter(
 
             AERON_GET_ACQUIRE(label_length, record->label_length);
 
-            func(
-                aeron_counter_get_acquire(value_addr),
-                id,
-                record->type_id,
-                (const uint8_t *)record->key,
-                sizeof(record->key),
-                (const char *)record->label,
-                (size_t)label_length,
-                clientd);
+            if (label_length >= 0 && (size_t)label_length <= AERON_COUNTER_MAX_LABEL_LENGTH)
+            {
+                func(
+                    aeron_counter_get_acquire(value_addr),
+                    id,
+                    record->type_id,
+                    (const uint8_t *)record->key,
+                    sizeof(record->key),
+                    (const char *)record->label,
+                    (size_t)label_length,
+                    clientd);
+            }
         }
         else if (AERON_COUNTER_RECORD_UNUSED == record_state)
         {
