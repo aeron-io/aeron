@@ -27,13 +27,16 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# git status refreshes the index first, so files that were only touched are not reported as changed.
 execute_process(
-    COMMAND git diff-index --quiet HEAD --
+    COMMAND git status --porcelain --untracked-files=no
     WORKING_DIRECTORY ${SOURCE_DIR}
-    RESULT_VARIABLE AERON_GIT_DIFF_INDEX_RESULT
+    RESULT_VARIABLE AERON_GIT_STATUS_RESULT
+    OUTPUT_VARIABLE AERON_GIT_STATUS_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-if (NOT AERON_GIT_DIFF_INDEX_RESULT EQUAL 0)
+if (NOT AERON_GIT_STATUS_RESULT EQUAL 0 OR NOT AERON_GIT_STATUS_OUTPUT STREQUAL "")
     set(AERON_VERSION_GITSHA "${AERON_VERSION_GITSHA}+guilty")
 endif ()
 
