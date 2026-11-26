@@ -1383,6 +1383,50 @@ jobs:
   fails too: it runs `if: always()` and unmounts a file system that was never mounted. Guarding it on the mount
   existing would leave only the real failure in the job.
 
+**6a, first measurements (26 November 2026)**
+
+From one green `ci.yml` run on `master` (45821748862, `5704436792`). Each C++ job's "Build" step is `cppbuild`, which
+configures, compiles and then runs ctest, so the split below comes from the log timestamps. One run only, so treat
+the numbers as indicative.
+
+| Job | Job | Configure + compile | ctest | Java system tests on C driver | C archive tests |
+|---|---|---|---|---|---|
+| Clang 17 (Ubuntu) | 14m | 2.3m | 11.8m | 5.1m | 4.8m |
+| GCC 13 (Ubuntu) | 14m | 2.4m | 11.7m | 5.0m | similar |
+| Rocky 9 | 16m | 2.6m, plus Docker setup | 12.1m | 5.1m | not checked |
+| MSVC (Windows) | 25m | 7.5m | 15.8m | 6.0m | 8.2m |
+| Xcode (macOS) | 23m | 1.9m | 21.5m | 9.3m | 10.3m |
+
+The C archive tests are the persistent subscription, persistent subscription resilience and archive tests, and
+their C++ wrapper equivalents. The other 12 C++ jobs take 14 to 18 minutes; the Java jobs take 8 to 15 minutes, and
+the slowest jobs, MSVC and Xcode, set the run's wall-clock time.
+
+- Tests are about 80% of every C++ job. Compiling is about 2 minutes, except on MSVC.
+- `java_system_tests_c_media_driver` runs the whole Java system test suite against the C driver in all 17 C++ jobs,
+  5 to 9 minutes each. It is `RUN_SERIAL`, and the build cache can't reuse its results (runs against a native binary
+  aren't cached, see below).
+- ctest runs tests one at a time (`cppbuild` passes no `-j`). Running them in parallel would gain little: the two
+  large groups need to run alone or share ports and Aeron directories.
+- ccache would save at most about 2 minutes per Linux or macOS job. Only MSVC compiles for long, and sccache rather
+  than ccache would be the tool there.
+
+Candidate changes, not agreed: run the Java system tests on the C driver in fewer jobs (e.g. once per OS rather than
+once per compiler), sccache for MSVC, and looking at the C archive tests' duration with the C engineers.
+
+**Bigger picture: a CI/CD pipeline rather than a set of parallel jobs.** These numbers belong in a wider discussion
+about the pipeline as a whole, not in piecemeal cuts. Every push currently starts every job at once, so a compile
+error or a broken unit test costs the same as a green run, and the same tests run many times over. The aim is a
+pipeline that:
+
+- fails fast: cheap checks first (build, checkstyle, unit tests), with the expensive stages starting only when those
+  pass;
+- reduces duplication: run each test suite in as few places as gives the coverage it's there for;
+- has a clear test matrix: which suites run on which OS, JDK and compiler, and at which stage (pull request, merge
+  to `master`, schedule, release), so everyone can see what is tested where and why.
+
+6b, 6c and the candidate changes above are inputs to that discussion. Measuring several runs (rest of 6a) and the
+history of which jobs fail on their own should come first.
+
 ### Native-binary test runs and the build cache (found in review of PR #2215)
 
 Copilot's review of the performance PR (#2215) pointed out a problem introduced by enabling the build cache:
