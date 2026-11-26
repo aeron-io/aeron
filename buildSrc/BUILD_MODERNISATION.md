@@ -452,6 +452,52 @@ from the cache. That gain is PR 2's; on CI it depends on whether the cache survi
   exit 0.
 - Step 5's optional clean-ups (5f dropped) and step 6 (CI and test speed) are not started.
 
+### Follow-up: stale C builds (November 2026)
+
+Dmytro reported three problems in incremental C builds, e.g. from CLion, that `gradle clean` or a fresh build made go
+away. `cppbuild` and CI configure from scratch every time, which hides all of them. Each was a build trusting
+something it had built earlier after one of its inputs had changed.
+
+| Problem | Cause | Since | Fix |
+|---|---|---|---|
+| Duplicate codec classes when switching between `master` and `release/1.54.x` | PR 4 put each test codec task in its own directory inside `generated-test`; the older build compiles that whole directory, so it found both copies | PR 4 | #2269 (merged) |
+| `ClassNotFoundException: io.aeron.archive.ArchivingMediaDriver` in the C archive tests | The tests have the aeron-all jar path, including the version, compiled in at configure time. Changing `version.txt` didn't reconfigure, so after a branch switch they looked for a jar that doesn't exist | 2018 | #2270 (merged) |
+| `SystemCountersTest` against the C driver fails after an uncommitted edit | Java works out the git SHA on every build; C did it only at configure time, so Java said `+guilty` and C didn't | Long-standing, more visible since PR 2 | #2271 (in review) |
+
+**#2269:** all generated codecs moved to Gradle's current convention,
+`build/generated/sources/<task>/java/<sourceSet>`, matching the annotation processor and headers. `generated-src` was
+Gradle's old convention, still used by the ANTLR plugin. This modernises the layout and fixes the clash, as the older
+build no longer finds the new directories. Checkstyle and CodeQL exclusions follow the new paths.
+
+**#2270**, four small fixes to the aeron-all jar the C tests use:
+
+- aeron-all's plain jar is disabled. It was empty, wrote to the same file as the shadow jar and ran first, so the two
+  tasks were never up to date, and Gradle disabled caching for `shadowJar` because of the overlapping output. An
+  interrupted build could also leave the empty jar in place.
+- The disabled `jar` task depends on `shadowJar`, so `gradlew jar` still builds the fat jar, as it did through
+  `finalizedBy`.
+- The glob CMake used for the jar's inputs had a stray `}`, so it matched nothing and CMake only built the jar when it
+  was missing (since 2020). It now matches aeron-archive's Java sources, which is still only a partial list.
+- `version.txt` is a configure dependency, so changing it reconfigures CMake.
+
+**#2271**, two commits:
+
+- The C SHA is written to a generated header by `cmake/AeronVersionGitSha.cmake` on every build, rewritten only when
+  it changes. A SHA change recompiles about 10 files and relinks the libraries and tests, about 13 seconds for a full
+  build; previously it either did nothing or, after a reconfigure, recompiled all 395 files. Each build pays about
+  0.1 seconds for the script.
+- `+guilty` comes from `git status` instead of `git diff-index`, which reported files that were only touched as
+  changed. This matches the Java build.
+
+`SystemCountersTest` uses `startsWith`, so it only fails when Java says `+guilty` and C doesn't: configure, edit, test.
+
+**Parked: CMake runs Gradle on every build** (local branch `build-cmake-run-gradle`). Replacing the jar glob with an
+always-run target lets Gradle, which knows all the jar's inputs (every module, codecs, build scripts, the SHA), decide
+whether the jar is up to date. With `--no-daemon` that costs about 4 seconds per C build with nothing changed; with a
+warm daemon about 0.6 seconds. An option such as `AERON_GRADLE_DAEMON`, on locally and off for `cppbuild` and CI,
+would make it cheap. None of the three problems above needs it, so it's parked. The branch is stacked on #2270's
+commits from before the squash, so rebase it onto `master` before using it.
+
 ### Verification tools
 
 These are kept outside version control, so they never end up in a commit:
