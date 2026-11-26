@@ -55,7 +55,7 @@ tasks.register('generateCodecs', GenerateSbeCodecs) {
     classpath = configurations.codecGeneration
     schemas.from(codecsFile, markCodecsFile)
     validationXsd = file(sbeFile)
-    outputDir = layout.buildDirectory.dir('generated-src')
+    outputDir = layout.buildDirectory.dir('generated/sources/generateCodecs/java/main')
     targetLanguage = 'Java'
 }
 
