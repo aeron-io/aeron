@@ -3272,6 +3272,11 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
                 goto malformed_command;
             }
 
+            if (command->reason_length < 0 || command->reason_length > AERON_ERROR_MAX_TEXT_LENGTH)
+            {
+                goto malformed_command;
+            }
+
             if (length < offsetof(aeron_reject_image_command_t, reason_text) + command->reason_length)
             {
                 goto malformed_command;
