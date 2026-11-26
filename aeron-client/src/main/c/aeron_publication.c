@@ -301,7 +301,7 @@ static int64_t aeron_publication_append_fragmented_message(
             if (NULL != reserved_value_supplier)
             {
                 data_header->reserved_value = reserved_value_supplier(
-                    clientd, term_buffer->addr + term_offset, frame_length);
+                    clientd, term_buffer->addr + frame_offset, frame_length);
             }
 
             AERON_SET_RELEASE(data_header->frame_header.frame_length, (int32_t)frame_length);
