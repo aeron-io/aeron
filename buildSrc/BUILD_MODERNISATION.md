@@ -462,7 +462,7 @@ something it had built earlier after one of its inputs had changed.
 |---|---|---|---|
 | Duplicate codec classes when switching between `master` and `release/1.54.x` | PR 4 put each test codec task in its own directory inside `generated-test`; the older build compiles that whole directory, so it found both copies | PR 4 | #2269 (merged) |
 | `ClassNotFoundException: io.aeron.archive.ArchivingMediaDriver` in the C archive tests | The tests have the aeron-all jar path, including the version, compiled in at configure time. Changing `version.txt` didn't reconfigure, so after a branch switch they looked for a jar that doesn't exist | 2018 | #2270 (merged) |
-| `SystemCountersTest` against the C driver fails after an uncommitted edit | Java works out the git SHA on every build; C did it only at configure time, so Java said `+guilty` and C didn't | Long-standing, more visible since PR 2 | #2271 (in review) |
+| `SystemCountersTest` against the C driver fails after an uncommitted edit | Java works out the git SHA on every build; C did it only at configure time, so Java said `+guilty` and C didn't | Long-standing, more visible since PR 2 | #2271 (merged) |
 
 **#2269:** all generated codecs moved to Gradle's current convention,
 `build/generated/sources/<task>/java/<sourceSet>`, matching the annotation processor and headers. `generated-src` was
@@ -491,12 +491,21 @@ build no longer finds the new directories. Checkstyle and CodeQL exclusions foll
 
 `SystemCountersTest` uses `startsWith`, so it only fails when Java says `+guilty` and C doesn't: configure, edit, test.
 
-**Parked: CMake runs Gradle on every build** (local branch `build-cmake-run-gradle`). Replacing the jar glob with an
-always-run target lets Gradle, which knows all the jar's inputs (every module, codecs, build scripts, the SHA), decide
-whether the jar is up to date. With `--no-daemon` that costs about 4 seconds per C build with nothing changed; with a
-warm daemon about 0.6 seconds. An option such as `AERON_GRADLE_DAEMON`, on locally and off for `cppbuild` and CI,
-would make it cheap. None of the three problems above needs it, so it's parked. The branch is stacked on #2270's
-commits from before the squash, so rebase it onto `master` before using it.
+**Next: CMake runs Gradle on every build** (branch `build-cmake-run-gradle`, pushed, no pull request yet). Replacing
+the jar glob with an always-run target lets Gradle, which knows all the jar's inputs (every module, codecs, build
+scripts, the SHA), decide whether the jar is up to date. None of the three problems above needs it, but it stops the
+jar going stale for any other change. With `--no-daemon` that costs about 3 seconds per C build with nothing
+changed. Dmytro agreed to try the daemon for local C builds (CMake used `--no-daemon` because of past corrupted
+caches), so a second commit removes `--no-daemon` from CMake's Gradle calls: about 0.8 seconds with a warm daemon.
+CI, releases and the Rocky Docker build keep it off through `GRADLE_OPTS=-Dorg.gradle.daemon=false`, which Gradle
+honours, so no CMake option is needed. CI passed on the branch.
+
+**Why the SHA is a generated header** (Dmytro's question on #2271): `-DAERON_VERSION_GITSHA` is set when CMake
+configures, and a normal build doesn't configure, so the value stays frozen. `CACHE` or `FORCE` only affect what
+happens during configure. Forcing a reconfigure on every build reruns all of CMake, and because the SHA was a global
+compile definition, a new value recompiles every file. A build step that writes a header, only when the value
+changes, recompiles just the files that use it. It has to be a header, not a generated `.c` file, because the SHA is
+used in compile-time string concatenation.
 
 ### Verification tools
 
