@@ -375,30 +375,25 @@ if (BUILD_AERON_ARCHIVE_API)
     add_subdirectory(${AERON_C_ARCHIVE_SOURCE_PATH})
     set(AERON_ALL_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-all/build/libs/aeron-all-${AERON_VERSION_TXT}.jar")
 
-    file(GLOB_RECURSE AERON_ALL_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/main/java/*.java")
-
-    add_custom_command(OUTPUT ${AERON_ALL_JAR}
+    # Gradle runs on every build and decides whether the jar is up to date, as it tracks all of the jar's inputs:
+    # sources, generated codecs, build scripts and the git SHA in the version classes.
+    add_custom_target(aeron-all-jar
         COMMAND ${CMAKE_COMMAND}
                 -E env
                 JAVA_HOME=${JAVA_HOME}
                 BUILD_JAVA_HOME=${BUILD_JAVA_HOME}
                 BUILD_JAVA_VERSION=${BUILD_JAVA_VERSION}
                 ${GRADLE_WRAPPER}
-                :aeron-all:clean
                 :aeron-all:assemble
                 --exclude-task  javadoc
                 --exclude-task  check
                 --no-daemon
                 --console=plain
                 --quiet
-        DEPENDS ${AERON_ALL_SOURCES}
+        BYPRODUCTS ${AERON_ALL_JAR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating aeron-all jar"
+        COMMENT "Updating aeron-all jar"
         VERBATIM)
-
-    add_custom_target(aeron-all-jar
-        DEPENDS ${AERON_ALL_JAR})
 
     if (AERON_TESTS)
         add_subdirectory(${AERON_C_ARCHIVE_TEST_PATH})
