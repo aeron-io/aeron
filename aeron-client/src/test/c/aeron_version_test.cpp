@@ -23,6 +23,7 @@ extern "C"
 {
 #include "aeron_common.h"
 #include "aeronc.h"
+#include "aeron_version_gitsha.h"
 }
 
 class VersionTest : public testing::Test

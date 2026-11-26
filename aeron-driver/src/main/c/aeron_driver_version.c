@@ -20,6 +20,7 @@
 #endif
 
 #include "aeron_driver_version.h"
+#include "aeron_version_gitsha.h"
 
 const char *aeron_driver_version_text(void)
 {

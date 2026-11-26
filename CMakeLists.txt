@@ -103,28 +103,29 @@ if (NOT DEFINED CMAKE_C_EXTENSIONS)
     set(CMAKE_C_EXTENSIONS OFF)
 endif ()
 
-execute_process(
-    COMMAND git log -1 --format=%h --abbrev=10
-    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-    OUTPUT_VARIABLE AERON_VERSION_GITSHA
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+# The git SHA is written to a generated header on every build, not just when CMake is configured, so committing or
+# changing files is reflected without reconfiguring. The header is only rewritten when the SHA changes.
+set(AERON_VERSION_GITSHA_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/version")
+set(AERON_VERSION_GITSHA_HEADER "${AERON_VERSION_GITSHA_DIR}/aeron_version_gitsha.h")
+set(AERON_VERSION_GITSHA_COMMAND
+    ${CMAKE_COMMAND}
+    -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+    -DOUTPUT_FILE=${AERON_VERSION_GITSHA_HEADER}
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/AeronVersionGitSha.cmake)
 
-execute_process(
-    COMMAND git diff-index --quiet HEAD --
-    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-    RESULT_VARIABLE AERON_GIT_DIFF_INDEX_RESULT
-)
+execute_process(COMMAND ${AERON_VERSION_GITSHA_COMMAND})
 
-if (NOT AERON_GIT_DIFF_INDEX_RESULT EQUAL 0)
-    set(AERON_VERSION_GITSHA "${AERON_VERSION_GITSHA}+guilty")
-endif ()
+add_custom_target(aeron_version_gitsha
+    COMMAND ${AERON_VERSION_GITSHA_COMMAND}
+    BYPRODUCTS ${AERON_VERSION_GITSHA_HEADER}
+    VERBATIM)
+
+include_directories(${AERON_VERSION_GITSHA_DIR})
 
 add_definitions(-DAERON_VERSION_TXT="${AERON_VERSION_TXT}")
 add_definitions(-DAERON_VERSION_MAJOR=${aeron_VERSION_MAJOR})
 add_definitions(-DAERON_VERSION_MINOR=${aeron_VERSION_MINOR})
 add_definitions(-DAERON_VERSION_PATCH=${aeron_VERSION_PATCH})
-add_definitions(-DAERON_VERSION_GITSHA="${AERON_VERSION_GITSHA}")
 
 if (AERON_HIDE_DEPRECATION_MESSAGE)
     add_compile_definitions("AERON_HIDE_DEPRECATION_MESSAGE")

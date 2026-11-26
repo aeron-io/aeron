@@ -391,12 +391,14 @@ SET(HEADERS
 
 add_library(aeron_driver SHARED ${DRIVER_ONLY_SOURCE} ${HEADERS})
 add_library(aeron::aeron_driver ALIAS aeron_driver)
+add_dependencies(aeron_driver aeron_version_gitsha)
 target_include_directories(aeron_driver PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR};${AERON_C_CLIENT_SOURCE_PATH}>"
     "$<INSTALL_INTERFACE:include/aeronmd;include/aeron>")
 
 add_library(aeron_driver_static STATIC ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_driver_static ALIAS aeron_driver_static)
+add_dependencies(aeron_driver_static aeron_version_gitsha)
 target_include_directories(aeron_driver_static PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR};${AERON_C_CLIENT_SOURCE_PATH}>"
     "$<INSTALL_INTERFACE:include/aeronmd;include/aeron>")

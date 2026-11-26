@@ -15,6 +15,7 @@
  */
 
 #include "aeron_archive_client_version.h"
+#include "aeron_version_gitsha.h"
 
 const char *aeron_archive_client_version_text(void)
 {
