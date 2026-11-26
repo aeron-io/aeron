@@ -19,6 +19,8 @@
 
 #include <gtest/gtest.h>
 
+#include "gmock/gmock-matchers.h"
+
 extern "C"
 {
 #include "concurrent/aeron_counters_manager.h"
@@ -33,11 +35,11 @@ typedef std::array<std::uint8_t, METADATA_CAPACITY> metadata_buffer_t;
 
 static const int REUSE_TIMEOUT = 5000;
 
-class CountersTest : public testing::Test
+class CountersTestBase
 {
 public:
 
-    CountersTest()
+    CountersTestBase()
     {
         m_valuesBuffer.fill(0);
         m_metadataBuffer.fill(0);
@@ -64,7 +66,7 @@ public:
         }
     }
 
-    ~CountersTest() override
+    ~CountersTestBase()
     {
         aeron_counters_manager_close(&m_manager);
     }
@@ -75,6 +77,10 @@ protected:
     aeron_counters_reader_t m_reader = {};
     aeron_counters_manager_t m_manager = {};
     aeron_clock_cache_t m_cached_clock = {};
+};
+
+class CountersTest : public CountersTestBase, public testing::Test
+{
 };
 
 TEST_F(CountersTest, shouldReadCounterState)
@@ -283,4 +289,135 @@ TEST_F(CountersTest, shouldResetValueAndReferenceIdIfReused)
     aeron_counters_manager_counter_reference_id(&m_manager, id_two, expected_reference_id_two);
     EXPECT_EQ(0, aeron_counters_reader_counter_reference_id(&m_reader, id_two, &reference_id_two));
     EXPECT_EQ(expected_reference_id_two, reference_id_two);
+}
+
+class InvalidCounterTest : public CountersTestBase, public testing::TestWithParam<std::int32_t>
+{
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    InvalidCounterTest,
+    InvalidCounterTest,
+    testing::Values(-1, 1000000));
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeInReaderAddr)
+{
+    int32_t counter_id = GetParam();
+    EXPECT_EQ(nullptr, aeron_counters_reader_addr(&m_reader, counter_id));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_THAT(
+        aeron_errmsg(),
+        testing::HasSubstr(std::string("counter id is out range [0, 7]: ").append(std::to_string(counter_id))));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingRegistrationId)
+{
+    int32_t counter_id = GetParam();
+    int64_t registration_id = -1;
+    EXPECT_EQ(-1, aeron_counters_reader_counter_registration_id(&m_reader, GetParam(), &registration_id));
+    EXPECT_EQ(-1, registration_id);
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_THAT(
+        aeron_errmsg(),
+        testing::HasSubstr(std::string("counter id is out range [0, 7]: ").append(std::to_string(counter_id))));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingOwnerId)
+{
+    int64_t owner_id = -1;
+    EXPECT_EQ(-1, aeron_counters_reader_counter_owner_id(&m_reader, GetParam(), &owner_id));
+    EXPECT_EQ(-1, owner_id);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingReferenceId)
+{
+    int64_t reference_id = -1;
+    EXPECT_EQ(-1, aeron_counters_reader_counter_reference_id(&m_reader, GetParam(), &reference_id));
+    EXPECT_EQ(-1, reference_id);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingState)
+{
+    int32_t state = -1;
+    EXPECT_EQ(-1, aeron_counters_reader_counter_state(&m_reader, GetParam(), &state));
+    EXPECT_EQ(-1, state);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingTypeId)
+{
+    int32_t typeId = -1;
+    EXPECT_EQ(-1, aeron_counters_reader_counter_type_id(&m_reader, GetParam(), &typeId));
+    EXPECT_EQ(-1, typeId);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingMetadataKey)
+{
+    uint8_t *key = nullptr;
+    EXPECT_EQ(-1, aeron_counters_reader_metadata_key(&m_reader, GetParam(), &key));
+    EXPECT_EQ(nullptr, key);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingCounterLabel)
+{
+    char label[100] = {};
+    label[0] = '\0';
+    EXPECT_EQ(-1, aeron_counters_reader_counter_label(&m_reader, GetParam(), label, sizeof(label)));
+    EXPECT_EQ('\0', label[0]);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenReadingReuseDeadline)
+{
+    int64_t deadline_ms = -1;
+    EXPECT_EQ(-1, aeron_counters_reader_free_for_reuse_deadline_ms(&m_reader, GetParam(), &deadline_ms));
+    EXPECT_EQ(-1, deadline_ms);
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeInManagerAddr)
+{
+    int32_t counter_id = GetParam();
+    EXPECT_EQ(nullptr, aeron_counters_manager_addr(&m_manager, counter_id));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_THAT(
+        aeron_errmsg(),
+        testing::HasSubstr(std::string("counter id is out range [0, 7]: ").append(std::to_string(counter_id))));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenSettingRegistrationId)
+{
+    int32_t counter_id = GetParam();
+    int64_t registration_id = 5;
+    EXPECT_EQ(-1, aeron_counters_manager_counter_registration_id(&m_manager, counter_id, registration_id));
+    EXPECT_EQ(nullptr, aeron_counters_manager_addr(&m_manager, counter_id));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_THAT(
+        aeron_errmsg(),
+        testing::HasSubstr(std::string("counter id is out range [0, 7]: ").append(std::to_string(counter_id))));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenSettingOwnerId)
+{
+    int32_t counter_id = GetParam();
+    int64_t owner_id = 7;
+    EXPECT_EQ(-1, aeron_counters_manager_counter_owner_id(&m_manager, counter_id, owner_id));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenSettingReferenceId)
+{
+    int32_t counter_id = GetParam();
+    int64_t ref_id = 42;
+    EXPECT_EQ(-1, aeron_counters_manager_counter_reference_id(&m_manager, counter_id, ref_id));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenUpdatingLabel)
+{
+    int32_t counter_id = GetParam();
+    const char *label = "label";
+    EXPECT_EQ(-1, aeron_counters_manager_update_label(&m_manager, counter_id, strlen(label), label));
+}
+
+TEST_P(InvalidCounterTest, shouldRejectCounterThatIsOutOfRangeWhenAppendingToLabel)
+{
+    int32_t counter_id = GetParam();
+    const char *label = "label";
+    EXPECT_EQ(-1, aeron_counters_manager_append_to_label(&m_manager, counter_id, strlen(label), label));
 }

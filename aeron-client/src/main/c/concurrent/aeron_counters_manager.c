@@ -42,6 +42,20 @@ _Static_assert(
     offsetof(aeron_counters_manager_t, max_counter_id) == offsetof(aeron_counters_reader_t, max_counter_id),
     "offsetof(aeron_counters_manager_t, max_counter_id) must match offsetof(aeron_counters_reader_t, max_counter_id)");
 
+#define AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, max_counter_id) \
+do                                                                             \
+{                                                                              \
+    if ((counter_id) < 0 || (counter_id) > (max_counter_id))                   \
+    {                                                                          \
+        AERON_SET_ERR(                                                         \
+            EINVAL,                                                            \
+            "counter id is out range [0, %" PRIi32 "]: %" PRIi32,              \
+            (max_counter_id), (counter_id));                                   \
+        return -1;                                                             \
+    }                                                                          \
+}                                                                              \
+while(0)
+
 int aeron_counters_manager_init(
     aeron_counters_manager_t *manager,
     uint8_t *metadata_buffer,
@@ -138,36 +152,60 @@ int32_t aeron_counters_reader_max_counter_id(aeron_counters_reader_t *reader)
     return reader->max_counter_id;
 }
 
-void aeron_counters_manager_counter_registration_id(
+int64_t *aeron_counters_manager_addr(aeron_counters_manager_t *manager, int32_t counter_id)
+{
+    if (counter_id < 0 || counter_id > manager->max_counter_id)
+    {
+        AERON_SET_ERR(EINVAL, "counter id is out range [0, %" PRIi32 "]: %" PRIi32, manager->max_counter_id, counter_id);
+        return NULL;
+    }
+
+    return (int64_t *)(manager->values + AERON_COUNTER_OFFSET(counter_id));
+}
+
+int aeron_counters_manager_counter_registration_id(
     aeron_counters_manager_t *manager, int32_t counter_id, int64_t registration_id)
 {
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, manager->max_counter_id);
+
     aeron_counter_value_descriptor_t *value_descriptor = (aeron_counter_value_descriptor_t *)(
         manager->values + AERON_COUNTER_OFFSET(counter_id));
 
     AERON_SET_RELEASE(value_descriptor->registration_id, registration_id);
+
+    return 0;
 }
 
-void aeron_counters_manager_counter_owner_id(
+int aeron_counters_manager_counter_owner_id(
     aeron_counters_manager_t *manager, int32_t counter_id, int64_t owner_id)
 {
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, manager->max_counter_id);
+
     aeron_counter_value_descriptor_t *value_descriptor = (aeron_counter_value_descriptor_t *)(
         manager->values + AERON_COUNTER_OFFSET(counter_id));
 
     value_descriptor->owner_id = owner_id;
+    return 0;
 }
 
-void aeron_counters_manager_counter_reference_id(
+int aeron_counters_manager_counter_reference_id(
     aeron_counters_manager_t *manager, int32_t counter_id, int64_t reference_id)
 {
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, manager->max_counter_id);
+
     aeron_counter_value_descriptor_t *value_descriptor = (aeron_counter_value_descriptor_t *)(
         manager->values + AERON_COUNTER_OFFSET(counter_id));
 
     value_descriptor->reference_id = reference_id;
+
+    return 0;
 }
 
-void aeron_counters_manager_update_label(
+int aeron_counters_manager_update_label(
     aeron_counters_manager_t *manager, int32_t counter_id, size_t label_length, const char *label)
 {
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, manager->max_counter_id);
+
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)
         (manager->metadata + (counter_id * AERON_COUNTERS_MANAGER_METADATA_LENGTH));
 
@@ -175,11 +213,15 @@ void aeron_counters_manager_update_label(
 
     memcpy(metadata->label, label, length);
     AERON_SET_RELEASE(metadata->label_length, (int32_t)length);
+
+    return 0;
 }
 
-void aeron_counters_manager_append_to_label(
+int aeron_counters_manager_append_to_label(
     aeron_counters_manager_t *manager, int32_t counter_id, size_t length, const char *value)
 {
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, manager->max_counter_id);
+
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)
         (manager->metadata + (counter_id * AERON_COUNTERS_MANAGER_METADATA_LENGTH));
 
@@ -192,6 +234,8 @@ void aeron_counters_manager_append_to_label(
 
     memcpy(metadata->label + current_length, value, copy_length);
     AERON_SET_RELEASE(metadata->label_length, (int32_t)(current_length + copy_length));
+
+    return 0;
 }
 
 void aeron_counters_manager_remove_free_list_index(aeron_counters_manager_t *manager, int index)
@@ -245,10 +289,7 @@ int32_t aeron_counters_manager_next_counter_id(aeron_counters_manager_t *manager
 
 int aeron_counters_manager_free(aeron_counters_manager_t *manager, int32_t counter_id)
 {
-    if (counter_id < 0 || counter_id > manager->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, manager->max_counter_id);
 
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)
         (manager->metadata + (counter_id * AERON_COUNTERS_MANAGER_METADATA_LENGTH));
@@ -404,8 +445,9 @@ int32_t aeron_counters_reader_find_by_type_id_and_registration_id(
 
 int64_t *aeron_counters_reader_addr(aeron_counters_reader_t *counters_reader, int32_t counter_id)
 {
-    if (counter_id < 0)
+    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
     {
+        AERON_SET_ERR(EINVAL, "counter id is out range [0, %" PRIi32 "]: %" PRIi32, counters_reader->max_counter_id, counter_id);
         return NULL;
     }
 
@@ -415,10 +457,7 @@ int64_t *aeron_counters_reader_addr(aeron_counters_reader_t *counters_reader, in
 int aeron_counters_reader_counter_registration_id(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, int64_t *registration_id)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_value_descriptor_t *value_descriptor = (aeron_counter_value_descriptor_t *)(
         counters_reader->values + AERON_COUNTER_OFFSET(counter_id));
@@ -431,10 +470,7 @@ int aeron_counters_reader_counter_registration_id(
 int aeron_counters_reader_counter_owner_id(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, int64_t *owner_id)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_value_descriptor_t *value_descriptor = (aeron_counter_value_descriptor_t *)(
         counters_reader->values + AERON_COUNTER_OFFSET(counter_id));
@@ -447,10 +483,7 @@ int aeron_counters_reader_counter_owner_id(
 int aeron_counters_reader_counter_reference_id(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, int64_t *reference_id)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_value_descriptor_t *value_descriptor = (aeron_counter_value_descriptor_t *)(
         counters_reader->values + AERON_COUNTER_OFFSET(counter_id));
@@ -462,10 +495,7 @@ int aeron_counters_reader_counter_reference_id(
 
 int aeron_counters_reader_counter_state(aeron_counters_reader_t *counters_reader, int32_t counter_id, int32_t *state)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)(
         counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(counter_id));
@@ -478,10 +508,7 @@ int aeron_counters_reader_counter_state(aeron_counters_reader_t *counters_reader
 int aeron_counters_reader_counter_type_id(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, int32_t *type_id)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)(
         counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(counter_id));
@@ -494,10 +521,7 @@ int aeron_counters_reader_counter_type_id(
 int aeron_counters_reader_metadata_key(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, uint8_t **key_p)
 {
-    if (NULL == key_p || counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     *key_p = counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(counter_id) + AERON_COUNTER_KEY_OFFSET;
 
@@ -507,10 +531,7 @@ int aeron_counters_reader_metadata_key(
 int aeron_counters_reader_counter_label(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, char *buffer, size_t buffer_length)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)(
         counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(counter_id));
@@ -527,10 +548,7 @@ int aeron_counters_reader_counter_label(
 int aeron_counters_reader_free_for_reuse_deadline_ms(
     aeron_counters_reader_t *counters_reader, int32_t counter_id, int64_t *deadline_ms)
 {
-    if (counter_id < 0 || counter_id > counters_reader->max_counter_id)
-    {
-        return -1;
-    }
+    AERON_COUNTERS_MANAGER_VALIDATE_COUNTER_ID(counter_id, counters_reader->max_counter_id);
 
     aeron_counter_metadata_descriptor_t *metadata = (aeron_counter_metadata_descriptor_t *)(
         counters_reader->metadata + AERON_COUNTER_METADATA_OFFSET(counter_id));
@@ -569,8 +587,6 @@ int aeron_counters_reader_init(
 
     return result;
 }
-
-extern int64_t *aeron_counters_manager_addr(aeron_counters_manager_t *counters_manager, int32_t counter_id);
 
 extern void aeron_counter_set_release(volatile int64_t *addr, int64_t value);
 

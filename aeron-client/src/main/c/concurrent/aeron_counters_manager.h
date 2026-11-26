@@ -119,19 +119,19 @@ int32_t aeron_counters_manager_allocate(
     const char *label,
     size_t label_length);
 
-void aeron_counters_manager_counter_registration_id(
+int aeron_counters_manager_counter_registration_id(
     aeron_counters_manager_t *manager, int32_t counter_id, int64_t registration_id);
 
-void aeron_counters_manager_counter_owner_id(
+int aeron_counters_manager_counter_owner_id(
     aeron_counters_manager_t *manager, int32_t counter_id, int64_t owner_id);
 
-void aeron_counters_manager_counter_reference_id(
+int aeron_counters_manager_counter_reference_id(
     aeron_counters_manager_t *manager, int32_t counter_id, int64_t reference_id);
 
-void aeron_counters_manager_update_label(
+int aeron_counters_manager_update_label(
     aeron_counters_manager_t *manager, int32_t counter_id, size_t label_length, const char *label);
 
-void aeron_counters_manager_append_to_label(
+int aeron_counters_manager_append_to_label(
     aeron_counters_manager_t *manager, int32_t counter_id, size_t length, const char *value);
 
 int32_t aeron_counters_manager_next_counter_id(aeron_counters_manager_t *manager);
@@ -153,10 +153,7 @@ void aeron_counters_reader_foreach_metadata(
     aeron_counters_reader_foreach_metadata_func_t func,
     void *clientd);
 
-inline int64_t *aeron_counters_manager_addr(aeron_counters_manager_t *counters_manager, int32_t counter_id)
-{
-    return (int64_t *)(counters_manager->values + AERON_COUNTER_OFFSET(counter_id));
-}
+int64_t *aeron_counters_manager_addr(aeron_counters_manager_t *counters_manager, int32_t counter_id);
 
 int aeron_counters_reader_init(
     aeron_counters_reader_t *reader,
