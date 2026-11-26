@@ -15,7 +15,6 @@
  */
 package io.aeron.archive;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,33 +29,12 @@ import java.util.List;
  */
 final class ArchiveMigrationPlanner
 {
-    private static final ArrayList<ArchiveMigrationStep> ALL_MIGRATION_STEPS = new ArrayList<>();
-
-    static
-    {
-        ALL_MIGRATION_STEPS.add(new ArchiveMigration_0_1());
-        ALL_MIGRATION_STEPS.add(new ArchiveMigration_1_2());
-        ALL_MIGRATION_STEPS.add(new ArchiveMigration_2_3());
-        // as migrations are added, they are added to the static list in order of operation
-    }
-
     private ArchiveMigrationPlanner()
     {
     }
 
     static List<ArchiveMigrationStep> createPlan(final int version)
     {
-        final List<ArchiveMigrationStep> steps = new ArrayList<>();
-
-        for (int i = 0, size = ALL_MIGRATION_STEPS.size(); i < size; i++)
-        {
-            if (ALL_MIGRATION_STEPS.get(i).minimumVersion() > version)
-            {
-                steps.addAll(ALL_MIGRATION_STEPS.subList(i, size));
-                break;
-            }
-        }
-
-        return steps;
+        return List.of();
     }
 }
