@@ -131,7 +131,6 @@ add_custom_command(OUTPUT ${GENERATED_C_CODECS}
             ${GRADLE_WRAPPER}
             -Dcodec.target.dir=${ARCHIVE_C_CODEC_TARGET_DIR}
             :aeron-archive:generateCCodecs
-            --no-daemon
             --console=plain
             --quiet
     DEPENDS ${CODEC_SCHEMA} aeron-all-jar

@@ -25,7 +25,6 @@ if (AERON_SYSTEM_TESTS)
                 -Daeron.test.system.aeronmd.path=$<TARGET_FILE:aeronmd>
                 :aeron-system-tests:cleanTest
                 :aeron-system-tests:test
-                --no-daemon
                 --console=plain)
     if (SANITISE_BUILD)
         # Sanitizer-instrumented runs are several times slower; double the budget.
@@ -49,7 +48,6 @@ if (AERON_SLOW_SYSTEM_TESTS)
                 -Daeron.test.system.aeronmd.path=$<TARGET_FILE:aeronmd>
                 :aeron-system-tests:cleanSlowTest
                 :aeron-system-tests:slowTest
-                --no-daemon
                 --console=plain)
     if (SANITISE_BUILD)
         # Sanitizer-instrumented runs are several times slower; double the budget.

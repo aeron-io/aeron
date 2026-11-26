@@ -375,8 +375,8 @@ if (BUILD_AERON_ARCHIVE_API)
     add_subdirectory(${AERON_C_ARCHIVE_SOURCE_PATH})
     set(AERON_ALL_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-all/build/libs/aeron-all-${AERON_VERSION_TXT}.jar")
 
-    # Gradle runs on every build and decides whether the jar is up to date, as it tracks all of the jar's inputs:
-    # sources, generated codecs, build scripts and the git SHA in the version classes.
+    # Gradle runs on every build and decides whether the jar is up to date. The Gradle daemon keeps this fast;
+    # CI turns it off with GRADLE_OPTS.
     add_custom_target(aeron-all-jar
         COMMAND ${CMAKE_COMMAND}
                 -E env
@@ -387,7 +387,6 @@ if (BUILD_AERON_ARCHIVE_API)
                 :aeron-all:assemble
                 --exclude-task  javadoc
                 --exclude-task  check
-                --no-daemon
                 --console=plain
                 --quiet
         BYPRODUCTS ${AERON_ALL_JAR}
