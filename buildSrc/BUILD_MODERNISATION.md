@@ -444,10 +444,10 @@ from the cache. That gain is PR 2's; on CI it depends on whether the cache survi
 
 **Left over:**
 
-- **CodeQL alert 3206** (open on `master`): `BuildJavaVersion.major()` doesn't catch the `NumberFormatException` from
+- **CodeQL alert 3206** (fixed): `BuildJavaVersion.major()` didn't catch the `NumberFormatException` from
   `Integer.parseInt`. PR 3 moved this parsing from the root Groovy script, which CodeQL doesn't analyse, into Java,
-  which it does. Behaviour is unchanged: the Groovy code made the same `Integer.parseInt` call, so a malformed
-  `BUILD_JAVA_VERSION` failed the build the same way. Either throw a `GradleException` naming the variable, or dismiss the alert as "won't fix".
+  which it does. #2254 now throws a `GradleException` naming `BUILD_JAVA_VERSION`, and CodeQL marked the alert fixed
+  on `master` on 18 November.
 - C validation output shows absolute paths since PR 3 (see "Reworking PR 3"); the tasks have no outputs and always
   exit 0.
 - Step 5's optional clean-ups (5f dropped) and step 6 (CI and test speed) are not started.
