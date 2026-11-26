@@ -374,7 +374,7 @@ if (BUILD_AERON_ARCHIVE_API)
     set(AERON_ALL_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-all/build/libs/aeron-all-${AERON_VERSION_TXT}.jar")
 
     file(GLOB_RECURSE AERON_ALL_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}}/aeron-archive/src/main/java/*.java")
+        "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/main/java/*.java")
 
     add_custom_command(OUTPUT ${AERON_ALL_JAR}
         COMMAND ${CMAKE_COMMAND}
