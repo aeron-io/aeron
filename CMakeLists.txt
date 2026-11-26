@@ -28,6 +28,7 @@ string(TIMESTAMP DSTAMP "%Y%m%d")
 include(FetchContent)
 
 file(STRINGS version.txt AERON_VERSION_TXT LIMIT_COUNT 1 REGEX "^[0-9]+(\\.[0-9]+)+")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS version.txt)
 string(REGEX REPLACE "^([0-9]+(\\.[0-9]+)+).*$" "\\1" AERON_VERSION_FROM_FILE "${AERON_VERSION_TXT}")
 
 if (${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
@@ -374,7 +375,7 @@ if (BUILD_AERON_ARCHIVE_API)
     set(AERON_ALL_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-all/build/libs/aeron-all-${AERON_VERSION_TXT}.jar")
 
     file(GLOB_RECURSE AERON_ALL_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}}/aeron-archive/src/main/java/*.java")
+        "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/main/java/*.java")
 
     add_custom_command(OUTPUT ${AERON_ALL_JAR}
         COMMAND ${CMAKE_COMMAND}

@@ -66,7 +66,12 @@ shadowJar {
     relocate 'org.HdrHistogram', 'io.aeron.shadow.org.HdrHistogram'
 }
 
-jar.finalizedBy shadowJar
+// aeron-all has no sources of its own, so its jar is the shadow jar. The plain jar would be empty and write to the same
+// file, so neither task could ever be up to date. The jar task still builds the shadow jar, for anyone who runs it.
+tasks.named('jar') {
+    enabled = false
+    dependsOn shadowJar
+}
 
 tasks.register('sourcesJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
