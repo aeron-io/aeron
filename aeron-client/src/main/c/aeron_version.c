@@ -16,6 +16,8 @@
 
 #include <stdint.h>
 
+#include "aeron_version_gitsha.h"
+
 const char aeron_version_full_str[] = "aeron version=" AERON_VERSION_TXT " commit=" AERON_VERSION_GITSHA;
 
 const char *aeron_version_full(void)

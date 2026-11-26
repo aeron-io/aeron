@@ -236,11 +236,13 @@ add_library(aeron SHARED ${SOURCE} ${HEADERS}
     aeron_client_error.h
     aeron_archive_client_error.h)
 add_library(aeron::aeron ALIAS aeron)
+add_dependencies(aeron aeron_version_gitsha)
 target_include_directories(aeron
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>")
 
 add_library(aeron_static STATIC ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_static ALIAS aeron_static)
+add_dependencies(aeron_static aeron_version_gitsha)
 target_include_directories(aeron_static
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>")
 

@@ -183,7 +183,7 @@ SET(HEADERS
 add_library(aeron_archive_c_client SHARED ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_archive_c_client ALIAS aeron_archive_c_client)
 
-add_dependencies(aeron_archive_c_client c_codecs)
+add_dependencies(aeron_archive_c_client c_codecs aeron_version_gitsha)
 
 target_include_directories(aeron_archive_c_client
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>"
@@ -198,7 +198,7 @@ target_link_libraries(
 add_library(aeron_archive_c_client_static STATIC ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_archive_c_client_static ALIAS aeron_archive_c_client_static)
 
-add_dependencies(aeron_archive_c_client_static c_codecs)
+add_dependencies(aeron_archive_c_client_static c_codecs aeron_version_gitsha)
 
 target_include_directories(aeron_archive_c_client_static
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>"
