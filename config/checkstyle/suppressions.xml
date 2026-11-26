@@ -4,7 +4,6 @@
         "https://checkstyle.org/dtds/suppressions_1_0.dtd">
 <suppressions>
     <suppress files=".*generated[\\/]sources.*" checks="."/>
-    <suppress files=".*generated-test.*" checks="."/>
     <suppress files="[\\/]test[\\/]" checks="MissingJavadoc.*"/>
     <suppress files="[\\/]test[\\/]" checks="JavadocVariable"/>
     <suppress files=".*package-info.java" checks="LineLength"/>

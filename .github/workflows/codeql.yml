@@ -83,7 +83,6 @@ jobs:
           patterns: |
             -**/thirdparty/**
             -**/generated/**
-            -**/generated-test/**
             -**/_deps/**
             -**/aeron-samples/**:java/uncaught-number-format-exception
             -**/*Test.java:java/uncaught-number-format-exception

@@ -83,7 +83,7 @@ tasks.register('generateTestCodecsV6', GenerateSbeCodecs) {
     classpath = configurations.codecGeneration
     schemas.from(codecsFile)
     validationXsd = file(sbeFile)
-    outputDir = layout.buildDirectory.dir('generated-test/generateTestCodecsV6')
+    outputDir = layout.buildDirectory.dir('generated/sources/generateTestCodecsV6/java/test')
     targetLanguage = 'Java'
     targetNamespace = 'io.aeron.archive.codecs.v6'
     schemaTransformVersion = '*:6'
@@ -93,7 +93,7 @@ tasks.register('generateTestCodecsMarkFileV0', GenerateSbeCodecs) {
     classpath = configurations.codecGeneration
     schemas.from(markCodecsFile)
     validationXsd = file(sbeFile)
-    outputDir = layout.buildDirectory.dir('generated-test/generateTestCodecsMarkFileV0')
+    outputDir = layout.buildDirectory.dir('generated/sources/generateTestCodecsMarkFileV0/java/test')
     targetLanguage = 'Java'
     targetNamespace = 'io.aeron.archive.codecs.mark.v0'
     schemaTransformVersion = '*:0'
@@ -103,7 +103,7 @@ tasks.register('generateTestCodecsMarkFileV1', GenerateSbeCodecs) {
     classpath = configurations.codecGeneration
     schemas.from(markCodecsFile)
     validationXsd = file(sbeFile)
-    outputDir = layout.buildDirectory.dir('generated-test/generateTestCodecsMarkFileV1')
+    outputDir = layout.buildDirectory.dir('generated/sources/generateTestCodecsMarkFileV1/java/test')
     targetLanguage = 'Java'
     targetNamespace = 'io.aeron.archive.codecs.mark.v1'
     schemaTransformVersion = '*:1'
