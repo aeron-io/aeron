@@ -613,11 +613,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static Supplier<IdleStrategy> idleStrategySupplier(final StatusIndicator controllableStatus)
         {
-            return () ->
-            {
-                final String name = getProperty(CLUSTER_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
-                return io.aeron.driver.Configuration.agentIdleStrategy(name, controllableStatus);
-            };
+            final String name = getProperty(CLUSTER_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
+            return () -> io.aeron.driver.Configuration.agentIdleStrategy(name, controllableStatus);
         }
 
         /**

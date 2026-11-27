@@ -20,6 +20,10 @@ import org.agrona.SystemUtil;
 import java.util.Properties;
 import java.util.function.Supplier;
 
+/**
+ * Creates contexts which take their default values from a supplied {@link Properties} instance rather than the
+ * system properties, so that several Aeron stacks in the same JVM can be configured independently.
+ */
 public final class ContextProperties
 {
     private static final ThreadLocal<Properties> BOUND_PROPERTIES = new ThreadLocal<>();
