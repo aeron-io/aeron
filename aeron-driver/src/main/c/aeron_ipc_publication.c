@@ -45,7 +45,8 @@ int aeron_ipc_publication_create(
     const char *channel,
     aeron_mapped_raw_log_t *mapped_raw_log,
     size_t log_file_name_length,
-    const char *log_file_name)
+    const char *log_file_name,
+    bool skip_buffer_cleanup)
 {
     aeron_ipc_publication_t *_pub = NULL;
 
@@ -183,6 +184,7 @@ int aeron_ipc_publication_create(
     _pub->is_exclusive = is_exclusive;
     _pub->in_cool_down = false;
     _pub->cool_down_expire_time_ns = 0;
+    _pub->skip_buffer_cleanup = skip_buffer_cleanup;
 
     _pub->conductor_fields.consumer_position = aeron_ipc_publication_producer_position(_pub);
     _pub->conductor_fields.last_consumer_position = _pub->conductor_fields.consumer_position;
@@ -312,7 +314,10 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
             int64_t new_limit_position = min_sub_pos + publication->term_window_length;
             if (new_limit_position > publication->conductor_fields.trip_limit)
             {
-                aeron_ipc_publication_clean_buffer(publication, min_sub_pos);
+                if (!publication->skip_buffer_cleanup)
+                {
+                    aeron_ipc_publication_clean_buffer(publication, min_sub_pos);
+                }
                 aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
                 publication->conductor_fields.trip_limit = new_limit_position + publication->trip_gain;
                 work_count++;
@@ -324,7 +329,10 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
         {
             aeron_counter_set_release(publication->pub_lmt_position.value_addr, consumer_position);
             publication->conductor_fields.trip_limit = consumer_position;
-            aeron_ipc_publication_clean_buffer(publication, consumer_position);
+            if (!publication->skip_buffer_cleanup)
+            {
+                aeron_ipc_publication_clean_buffer(publication, consumer_position);
+            }
             work_count++;
         }
     }

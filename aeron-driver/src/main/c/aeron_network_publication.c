@@ -118,7 +118,8 @@ int aeron_network_publication_create(
     aeron_system_counters_t *system_counters,
     aeron_mapped_raw_log_t *mapped_raw_log,
     size_t log_file_name_length,
-    const char *log_file_name)
+    const char *log_file_name,
+    bool skip_buffer_cleanup)
 {
     aeron_network_publication_t *_pub = NULL;
 
@@ -296,6 +297,7 @@ int aeron_network_publication_create(
     _pub->track_sender_limits = false;
     _pub->has_sender_released = false;
     _pub->has_received_unicast_eos = false;
+    _pub->skip_buffer_cleanup = skip_buffer_cleanup;
 
     _pub->heartbeats_sent_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_HEARTBEATS_SENT);
     _pub->sender_flow_control_limits_counter = aeron_system_counter_addr(
@@ -932,14 +934,18 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
             int64_t new_limit_position = min_consumer_position + publication->term_window_length;
             if (new_limit_position > aeron_counter_get_plain(publication->pub_lmt_position.value_addr))
             {
-                aeron_network_publication_clean_buffer(publication, min_consumer_position - publication->term_buffer_length);
-                const int64_t clean_position = publication->conductor_fields.clean_position;
+                int64_t dirty_term_position = min_consumer_position;
+                if (!publication->skip_buffer_cleanup)
+                {
+                    aeron_network_publication_clean_buffer(publication, min_consumer_position - publication->term_buffer_length);
+                    dirty_term_position = publication->conductor_fields.clean_position;
+                }
                 const int32_t dirty_term_id = aeron_logbuffer_compute_term_id_from_position(
-                    clean_position, publication->position_bits_to_shift, publication->initial_term_id);
+                    dirty_term_position, publication->position_bits_to_shift, publication->initial_term_id);
                 const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
                     new_limit_position, publication->position_bits_to_shift, publication->initial_term_id);
                 const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
-                if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & publication->term_length_mask)))
+                if (term_gap < 2 || (2 == term_gap && 0 != (dirty_term_position & publication->term_length_mask)))
                 {
                     aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
                 }
@@ -950,7 +956,10 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
         {
             aeron_network_publication_update_connected_status(publication, false);
             aeron_counter_set_release(publication->pub_lmt_position.value_addr, snd_pos);
-            aeron_network_publication_clean_buffer(publication, snd_pos - publication->term_buffer_length);
+            if (!publication->skip_buffer_cleanup)
+            {
+                aeron_network_publication_clean_buffer(publication, snd_pos - publication->term_buffer_length);
+            }
             work_count = 1;
         }
     }

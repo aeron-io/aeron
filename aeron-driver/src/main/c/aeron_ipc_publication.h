@@ -69,6 +69,7 @@ typedef struct aeron_ipc_publication_stct
     int32_t initial_term_id;
     bool is_exclusive;
     bool in_cool_down;
+    bool skip_buffer_cleanup;
     int64_t cool_down_expire_time_ns;
     int64_t tag;
     int32_t session_id;
@@ -105,7 +106,8 @@ int aeron_ipc_publication_create(
     const char *channel,
     aeron_mapped_raw_log_t *mapped_raw_log,
     size_t log_file_name_length,
-    const char *log_file_name);
+    const char *log_file_name,
+    bool skip_buffer_cleanup);
 
 void aeron_ipc_publication_close(aeron_counters_manager_t *counters_manager, aeron_ipc_publication_t *publication);
 

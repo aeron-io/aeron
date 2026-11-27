@@ -172,7 +172,8 @@ protected:
             uri,
             &log_buffer_info->mapped_raw_log,
             static_cast<size_t>(path_length),
-            log_buffer_info->log_file_name) < 0)
+            log_buffer_info->log_file_name,
+            false) < 0)
         {
             return nullptr;
         }

@@ -267,7 +267,8 @@ protected:
             &m_system_counters,
             &log_buffer_info->mapped_raw_log,
             static_cast<size_t>(path_length),
-            log_buffer_info->log_file_name) < 0)
+            log_buffer_info->log_file_name,
+            false) < 0)
         {
             flow_control->fini(flow_control);
             return nullptr;

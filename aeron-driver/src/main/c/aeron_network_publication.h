@@ -61,7 +61,8 @@ int aeron_network_publication_create(
     aeron_system_counters_t *system_counters,
     aeron_mapped_raw_log_t *mapped_raw_log,
     size_t log_file_name_length,
-    const char *log_file_name);
+    const char *log_file_name,
+    bool skip_buffer_cleanup);
 
 typedef struct aeron_network_publication_stct
 {
@@ -134,6 +135,7 @@ typedef struct aeron_network_publication_stct
     bool is_setup_elicited;
     bool is_exclusive;
     bool is_response;
+    bool skip_buffer_cleanup;
     volatile bool has_receivers;
     volatile bool has_spies;
     volatile bool is_connected;

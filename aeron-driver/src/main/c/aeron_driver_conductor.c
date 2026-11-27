@@ -3993,7 +3993,8 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_ipc_pu
         uri,
         command->mapped_raw_log,
         command->log_file_name_length,
-        command->log_file_name) < 0)
+        command->log_file_name,
+        command->is_exclusive /* FIXME: Backwards compatibility is broken! */) < 0)
     {
         AERON_APPEND_ERR("%s", "");
         goto error;
@@ -4689,7 +4690,8 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_networ
             &conductor->system_counters,
             async_command->mapped_raw_log,
             async_command->log_file_name_length,
-            async_command->log_file_name) < 0)
+            async_command->log_file_name,
+            async_command->is_exclusive /* FIXME: This is breaks compatibility */) < 0)
     {
         AERON_APPEND_ERR("uri=%.*s", uri_length, uri);
         goto error;
