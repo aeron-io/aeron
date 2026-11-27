@@ -21,6 +21,8 @@ import io.aeron.driver.status.ReceiverNaksSent;
 import io.aeron.driver.status.SenderNaksReceived;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.io.File;
@@ -45,6 +48,7 @@ import static org.hamcrest.Matchers.oneOf;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+@ExtendWith(InterruptingTestCallback.class)
 public class DataLossAndRecoverySystemTest
 {
     private static final int LOSS_LENGTH = 100_000;
@@ -53,7 +57,8 @@ public class DataLossAndRecoverySystemTest
 
     private final MediaDriver.Context context = new MediaDriver.Context()
         .publicationTermBufferLength(LogBufferDescriptor.TERM_MIN_LENGTH)
-        .threadingMode(ThreadingMode.SHARED);
+        .threadingMode(ThreadingMode.SHARED)
+        .aeronDirectoryName(CommonContext.generateRandomDirName());
     private TestMediaDriver driver;
 
     @BeforeEach
@@ -102,6 +107,7 @@ public class DataLossAndRecoverySystemTest
     }
 
     @Test
+    @InterruptAfter(10)
     void shouldConfigureNakDelayPerStream()
     {
         dontCoalesceNaksOnReceiverByDefault();
@@ -130,6 +136,7 @@ public class DataLossAndRecoverySystemTest
     }
 
     @Test
+    @InterruptAfter(10)
     void shouldSendStreamOfDataAndHandleLargeGapWithSingleRetransmitEvenIfNakingFrequently()
     {
         dontCoalesceNaksOnReceiverByDefault();
@@ -333,6 +340,8 @@ public class DataLossAndRecoverySystemTest
                 {
                     sub.poll(handler, 10);
                 }
+
+                Tests.yield();
             }
 
             final CountersReader countersReader = aeron.countersReader();
