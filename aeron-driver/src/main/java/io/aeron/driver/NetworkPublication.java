@@ -171,6 +171,7 @@ public final class NetworkPublication
     private final boolean signalEos;
     private final boolean isResponse;
     private final boolean spiesSimulateConnection;
+    private final boolean skipBufferCleanup;
     private volatile boolean hasSpies;
     private volatile boolean hasReceivers;
     private volatile boolean isConnected;
@@ -227,7 +228,8 @@ public final class NetworkPublication
         final FlowControl flowControl,
         final RetransmitHandler retransmitHandler,
         final NetworkPublicationThreadLocals threadLocals,
-        final boolean isExclusive)
+        final boolean isExclusive,
+        final boolean skipBufferCleanup)
     {
         this.registrationId = registrationId;
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
@@ -258,6 +260,7 @@ public final class NetworkPublication
         this.startingTermOffset = params.termOffset;
         this.isResponse = params.isResponse;
         this.responseCorrelationId = params.responseCorrelationId;
+        this.skipBufferCleanup = skipBufferCleanup;
 
         metaDataBuffer = rawLog.metaData();
         setupBuffer = threadLocals.setupBuffer();
@@ -820,7 +823,10 @@ public final class NetworkPublication
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
                 if (newLimitPosition > publisherLimit.get())
                 {
-                    cleanBufferTo(minConsumerPosition - termBufferLength);
+                    if (!skipBufferCleanup)
+                    {
+                        cleanBufferTo(minConsumerPosition - termBufferLength);
+                    }
                     final long cleanPosition = this.cleanPosition;
                     final int dirtyTermId =
                         computeTermIdFromPosition(cleanPosition, positionBitsToShift, initialTermId);
@@ -838,7 +844,10 @@ public final class NetworkPublication
             {
                 updateConnectedState(false);
                 publisherLimit.setRelease(senderPosition);
-                cleanBufferTo(senderPosition - termBufferLength);
+                if (!skipBufferCleanup)
+                {
+                    cleanBufferTo(senderPosition - termBufferLength);
+                }
                 workCount = 1;
             }
         }

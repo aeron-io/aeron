@@ -1447,7 +1447,8 @@ public final class DriverConductor implements Agent
                 flowControl,
                 retransmitHandler,
                 networkPublicationThreadLocals,
-                isExclusive);
+                isExclusive,
+                isExclusive /* FIXME: This is not safe for old clients or clients written in other langs */);
 
             channelEndpoint.incRef();
             networkPublications.add(publication);
@@ -1940,7 +1941,8 @@ public final class DriverConductor implements Agent
                 publisherLimit,
                 rawLog,
                 isExclusive,
-                params);
+                params,
+                isExclusive /* FIXME: This is not safe for old clients or clients written in other langs */);
 
             findAndUpdateResponseIpcSubscription(params, publication);
 

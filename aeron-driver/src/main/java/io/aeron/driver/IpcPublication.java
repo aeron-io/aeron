@@ -83,6 +83,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private boolean inCoolDown = false;
     private long coolDownExpireTimeNs = 0;
     private final boolean isExclusive;
+    private final boolean skipBufferCleanup;
     private State state = State.ACTIVE;
     private final UnsafeBuffer[] termBuffers;
     private final Position publisherPos;
@@ -106,7 +107,8 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final Position publisherLimit,
         final RawLog rawLog,
         final boolean isExclusive,
-        final PublicationParams params)
+        final PublicationParams params,
+        final boolean skipBufferCleanup)
     {
         this.registrationId = registrationId;
         this.channel = channel;
@@ -119,6 +121,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.startingTermId = params.termId;
         this.startingTermOffset = params.termOffset;
         this.errorHandler = ctx.countedErrorHandler();
+        this.skipBufferCleanup = skipBufferCleanup;
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
@@ -464,7 +467,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 final long newLimitPosition = minSubscriberPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
-                    cleanBufferTo(minSubscriberPosition);
+                    if (!skipBufferCleanup)
+                    {
+                        cleanBufferTo(minSubscriberPosition);
+                    }
                     publisherLimit.setRelease(newLimitPosition);
                     tripLimit = newLimitPosition + tripGain;
                     workCount = 1;
@@ -474,7 +480,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             {
                 tripLimit = consumerPosition;
                 publisherLimit.setRelease(consumerPosition);
-                cleanBufferTo(consumerPosition);
+                if (!skipBufferCleanup)
+                {
+                    cleanBufferTo(consumerPosition);
+                }
                 workCount = 1;
             }
         }

@@ -139,7 +139,8 @@ class NetworkPublicationTest
             flowControl,
             retransmitHandler,
             NETWORK_PUBLICATION_THREAD_LOCALS,
-            true);
+            true,
+            false);
         assertEquals(initialPosition, publication.cleanPosition);
         final long initialTermBasePosition = initialPosition - (initialPosition & (TERM_MIN_LENGTH - 1));
 
@@ -221,7 +222,8 @@ class NetworkPublicationTest
             flowControl,
             retransmitHandler,
             NETWORK_PUBLICATION_THREAD_LOCALS,
-            true);
+            true,
+            false);
         assertEquals(initialPosition, publication.cleanPosition);
 
         // setup initial connection
@@ -273,7 +275,8 @@ class NetworkPublicationTest
             flowControl,
             retransmitHandler,
             NETWORK_PUBLICATION_THREAD_LOCALS,
-            true);
+            true,
+            false);
         assertEquals(initialPosition, publication.cleanPosition);
 
         // setup initial connection

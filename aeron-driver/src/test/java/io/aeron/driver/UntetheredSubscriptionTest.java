@@ -72,7 +72,8 @@ class UntetheredSubscriptionTest
             publisherLimit,
             rawLog,
             true,
-            params);
+            params,
+            false);
     }
 
     @Test
