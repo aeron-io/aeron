@@ -191,9 +191,6 @@ int aeron_publication_image_create(
     aeron_driver_context_t *context = conductor->context;
 
     aeron_publication_image_t *_image = NULL;
-    const uint64_t log_length = aeron_logbuffer_compute_log_length(
-        (uint64_t)term_buffer_length, context->file_page_size);
-
     *image = NULL;
 
     if (aeron_alloc((void **)&_image, sizeof(aeron_publication_image_t)) < 0)
@@ -219,10 +216,6 @@ int aeron_publication_image_create(
         AERON_APPEND_ERR("%s", "Could not init publication image loss detector");
         goto error;
     }
-
-    _image->mapped_bytes_counter = aeron_system_counter_addr(
-        system_counters, AERON_SYSTEM_COUNTER_BYTES_CURRENTLY_MAPPED);
-    aeron_counter_get_and_add_release(_image->mapped_bytes_counter, (int64_t) log_length);
 
     _image->log.untethered_subscription_state_change = context->log.untethered_subscription_on_state_change;
     _image->log.publication_image_revoke = context->log.publication_image_revoke;

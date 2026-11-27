@@ -187,10 +187,12 @@ static void aeron_driver_native_resource_agent_on_command(
 static void aeron_driver_native_resource_agent_on_log_buffer_free(
     aeron_driver_native_resource_agent_t *native_resource_agent,
     aeron_mapped_raw_log_t *mapped_raw_log,
-    const char *log_file_name)
+    const char *log_file_name,
+    const size_t mapped_file_length)
 {
-    int64_t *counter = aeron_system_counter_addr(native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_BYTES_CURRENTLY_MAPPED);
-    aeron_counter_get_and_add_release(counter, -((int64_t) mapped_raw_log->mapped_file.length));
+    int64_t *counter = aeron_system_counter_addr(
+        native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_BYTES_CURRENTLY_MAPPED);
+    aeron_counter_get_and_add_release(counter, -(int64_t) mapped_file_length);
     aeron_free(mapped_raw_log);
     aeron_free((char *)log_file_name);
 }
@@ -209,10 +211,11 @@ static int aeron_driver_native_resource_agent_free_log_buffers(
             break;
         }
 
+        size_t mapped_file_length = log_buffer.mapped_raw_log->mapped_file.length;
         if (native_resource_agent->context->raw_log_free_func(log_buffer.mapped_raw_log, log_buffer.log_file_name))
         {
             aeron_driver_native_resource_agent_on_log_buffer_free(
-                native_resource_agent, log_buffer.mapped_raw_log, log_buffer.log_file_name);
+                native_resource_agent, log_buffer.mapped_raw_log, log_buffer.log_file_name, mapped_file_length);
         }
         else
         {
@@ -402,14 +405,16 @@ void aeron_driver_native_resource_agent_on_free_log_buffer(
     aeron_driver_native_resource_agent_t *native_resource_agent,
     aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *cmd)
 {
+    size_t mapped_file_length = cmd->mapped_raw_log->mapped_file.length;
     if (native_resource_agent->context->raw_log_free_func(cmd->mapped_raw_log, cmd->log_file_name))
     {
         aeron_driver_native_resource_agent_on_log_buffer_free(
-            native_resource_agent, cmd->mapped_raw_log, cmd->log_file_name);
+            native_resource_agent, cmd->mapped_raw_log, cmd->log_file_name, mapped_file_length);
         return;
     }
 
-    int64_t *counter = aeron_system_counter_addr(native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_FREE_FAILS);
+    int64_t *counter = aeron_system_counter_addr(
+        native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_FREE_FAILS);
     aeron_counter_increment_release(counter);
 
     aeron_driver_native_resource_agent_log_buffer_t log_buffer;
