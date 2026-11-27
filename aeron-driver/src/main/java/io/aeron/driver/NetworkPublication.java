@@ -823,17 +823,18 @@ public final class NetworkPublication
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
                 if (newLimitPosition > publisherLimit.get())
                 {
+                    long dirtyTermPosition = minConsumerPosition;
                     if (!skipBufferCleanup)
                     {
                         cleanBufferTo(minConsumerPosition - termBufferLength);
+                        dirtyTermPosition = cleanPosition;
                     }
-                    final long cleanPosition = this.cleanPosition;
                     final int dirtyTermId =
-                        computeTermIdFromPosition(cleanPosition, positionBitsToShift, initialTermId);
+                        computeTermIdFromPosition(dirtyTermPosition, positionBitsToShift, initialTermId);
                     final int activeTermId =
                         computeTermIdFromPosition(newLimitPosition, positionBitsToShift, initialTermId);
                     final int termGap = activeTermId - dirtyTermId;
-                    if (termGap < 2 || (2 == termGap && 0 != (int)(cleanPosition & termLengthMask)))
+                    if (termGap < 2 || (2 == termGap && 0 != (int)(dirtyTermPosition & termLengthMask)))
                     {
                         publisherLimit.setRelease(newLimitPosition);
                     }
