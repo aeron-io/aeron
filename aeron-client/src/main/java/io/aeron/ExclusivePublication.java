@@ -612,6 +612,10 @@ public final class ExclusivePublication extends ExclusivePublicationValues
 
     private int handleEndOfLog(final UnsafeBuffer termBuffer, final int termLength)
     {
+        // pre-zero first frame in the next term
+        final int nextIndex = nextPartitionIndex(activePartitionIndex);
+        frameLengthOrdered(termBuffers[nextIndex], 0, 0);
+
         if (termOffset < termLength)
         {
             final int offset = termOffset;
@@ -634,17 +638,18 @@ public final class ExclusivePublication extends ExclusivePublicationValues
     {
         final int frameLength = length + HEADER_LENGTH;
         final int alignedLength = align(frameLength, FRAME_ALIGNMENT);
-        final int termLength = termBuffer.capacity();
 
         int resultingOffset = termOffset + alignedLength;
         logMetaDataBuffer.putLongRelease(tailCounterOffset, packTail(termId, resultingOffset));
 
-        if (resultingOffset > termLength)
+        if (resultingOffset > termBufferLength)
         {
-            resultingOffset = handleEndOfLog(termBuffer, termLength);
+            resultingOffset = handleEndOfLog(termBuffer, termBufferLength);
         }
         else
         {
+            preZeroNextFrame(termBuffer, resultingOffset);
+
             headerWriter.write(termBuffer, termOffset, frameLength, termId);
             termBuffer.putBytes(termOffset + HEADER_LENGTH, srcBuffer, srcOffset, length);
 
@@ -688,6 +693,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
                 final int bytesToWrite = Math.min(remaining, maxPayloadLength);
                 final int frameLength = bytesToWrite + HEADER_LENGTH;
                 final int alignedLength = align(frameLength, FRAME_ALIGNMENT);
+
+                preZeroNextFrame(termBuffer, frameOffset + alignedLength);
 
                 headerWriter.write(termBuffer, frameOffset, frameLength, termId);
                 termBuffer.putBytes(
@@ -745,6 +752,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
         }
         else
         {
+            preZeroNextFrame(termBuffer, resultingOffset);
+
             headerWriter.write(termBuffer, termOffset, frameLength, termId);
             termBuffer.putBytes(termOffset + HEADER_LENGTH, bufferOne, offsetOne, lengthOne);
             termBuffer.putBytes(termOffset + HEADER_LENGTH + lengthOne, bufferTwo, offsetTwo, lengthTwo);
@@ -797,6 +806,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
                 final int bytesToWrite = Math.min(remaining, maxPayloadLength);
                 final int frameLength = bytesToWrite + HEADER_LENGTH;
                 final int alignedLength = align(frameLength, FRAME_ALIGNMENT);
+
+                preZeroNextFrame(termBuffer, frameOffset + alignedLength);
 
                 headerWriter.write(termBuffer, frameOffset, frameLength, termId);
 
@@ -871,6 +882,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
         }
         else
         {
+            preZeroNextFrame(termBuffer, resultingOffset);
+
             headerWriter.write(termBuffer, termOffset, frameLength, termId);
 
             int offset = termOffset + HEADER_LENGTH;
@@ -922,6 +935,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
                 final int bytesToWrite = Math.min(remaining, maxPayloadLength);
                 final int frameLength = bytesToWrite + HEADER_LENGTH;
                 final int alignedLength = align(frameLength, FRAME_ALIGNMENT);
+
+                preZeroNextFrame(termBuffer, frameOffset + alignedLength);
 
                 headerWriter.write(termBuffer, frameOffset, frameLength, termId);
 
@@ -991,6 +1006,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
         }
         else
         {
+            preZeroNextFrame(termBuffer, resultingOffset);
+
             headerWriter.write(termBuffer, termOffset, frameLength, termId);
             bufferClaim.wrap(termBuffer, termOffset, frameLength);
         }
@@ -1016,6 +1033,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
         }
         else
         {
+            preZeroNextFrame(termBuffer, resultingOffset);
+
             headerWriter.write(termBuffer, termOffset, frameLength, termId);
             frameType(termBuffer, termOffset, PADDING_FRAME_TYPE);
             frameLengthOrdered(termBuffer, termOffset, frameLength);
@@ -1035,6 +1054,8 @@ public final class ExclusivePublication extends ExclusivePublicationValues
 
         logMetaDataBuffer.putLongRelease(tailCounterOffset, packTail(termId, resultingOffset));
 
+        preZeroNextFrame(termBuffer, resultingOffset);
+
         termBuffer.putBytes(termOffset + HEADER_LENGTH, buffer, offset + HEADER_LENGTH, length - HEADER_LENGTH);
         termBuffer.putLong(termOffset + 24, buffer.getLong(offset + 24));
         termBuffer.putLong(termOffset + 16, buffer.getLong(offset + 16));
@@ -1042,5 +1063,18 @@ public final class ExclusivePublication extends ExclusivePublicationValues
         termBuffer.putLongRelease(termOffset, buffer.getLong(offset));
 
         return resultingOffset;
+    }
+
+    private void preZeroNextFrame(final UnsafeBuffer termBuffer, final int resultingOffset)
+    {
+        if (resultingOffset == termBufferLength)
+        {
+            final int nextIndex = nextPartitionIndex(activePartitionIndex);
+            frameLengthOrdered(termBuffers[nextIndex], 0, 0);
+        }
+        else
+        {
+            frameLengthOrdered(termBuffer, resultingOffset, 0);
+        }
     }
 }
