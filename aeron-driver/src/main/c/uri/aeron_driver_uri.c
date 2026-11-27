@@ -165,7 +165,10 @@ int aeron_uri_linger_timeout_param(aeron_uri_params_t *uri_params, aeron_driver_
 }
 
 int aeron_uri_publication_session_id_param(
-    aeron_uri_params_t *uri_params, aeron_driver_conductor_t *conductor, aeron_driver_uri_publication_params_t *params)
+    aeron_uri_params_t *uri_params,
+    aeron_driver_conductor_t *conductor,
+    aeron_driver_uri_publication_params_t *params,
+    bool is_ipc)
 {
     const char *session_id_str = aeron_uri_find_param_value(uri_params, AERON_URI_SESSION_ID_KEY);
     if (NULL != session_id_str)
@@ -185,20 +188,40 @@ int aeron_uri_publication_session_id_param(
                 return -1;
             }
 
-            aeron_network_publication_t *publication = aeron_driver_conductor_find_network_publication_by_tag(
-                conductor, (int64_t)tag);
-
-            if (NULL == publication)
+            if (is_ipc)
             {
-                AERON_SET_ERR(
-                    EINVAL, "%s=%s must reference a network publication", AERON_URI_SESSION_ID_KEY, session_id_str);
-                return -1;
-            }
+                aeron_ipc_publication_t *publication = aeron_driver_conductor_find_ipc_publication_by_tag(
+                    conductor, (int64_t)tag);
 
-            params->has_session_id = true;
-            params->session_id = publication->session_id;
-            params->mtu_length = publication->mtu_length;
-            params->term_length = publication->term_buffer_length;
+                if (NULL == publication)
+                {
+                    AERON_SET_ERR(
+                        EINVAL, "%s=%s must reference an IPC publication", AERON_URI_SESSION_ID_KEY, session_id_str);
+                    return -1;
+                }
+
+                params->has_session_id = true;
+                params->session_id = publication->session_id;
+                params->mtu_length = (size_t)publication->log_meta_data->mtu_length;
+                params->term_length = (size_t)publication->log_meta_data->term_length;
+            }
+            else
+            {
+                aeron_network_publication_t *publication = aeron_driver_conductor_find_network_publication_by_tag(
+                    conductor, (int64_t)tag);
+
+                if (NULL == publication)
+                {
+                    AERON_SET_ERR(
+                        EINVAL, "%s=%s must reference a network publication", AERON_URI_SESSION_ID_KEY, session_id_str);
+                    return -1;
+                }
+
+                params->has_session_id = true;
+                params->session_id = publication->session_id;
+                params->mtu_length = publication->mtu_length;
+                params->term_length = publication->term_buffer_length;
+            }
         }
         else
         {
@@ -257,7 +280,7 @@ int aeron_diver_uri_publication_params(
     aeron_uri_params_t *uri_params = AERON_URI_IPC == uri->type ?
         &uri->params.ipc.additional_params : &uri->params.udp.additional_params;
 
-    if (aeron_uri_publication_session_id_param(uri_params, conductor, params) < 0)
+    if (aeron_uri_publication_session_id_param(uri_params, conductor, params, AERON_URI_IPC == uri->type) < 0)
     {
         return -1;
     }

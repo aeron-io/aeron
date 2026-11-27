@@ -423,3 +423,74 @@ TEST_F(DriverConductorIpcTest, shouldNotAddIpcSubscriptionThenPublicationWithDif
         .Times(0);
     readAllBroadcastsFromConductor(mock_broadcast_handler);
 }
+
+TEST_F(DriverConductorIpcTest, shouldUseSessionIdFromTaggedIpcPublication)
+{
+    int64_t client_id = nextCorrelationId();
+    int64_t pub_id_1 = nextCorrelationId();
+    int64_t pub_id_2 = nextCorrelationId();
+
+    ASSERT_EQ(addPublication(
+        client_id, pub_id_1, AERON_IPC_CHANNEL "?tags=1001,1002|term-length=131072|mtu=8192", STREAM_ID_1, false), 0);
+    ASSERT_EQ(addPublication(client_id, pub_id_2, AERON_IPC_CHANNEL "?session-id=tag:1002", STREAM_ID_2, false), 0);
+    doWorkUntilDone();
+    EXPECT_EQ(aeron_driver_conductor_num_ipc_publications(&m_conductor.m_conductor), 2u);
+    readAllBroadcastsFromConductor(null_broadcast_handler);
+
+    aeron_ipc_publication_t *pub_1 = aeron_driver_conductor_find_ipc_publication(&m_conductor.m_conductor, pub_id_1);
+    aeron_ipc_publication_t *pub_2 = aeron_driver_conductor_find_ipc_publication(&m_conductor.m_conductor, pub_id_2);
+    ASSERT_NE(nullptr, pub_1);
+    ASSERT_NE(nullptr, pub_2);
+    EXPECT_EQ(pub_1->session_id, pub_2->session_id);
+    EXPECT_EQ(131072, pub_2->log_meta_data->term_length);
+    EXPECT_EQ(8192, pub_2->log_meta_data->mtu_length);
+}
+
+TEST_F(DriverConductorIpcTest, shouldErrorWithUnknownIpcSessionIdTag)
+{
+    int64_t client_id = nextCorrelationId();
+    int64_t pub_id = nextCorrelationId();
+
+    ASSERT_EQ(addPublication(client_id, pub_id, AERON_IPC_CHANNEL "?session-id=tag:1002", STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    EXPECT_EQ(aeron_driver_conductor_num_ipc_publications(&m_conductor.m_conductor), 0u);
+
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _)).With(IsError(pub_id));
+    readAllBroadcastsFromConductor(mock_broadcast_handler);
+}
+
+TEST_F(DriverConductorIpcTest, shouldNotResolveIpcSessionIdTagAgainstNetworkPublication)
+{
+    int64_t client_id = nextCorrelationId();
+    int64_t network_pub_id = nextCorrelationId();
+    int64_t ipc_pub_id = nextCorrelationId();
+
+    ASSERT_EQ(addPublication(client_id, network_pub_id, CHANNEL_1 "|tags=1001,1002", STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    readAllBroadcastsFromConductor(null_broadcast_handler);
+
+    ASSERT_EQ(addPublication(client_id, ipc_pub_id, AERON_IPC_CHANNEL "?session-id=tag:1002", STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    EXPECT_EQ(aeron_driver_conductor_num_ipc_publications(&m_conductor.m_conductor), 0u);
+
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _)).With(IsError(ipc_pub_id));
+    readAllBroadcastsFromConductor(mock_broadcast_handler);
+}
+
+TEST_F(DriverConductorIpcTest, shouldNotResolveNetworkSessionIdTagAgainstIpcPublication)
+{
+    int64_t client_id = nextCorrelationId();
+    int64_t ipc_pub_id = nextCorrelationId();
+    int64_t network_pub_id = nextCorrelationId();
+
+    ASSERT_EQ(addPublication(client_id, ipc_pub_id, AERON_IPC_CHANNEL "?tags=1001,1002", STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    readAllBroadcastsFromConductor(null_broadcast_handler);
+
+    ASSERT_EQ(addPublication(client_id, network_pub_id, CHANNEL_1 "|session-id=tag:1002", STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    EXPECT_EQ(aeron_driver_conductor_num_network_publications(&m_conductor.m_conductor), 0u);
+
+    EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _)).With(IsError(network_pub_id));
+    readAllBroadcastsFromConductor(mock_broadcast_handler);
+}

@@ -267,6 +267,15 @@ TEST_F(DriverUriTest, shouldErrorParsingOutOfRangeSessionId)
     EXPECT_EQ(aeron_diver_uri_publication_params(&m_uri, &params, &m_conductor, false), -1);
 }
 
+TEST_F(DriverUriTest, shouldErrorWhenIpcSessionIdTagDoesNotReferenceIpcPublication)
+{
+    aeron_driver_uri_publication_params_t params;
+
+    EXPECT_EQ(AERON_URI_PARSE("aeron:ipc?session-id=tag:1002", &m_uri), 0);
+    EXPECT_EQ(aeron_diver_uri_publication_params(&m_uri, &params, &m_conductor, false), -1);
+    EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("must reference an IPC publication"));
+}
+
 TEST_F(DriverUriTest, shouldParseSubscriptionParamReliable)
 {
     aeron_driver_uri_subscription_params_t params;
