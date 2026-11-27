@@ -20,6 +20,7 @@ import io.aeron.AeronCounters;
 import io.aeron.AvailableImageHandler;
 import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
+import io.aeron.ContextProperties;
 import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
@@ -55,6 +56,7 @@ import org.agrona.concurrent.NoOpLock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -69,13 +71,15 @@ import static io.aeron.CommonContext.SPARSE_PARAM_NAME;
 import static io.aeron.CommonContext.TERM_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.checkDebugTimeout;
 import static io.aeron.CommonContext.getAeronDirectoryName;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getInteger;
+import static io.aeron.ContextProperties.getNullableProperty;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.ContextProperties.getSizeAsInt;
 import static io.aeron.driver.Configuration.IDLE_MAX_PARK_NS;
 import static io.aeron.driver.Configuration.IDLE_MAX_SPINS;
 import static io.aeron.driver.Configuration.IDLE_MAX_YIELDS;
 import static io.aeron.driver.Configuration.IDLE_MIN_PARK_NS;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getProperty;
-import static org.agrona.SystemUtil.getSizeAsInt;
 
 /**
  * Client for interacting with a local or remote Aeron Archive which records and replays message streams from storage.
@@ -2876,7 +2880,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static int messageRetryAttempts()
         {
-            return Integer.getInteger(MESSAGE_RETRY_ATTEMPTS_PROP_NAME, MESSAGE_RETRY_ATTEMPTS_DEFAULT);
+            return getInteger(MESSAGE_RETRY_ATTEMPTS_PROP_NAME, MESSAGE_RETRY_ATTEMPTS_DEFAULT);
         }
 
         /**
@@ -2887,7 +2891,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static boolean controlTermBufferSparse()
         {
-            final String propValue = System.getProperty(
+            final String propValue = getProperty(
                 CONTROL_TERM_BUFFER_SPARSE_PROP_NAME, Boolean.toString(CONTROL_TERM_BUFFER_SPARSE_DEFAULT));
             return "true".equals(propValue);
         }
@@ -2921,7 +2925,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static String controlChannel()
         {
-            return System.getProperty(CONTROL_CHANNEL_PROP_NAME);
+            return getProperty(CONTROL_CHANNEL_PROP_NAME);
         }
 
         /**
@@ -2933,7 +2937,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static int controlStreamId()
         {
-            return Integer.getInteger(CONTROL_STREAM_ID_PROP_NAME, CONTROL_STREAM_ID_DEFAULT);
+            return getInteger(CONTROL_STREAM_ID_PROP_NAME, CONTROL_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -2945,7 +2949,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static String localControlChannel()
         {
-            return System.getProperty(LOCAL_CONTROL_CHANNEL_PROP_NAME, LOCAL_CONTROL_CHANNEL_DEFAULT);
+            return getProperty(LOCAL_CONTROL_CHANNEL_PROP_NAME, LOCAL_CONTROL_CHANNEL_DEFAULT);
         }
 
         /**
@@ -2957,7 +2961,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static int localControlStreamId()
         {
-            return Integer.getInteger(LOCAL_CONTROL_STREAM_ID_PROP_NAME, LOCAL_CONTROL_STREAM_ID_DEFAULT);
+            return getInteger(LOCAL_CONTROL_STREAM_ID_PROP_NAME, LOCAL_CONTROL_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -2967,7 +2971,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static String controlResponseChannel()
         {
-            return System.getProperty(CONTROL_RESPONSE_CHANNEL_PROP_NAME);
+            return getProperty(CONTROL_RESPONSE_CHANNEL_PROP_NAME);
         }
 
         /**
@@ -2979,7 +2983,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static int controlResponseStreamId()
         {
-            return Integer.getInteger(CONTROL_RESPONSE_STREAM_ID_PROP_NAME, CONTROL_RESPONSE_STREAM_ID_DEFAULT);
+            return getInteger(CONTROL_RESPONSE_STREAM_ID_PROP_NAME, CONTROL_RESPONSE_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -2989,7 +2993,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static String recordingEventsChannel()
         {
-            return System.getProperty(RECORDING_EVENTS_CHANNEL_PROP_NAME);
+            return getProperty(RECORDING_EVENTS_CHANNEL_PROP_NAME);
         }
 
         /**
@@ -3001,7 +3005,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static int recordingEventsStreamId()
         {
-            return Integer.getInteger(RECORDING_EVENTS_STREAM_ID_PROP_NAME, RECORDING_EVENTS_STREAM_ID_DEFAULT);
+            return getInteger(RECORDING_EVENTS_STREAM_ID_PROP_NAME, RECORDING_EVENTS_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -3012,7 +3016,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static boolean recordingEventsEnabled()
         {
-            final String propValue = System.getProperty(
+            final String propValue = getProperty(
                 RECORDING_EVENTS_ENABLED_PROP_NAME, Boolean.toString(RECORDING_EVENTS_ENABLED_DEFAULT));
             return "true".equals(propValue);
         }
@@ -3026,7 +3030,7 @@ public final class AeronArchive implements AutoCloseable
          */
         public static String clientName()
         {
-            return getProperty(CLIENT_NAME_PROP_NAME, "");
+            return getNullableProperty(CLIENT_NAME_PROP_NAME, "");
         }
     }
 
@@ -3053,6 +3057,7 @@ public final class AeronArchive implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private long messageTimeoutNs = Configuration.messageTimeoutNs();
         private int messageRetryAttempts = Configuration.messageRetryAttempts();
         private String clientName = AeronArchive.Configuration.clientName();
@@ -3104,6 +3109,11 @@ public final class AeronArchive implements AutoCloseable
          * Conclude configuration by setting up defaults when specifics are not provided.
          */
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        private void doConclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
             {

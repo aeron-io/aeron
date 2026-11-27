@@ -19,6 +19,7 @@ import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.Counter;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.archive.client.AeronArchive;
@@ -57,6 +58,7 @@ import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -64,11 +66,11 @@ import java.util.function.Supplier;
 import static io.aeron.AeronCounters.CLUSTER_BACKUP_SNAPSHOT_RETRIEVE_COUNT_TYPE_ID;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.CommonContext.driverFilePageSize;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getProperty;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
-import static java.lang.System.getProperty;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.agrona.SystemUtil.getDurationInNanos;
 
 /**
  * Backup component which can run remote from a cluster which polls for snapshots and replicates the log.
@@ -416,7 +418,7 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String catchupEndpoint()
         {
-            String configuredCatchupEndpoint = System.getProperty(CLUSTER_BACKUP_CATCHUP_ENDPOINT_PROP_NAME);
+            String configuredCatchupEndpoint = getProperty(CLUSTER_BACKUP_CATCHUP_ENDPOINT_PROP_NAME);
 
             if (null == configuredCatchupEndpoint && null != ConsensusModule.Configuration.clusterMembers())
             {
@@ -440,7 +442,7 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String catchupChannel()
         {
-            return System.getProperty(CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME, CLUSTER_BACKUP_CATCHUP_CHANNEL_DEFAULT);
+            return getProperty(CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME, CLUSTER_BACKUP_CATCHUP_CHANNEL_DEFAULT);
         }
 
         /**
@@ -529,7 +531,7 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String clusterBackupSourceType()
         {
-            return System.getProperty(CLUSTER_BACKUP_SOURCE_TYPE_PROP_NAME, CLUSTER_BACKUP_SOURCE_TYPE_DEFAULT);
+            return getProperty(CLUSTER_BACKUP_SOURCE_TYPE_PROP_NAME, CLUSTER_BACKUP_SOURCE_TYPE_DEFAULT);
         }
 
         /**
@@ -598,6 +600,7 @@ public final class ClusterBackup implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private boolean ownsAeronClient = false;
         private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
         private Aeron aeron;
@@ -676,8 +679,13 @@ public final class ClusterBackup implements AutoCloseable
         /**
          * Conclude configuration by setting up defaults when specifics are not provided.
          */
-        @SuppressWarnings("MethodLength")
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        @SuppressWarnings("MethodLength")
+        private void doConclude()
         {
             final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();
 

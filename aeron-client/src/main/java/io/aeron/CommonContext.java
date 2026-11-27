@@ -70,8 +70,9 @@ import static io.aeron.CncFileDescriptor.CNC_FILE;
 import static io.aeron.CncFileDescriptor.TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET;
 import static io.aeron.CncFileDescriptor.cncVersionOffset;
 import static io.aeron.CncFileDescriptor.createToDriverBuffer;
-import static java.lang.Long.getLong;
-import static java.lang.System.getProperty;
+import static io.aeron.ContextProperties.getBoolean;
+import static io.aeron.ContextProperties.getLong;
+import static io.aeron.ContextProperties.getProperty;
 import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.file.StandardOpenOption.READ;
@@ -162,7 +163,7 @@ public class CommonContext implements Cloneable
     /**
      * Timeout in which the driver is expected to respond or heartbeat.
      */
-    public static final long DRIVER_TIMEOUT_MS = getLong(DRIVER_TIMEOUT_PROP_NAME, DEFAULT_DRIVER_TIMEOUT_MS);
+    public static final long DRIVER_TIMEOUT_MS = Long.getLong(DRIVER_TIMEOUT_PROP_NAME, DEFAULT_DRIVER_TIMEOUT_MS);
 
     /**
      * Value to represent a sessionId that is not to be used.
@@ -598,7 +599,7 @@ public class CommonContext implements Cloneable
      */
     public static boolean threadAffinityUseCpusetOffsets()
     {
-        return Boolean.getBoolean(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME);
+        return getBoolean(THREAD_AFFINITY_USE_CPUSET_OFFSETS_PROP_NAME);
     }
 
     /**
@@ -609,7 +610,7 @@ public class CommonContext implements Cloneable
      */
     public static boolean threadAffinityFailOnValidationErrors()
     {
-        return Boolean.getBoolean(THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME);
+        return getBoolean(THREAD_AFFINITY_FAIL_ON_VALIDATION_ERRORS_PROP_NAME);
     }
 
     /**
@@ -647,7 +648,7 @@ public class CommonContext implements Cloneable
      */
     public static String getSecureRandomAlgorithm()
     {
-        return System.getProperty(SECURE_RANDOM_ALGORITHM_PROP_NAME, SECURE_RANDOM_ALGORITHM_DEFAULT);
+        return getProperty(SECURE_RANDOM_ALGORITHM_PROP_NAME, SECURE_RANDOM_ALGORITHM_DEFAULT);
     }
 
     /**
@@ -658,7 +659,7 @@ public class CommonContext implements Cloneable
     @Config
     public static PrintStream fallbackLogger()
     {
-        final String fallbackLoggerName = getProperty(FALLBACK_LOGGER_PROP_NAME, "stderr");
+        final String fallbackLoggerName = System.getProperty(FALLBACK_LOGGER_PROP_NAME, "stderr");
         return switch (fallbackLoggerName)
         {
             case "stdout" -> System.out;
@@ -692,13 +693,13 @@ public class CommonContext implements Cloneable
     }
 
     private volatile boolean isConcluded;
-    private long driverTimeoutMs = DRIVER_TIMEOUT_MS;
+    private long driverTimeoutMs = getLong(DRIVER_TIMEOUT_PROP_NAME, DEFAULT_DRIVER_TIMEOUT_MS);
     private String aeronDirectoryName = getAeronDirectoryName();
     private File aeronDirectory;
     private File cncFile;
     private UnsafeBuffer countersMetaDataBuffer;
     private UnsafeBuffer countersValuesBuffer;
-    private boolean enableExperimentalFeatures = Boolean.getBoolean(ENABLE_EXPERIMENTAL_FEATURES_PROP_NAME);
+    private boolean enableExperimentalFeatures = getBoolean(ENABLE_EXPERIMENTAL_FEATURES_PROP_NAME);
 
     static
     {
@@ -1010,7 +1011,7 @@ public class CommonContext implements Cloneable
      */
     public static long checkDebugTimeout(final long timeout, final TimeUnit timeUnit, final double factor)
     {
-        final String debugTimeoutString = getProperty(DEBUG_TIMEOUT_PROP_NAME);
+        final String debugTimeoutString = System.getProperty(DEBUG_TIMEOUT_PROP_NAME);
         if (null == debugTimeoutString || !SystemUtil.isDebuggerAttached())
         {
             return timeout;

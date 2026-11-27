@@ -19,7 +19,9 @@ import io.aeron.CommonContext;
 import io.aeron.driver.media.UdpChannel;
 import org.agrona.LangUtil;
 
-import static io.aeron.driver.Configuration.MULTICAST_FLOW_CONTROL_STRATEGY;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.driver.Configuration.MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT;
+import static io.aeron.driver.Configuration.MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME;
 
 /**
  * Default supplier of {@link FlowControl} strategies for multicast streams which supports defining the strategy in
@@ -27,6 +29,9 @@ import static io.aeron.driver.Configuration.MULTICAST_FLOW_CONTROL_STRATEGY;
  */
 public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
 {
+    private final String flowControlStrategy = getProperty(
+        MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME, MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT);
+
     /**
      * Default constructor.
      */
@@ -62,15 +67,15 @@ public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
             }
         }
 
-        if (MaxMulticastFlowControl.class.getName().equals(MULTICAST_FLOW_CONTROL_STRATEGY))
+        if (MaxMulticastFlowControl.class.getName().equals(flowControlStrategy))
         {
             return new MaxMulticastFlowControl();
         }
-        else if (MinMulticastFlowControl.class.getName().equals(MULTICAST_FLOW_CONTROL_STRATEGY))
+        else if (MinMulticastFlowControl.class.getName().equals(flowControlStrategy))
         {
             return new MinMulticastFlowControl();
         }
-        else if (TaggedMulticastFlowControl.class.getName().equals(MULTICAST_FLOW_CONTROL_STRATEGY))
+        else if (TaggedMulticastFlowControl.class.getName().equals(flowControlStrategy))
         {
             return new TaggedMulticastFlowControl();
         }
@@ -78,7 +83,7 @@ public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
         FlowControl flowControl = null;
         try
         {
-            flowControl = (FlowControl)Class.forName(MULTICAST_FLOW_CONTROL_STRATEGY)
+            flowControl = (FlowControl)Class.forName(flowControlStrategy)
                 .getConstructor()
                 .newInstance();
         }
@@ -97,6 +102,6 @@ public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
     public String toString()
     {
         return "DefaultMulticastFlowControlSupplier{flowControlClass=" +
-            MULTICAST_FLOW_CONTROL_STRATEGY + "}";
+            flowControlStrategy + "}";
     }
 }

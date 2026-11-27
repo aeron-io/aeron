@@ -52,17 +52,17 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getInteger;
+import static io.aeron.ContextProperties.getLong;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.ContextProperties.getSizeAsInt;
+import static io.aeron.ContextProperties.getSizeAsLong;
 import static io.aeron.driver.ThreadingMode.DEDICATED;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MAX_SIZE;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
-import static java.lang.Integer.getInteger;
-import static java.lang.Long.getLong;
-import static java.lang.System.getProperty;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.fromHex;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getSizeAsInt;
-import static org.agrona.SystemUtil.getSizeAsLong;
 
 /**
  * Configuration options for the {@link MediaDriver}.
@@ -619,7 +619,7 @@ public final class Configuration
     /**
      * {@link FlowControl} to be employed for unicast channels.
      */
-    public static final String UNICAST_FLOW_CONTROL_STRATEGY = getProperty(
+    public static final String UNICAST_FLOW_CONTROL_STRATEGY = System.getProperty(
         UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME, UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT);
 
     /**
@@ -637,7 +637,7 @@ public final class Configuration
     /**
      * {@link FlowControl} to be employed for multicast channels.
      */
-    public static final String MULTICAST_FLOW_CONTROL_STRATEGY = getProperty(
+    public static final String MULTICAST_FLOW_CONTROL_STRATEGY = System.getProperty(
         MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME, MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT);
 
     /**

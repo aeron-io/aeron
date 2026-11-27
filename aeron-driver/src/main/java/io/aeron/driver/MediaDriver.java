@@ -18,6 +18,7 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.CncFileDescriptor;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.command.ControlProtocolEvents;
 import io.aeron.config.Config;
 import io.aeron.cpu.topology.AffinityRegistry;
@@ -89,6 +90,7 @@ import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -571,6 +573,7 @@ public final class MediaDriver implements AutoCloseable
         }
 
         private volatile boolean isClosed;
+        private final Properties properties = ContextProperties.current();
         private boolean printConfigurationOnStart = CommonContext.shouldPrintConfigurationOnStart();
         private boolean useWindowsHighResTimer = Configuration.useWindowsHighResTimer();
         private boolean warnIfDirectoryExists = Configuration.warnIfDirExists();
@@ -794,8 +797,14 @@ public final class MediaDriver implements AutoCloseable
          * {@inheritDoc}
          */
         @Override
-        @SuppressWarnings("MethodLength")
         public Context conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+            return this;
+        }
+
+        @SuppressWarnings("MethodLength")
+        private Context doConclude()
         {
             super.conclude();
 

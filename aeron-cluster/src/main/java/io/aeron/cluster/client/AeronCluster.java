@@ -19,6 +19,7 @@ import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.ControlledFragmentAssembler;
 import io.aeron.DirectBufferVector;
 import io.aeron.ErrorCode;
@@ -75,12 +76,15 @@ import org.agrona.concurrent.UnsafeBuffer;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.CommonContext.REJOIN_PARAM_NAME;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getProperty;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getInteger;
+import static io.aeron.ContextProperties.getNullableProperty;
+import static io.aeron.ContextProperties.getProperty;
 
 /**
  * Client for interacting with an Aeron Cluster.
@@ -1347,7 +1351,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String ingressEndpoints()
         {
-            return System.getProperty(INGRESS_ENDPOINTS_PROP_NAME, INGRESS_ENDPOINTS_DEFAULT);
+            return getProperty(INGRESS_ENDPOINTS_PROP_NAME, INGRESS_ENDPOINTS_DEFAULT);
         }
 
         /**
@@ -1357,7 +1361,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String ingressChannel()
         {
-            return System.getProperty(INGRESS_CHANNEL_PROP_NAME, INGRESS_CHANNEL_DEFAULT);
+            return getProperty(INGRESS_CHANNEL_PROP_NAME, INGRESS_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1367,7 +1371,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public static int ingressStreamId()
         {
-            return Integer.getInteger(INGRESS_STREAM_ID_PROP_NAME, INGRESS_STREAM_ID_DEFAULT);
+            return getInteger(INGRESS_STREAM_ID_PROP_NAME, INGRESS_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -1377,7 +1381,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String egressChannel()
         {
-            return System.getProperty(EGRESS_CHANNEL_PROP_NAME, EGRESS_CHANNEL_DEFAULT);
+            return getProperty(EGRESS_CHANNEL_PROP_NAME, EGRESS_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1387,7 +1391,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public static int egressStreamId()
         {
-            return Integer.getInteger(EGRESS_STREAM_ID_PROP_NAME, EGRESS_STREAM_ID_DEFAULT);
+            return getInteger(EGRESS_STREAM_ID_PROP_NAME, EGRESS_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -1399,7 +1403,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String clientName()
         {
-            return getProperty(CLIENT_NAME_PROP_NAME, "");
+            return getNullableProperty(CLIENT_NAME_PROP_NAME, "");
         }
     }
 
@@ -1423,6 +1427,7 @@ public final class AeronCluster implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private long messageTimeoutNs = Configuration.messageTimeoutNs();
         private long newLeaderTimeoutNs = NULL_VALUE;
         private String ingressEndpoints = Configuration.ingressEndpoints();
@@ -1472,6 +1477,11 @@ public final class AeronCluster implements AutoCloseable
          * Conclude configuration by setting up defaults when specifics are not provided.
          */
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        private void doConclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
             {

@@ -20,6 +20,7 @@ import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.Counter;
 import io.aeron.Image;
 import io.aeron.RethrowingErrorHandler;
@@ -80,6 +81,7 @@ import java.nio.file.Files;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -99,6 +101,11 @@ import static io.aeron.AeronCounters.ARCHIVE_REPLAY_SESSION_COUNT_TYPE_ID;
 import static io.aeron.AeronCounters.validateCounterTypeId;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.CommonContext.fallbackLogger;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getInteger;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.ContextProperties.getSizeAsInt;
+import static io.aeron.ContextProperties.getSizeAsLong;
 import static io.aeron.archive.Archive.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
 import static io.aeron.archive.Archive.Configuration.SESSION_LIVENESS_CHECK_INTERVAL_DEFAULT_NS;
 import static io.aeron.archive.Archive.Configuration.SESSION_LIVENESS_CHECK_INTERVAL_PROP_NAME;
@@ -107,14 +114,10 @@ import static io.aeron.exceptions.AeronException.Category.ERROR;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MIN_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.checkTermLength;
-import static java.lang.System.getProperty;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.BitUtil.isPowerOfTwo;
 import static org.agrona.BufferUtil.allocateDirectAligned;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getSizeAsInt;
-import static org.agrona.SystemUtil.getSizeAsLong;
 import static org.agrona.SystemUtil.loadPropertiesFiles;
 
 /**
@@ -708,7 +711,7 @@ public final class Archive implements AutoCloseable
          */
         public static String archiveDirName()
         {
-            return System.getProperty(ARCHIVE_DIR_PROP_NAME, ARCHIVE_DIR_DEFAULT);
+            return getProperty(ARCHIVE_DIR_PROP_NAME, ARCHIVE_DIR_DEFAULT);
         }
 
         /**
@@ -718,7 +721,7 @@ public final class Archive implements AutoCloseable
          */
         public static String markFileDir()
         {
-            return System.getProperty(MARK_FILE_DIR_PROP_NAME);
+            return getProperty(MARK_FILE_DIR_PROP_NAME);
         }
 
         /**
@@ -766,7 +769,7 @@ public final class Archive implements AutoCloseable
          */
         public static int fileSyncLevel()
         {
-            return Integer.getInteger(FILE_SYNC_LEVEL_PROP_NAME, FILE_SYNC_LEVEL_DEFAULT);
+            return getInteger(FILE_SYNC_LEVEL_PROP_NAME, FILE_SYNC_LEVEL_DEFAULT);
         }
 
         /**
@@ -782,7 +785,7 @@ public final class Archive implements AutoCloseable
          */
         public static int catalogFileSyncLevel()
         {
-            return Integer.getInteger(CATALOG_FILE_SYNC_LEVEL_PROP_NAME, CATALOG_FILE_SYNC_LEVEL_DEFAULT);
+            return getInteger(CATALOG_FILE_SYNC_LEVEL_PROP_NAME, CATALOG_FILE_SYNC_LEVEL_DEFAULT);
         }
 
         /**
@@ -792,7 +795,7 @@ public final class Archive implements AutoCloseable
          */
         public static ArchiveThreadingMode threadingMode()
         {
-            return ArchiveThreadingMode.valueOf(System.getProperty(THREADING_MODE_PROP_NAME, DEDICATED.name()));
+            return ArchiveThreadingMode.valueOf(getProperty(THREADING_MODE_PROP_NAME, DEDICATED.name()));
         }
 
         /**
@@ -803,7 +806,7 @@ public final class Archive implements AutoCloseable
          */
         public static int conductorCpuAffinity()
         {
-            return Integer.getInteger(CONDUCTOR_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+            return getInteger(CONDUCTOR_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
         }
 
         /**
@@ -814,7 +817,7 @@ public final class Archive implements AutoCloseable
          */
         public static int recorderCpuAffinity()
         {
-            return Integer.getInteger(RECORDER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+            return getInteger(RECORDER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
         }
 
         /**
@@ -825,7 +828,7 @@ public final class Archive implements AutoCloseable
          */
         public static int replayerCpuAffinity()
         {
-            return Integer.getInteger(REPLAYER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+            return getInteger(REPLAYER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
         }
 
         /**
@@ -839,7 +842,7 @@ public final class Archive implements AutoCloseable
         {
             return () ->
             {
-                final String name = System.getProperty(ARCHIVE_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
+                final String name = getProperty(ARCHIVE_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
                 return io.aeron.driver.Configuration.agentIdleStrategy(name, controllableStatus);
             };
         }
@@ -853,7 +856,7 @@ public final class Archive implements AutoCloseable
          */
         public static Supplier<IdleStrategy> recorderIdleStrategySupplier(final StatusIndicator controllableStatus)
         {
-            final String name = System.getProperty(ARCHIVE_RECORDER_IDLE_STRATEGY_PROP_NAME);
+            final String name = getProperty(ARCHIVE_RECORDER_IDLE_STRATEGY_PROP_NAME);
             if (null == name)
             {
                 return null;
@@ -871,7 +874,7 @@ public final class Archive implements AutoCloseable
          */
         public static Supplier<IdleStrategy> replayerIdleStrategySupplier(final StatusIndicator controllableStatus)
         {
-            final String name = System.getProperty(ARCHIVE_REPLAYER_IDLE_STRATEGY_PROP_NAME);
+            final String name = getProperty(ARCHIVE_REPLAYER_IDLE_STRATEGY_PROP_NAME);
             if (null == name)
             {
                 return null;
@@ -887,7 +890,7 @@ public final class Archive implements AutoCloseable
          */
         public static int maxConcurrentRecordings()
         {
-            return Integer.getInteger(MAX_CONCURRENT_RECORDINGS_PROP_NAME, MAX_CONCURRENT_RECORDINGS_DEFAULT);
+            return getInteger(MAX_CONCURRENT_RECORDINGS_PROP_NAME, MAX_CONCURRENT_RECORDINGS_DEFAULT);
         }
 
         /**
@@ -897,7 +900,7 @@ public final class Archive implements AutoCloseable
          */
         public static int maxConcurrentReplays()
         {
-            return Integer.getInteger(MAX_CONCURRENT_REPLAYS_PROP_NAME, MAX_CONCURRENT_REPLAYS_DEFAULT);
+            return getInteger(MAX_CONCURRENT_REPLAYS_PROP_NAME, MAX_CONCURRENT_REPLAYS_DEFAULT);
         }
 
         /**
@@ -910,7 +913,7 @@ public final class Archive implements AutoCloseable
         @Deprecated
         public static long maxCatalogEntries()
         {
-            return SystemUtil.getSizeAsLong(MAX_CATALOG_ENTRIES_PROP_NAME, MAX_CATALOG_ENTRIES_DEFAULT);
+            return getSizeAsLong(MAX_CATALOG_ENTRIES_PROP_NAME, MAX_CATALOG_ENTRIES_DEFAULT);
         }
 
         /**
@@ -920,7 +923,7 @@ public final class Archive implements AutoCloseable
          */
         public static long catalogCapacity()
         {
-            return SystemUtil.getSizeAsLong(CATALOG_CAPACITY_PROP_NAME, CATALOG_CAPACITY_DEFAULT);
+            return getSizeAsLong(CATALOG_CAPACITY_PROP_NAME, CATALOG_CAPACITY_DEFAULT);
         }
 
         /**
@@ -994,7 +997,7 @@ public final class Archive implements AutoCloseable
          */
         public static String replicationChannel()
         {
-            return System.getProperty(REPLICATION_CHANNEL_PROP_NAME);
+            return getProperty(REPLICATION_CHANNEL_PROP_NAME);
         }
 
         /**
@@ -1017,7 +1020,7 @@ public final class Archive implements AutoCloseable
          */
         public static AuthenticatorSupplier authenticatorSupplier()
         {
-            final String supplierClassName = System.getProperty(
+            final String supplierClassName = getProperty(
                 AUTHENTICATOR_SUPPLIER_PROP_NAME, AUTHENTICATOR_SUPPLIER_DEFAULT);
 
             AuthenticatorSupplier supplier = null;
@@ -1043,7 +1046,7 @@ public final class Archive implements AutoCloseable
          */
         public static AuthorisationServiceSupplier authorisationServiceSupplier()
         {
-            final String supplierClassName = System.getProperty(AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME);
+            final String supplierClassName = getProperty(AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME);
             if (Strings.isEmpty(supplierClassName))
             {
                 return DEFAULT_AUTHORISATION_SERVICE_SUPPLIER;
@@ -1101,7 +1104,7 @@ public final class Archive implements AutoCloseable
          */
         public static boolean controlChannelEnabled()
         {
-            return "true".equals(System.getProperty(CONTROL_CHANNEL_ENABLED_PROP_NAME, "true"));
+            return "true".equals(getProperty(CONTROL_CHANNEL_ENABLED_PROP_NAME, "true"));
         }
 
         /**
@@ -1144,6 +1147,7 @@ public final class Archive implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private boolean deleteArchiveOnStart = Configuration.deleteArchiveOnStart();
         private boolean ownsAeronClient = false;
         private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
@@ -1258,8 +1262,13 @@ public final class Archive implements AutoCloseable
         /**
          * Conclude the configuration parameters by resolving dependencies and null values to use defaults.
          */
-        @SuppressWarnings("MethodLength")
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        @SuppressWarnings("MethodLength")
+        private void doConclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
             {

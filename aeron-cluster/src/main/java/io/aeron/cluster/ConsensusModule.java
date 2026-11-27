@@ -19,6 +19,7 @@ import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.Counter;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
@@ -82,6 +83,7 @@ import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -104,6 +106,11 @@ import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.CommonContext.fallbackLogger;
 import static io.aeron.CommonContext.threadName;
+import static io.aeron.ContextProperties.getBoolean;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getInteger;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.ContextProperties.getSizeAsInt;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLIENT_TIMEOUT_COUNT_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLOCK_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CPU_AFFINITY_PROP_NAME;
@@ -118,8 +125,6 @@ import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_COUNTER_TYPE_ID;
 import static java.lang.Boolean.parseBoolean;
 import static org.agrona.BitUtil.findNextPositivePowerOfTwo;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getSizeAsInt;
 import static org.agrona.SystemUtil.loadPropertiesFiles;
 
 /**
@@ -1049,7 +1054,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int ingressFragmentLimit()
         {
-            return Integer.getInteger(CLUSTER_INGRESS_FRAGMENT_LIMIT_PROP_NAME, CLUSTER_INGRESS_FRAGMENT_LIMIT_DEFAULT);
+            return getInteger(CLUSTER_INGRESS_FRAGMENT_LIMIT_PROP_NAME, CLUSTER_INGRESS_FRAGMENT_LIMIT_DEFAULT);
         }
 
         /**
@@ -1061,7 +1066,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static boolean isIpcIngressAllowed()
         {
-            return "true".equalsIgnoreCase(System.getProperty(
+            return "true".equalsIgnoreCase(getProperty(
                 CLUSTER_INGRESS_IPC_ALLOWED_PROP_NAME, CLUSTER_INGRESS_IPC_ALLOWED_DEFAULT));
         }
 
@@ -1074,7 +1079,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int clusterMemberId()
         {
-            return Integer.getInteger(CLUSTER_MEMBER_ID_PROP_NAME, CLUSTER_MEMBER_ID_DEFAULT);
+            return getInteger(CLUSTER_MEMBER_ID_PROP_NAME, CLUSTER_MEMBER_ID_DEFAULT);
         }
 
         /**
@@ -1088,7 +1093,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int appointedLeaderId()
         {
-            return Integer.getInteger(APPOINTED_LEADER_ID_PROP_NAME, APPOINTED_LEADER_ID_DEFAULT);
+            return getInteger(APPOINTED_LEADER_ID_PROP_NAME, APPOINTED_LEADER_ID_DEFAULT);
         }
 
         /**
@@ -1098,7 +1103,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String clusterMembers()
         {
-            return System.getProperty(CLUSTER_MEMBERS_PROP_NAME);
+            return getProperty(CLUSTER_MEMBERS_PROP_NAME);
         }
 
         /**
@@ -1110,7 +1115,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String clusterConsensusEndpoints()
         {
-            return System.getProperty(CLUSTER_CONSENSUS_ENDPOINTS_PROP_NAME, CLUSTER_CONSENSUS_ENDPOINTS_DEFAULT);
+            return getProperty(CLUSTER_CONSENSUS_ENDPOINTS_PROP_NAME, CLUSTER_CONSENSUS_ENDPOINTS_DEFAULT);
         }
 
         /**
@@ -1120,7 +1125,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String logChannel()
         {
-            return System.getProperty(LOG_CHANNEL_PROP_NAME, LOG_CHANNEL_DEFAULT);
+            return getProperty(LOG_CHANNEL_PROP_NAME, LOG_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1130,7 +1135,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int logStreamId()
         {
-            return Integer.getInteger(LOG_STREAM_ID_PROP_NAME, LOG_STREAM_ID_DEFAULT);
+            return getInteger(LOG_STREAM_ID_PROP_NAME, LOG_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -1140,7 +1145,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String memberEndpoints()
         {
-            return System.getProperty(MEMBER_ENDPOINTS_PROP_NAME, MEMBER_ENDPOINTS_DEFAULT);
+            return getProperty(MEMBER_ENDPOINTS_PROP_NAME, MEMBER_ENDPOINTS_DEFAULT);
         }
 
         /**
@@ -1152,7 +1157,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String snapshotChannel()
         {
-            return System.getProperty(
+            return getProperty(
                 ClusteredServiceContainer.Configuration.SNAPSHOT_CHANNEL_PROP_NAME, SNAPSHOT_CHANNEL_DEFAULT);
         }
 
@@ -1165,7 +1170,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int snapshotStreamId()
         {
-            return Integer.getInteger(
+            return getInteger(
                 ClusteredServiceContainer.Configuration.SNAPSHOT_STREAM_ID_PROP_NAME, SNAPSHOT_STREAM_ID_DEFAULT);
         }
 
@@ -1178,7 +1183,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int serviceCount()
         {
-            return Integer.getInteger(SERVICE_COUNT_PROP_NAME, SERVICE_COUNT_DEFAULT);
+            return getInteger(SERVICE_COUNT_PROP_NAME, SERVICE_COUNT_DEFAULT);
         }
 
         /**
@@ -1190,7 +1195,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int maxConcurrentSessions()
         {
-            return Integer.getInteger(MAX_CONCURRENT_SESSIONS_PROP_NAME, MAX_CONCURRENT_SESSIONS_DEFAULT);
+            return getInteger(MAX_CONCURRENT_SESSIONS_PROP_NAME, MAX_CONCURRENT_SESSIONS_DEFAULT);
         }
 
         /**
@@ -1325,7 +1330,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static AuthenticatorSupplier authenticatorSupplier()
         {
-            final String supplierClassName = System.getProperty(AUTHENTICATOR_SUPPLIER_PROP_NAME);
+            final String supplierClassName = getProperty(AUTHENTICATOR_SUPPLIER_PROP_NAME);
             if (Strings.isEmpty(supplierClassName))
             {
                 return DefaultAuthenticatorSupplier.INSTANCE;
@@ -1354,7 +1359,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static AuthorisationServiceSupplier authorisationServiceSupplier()
         {
-            final String supplierClassName = System.getProperty(AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME);
+            final String supplierClassName = getProperty(AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME);
             if (Strings.isEmpty(supplierClassName))
             {
                 return DEFAULT_AUTHORISATION_SERVICE_SUPPLIER;
@@ -1389,7 +1394,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String consensusChannel()
         {
-            return System.getProperty(CONSENSUS_CHANNEL_PROP_NAME, CONSENSUS_CHANNEL_DEFAULT);
+            return getProperty(CONSENSUS_CHANNEL_PROP_NAME, CONSENSUS_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1401,7 +1406,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int consensusStreamId()
         {
-            return Integer.getInteger(CONSENSUS_STREAM_ID_PROP_NAME, CONSENSUS_STREAM_ID_DEFAULT);
+            return getInteger(CONSENSUS_STREAM_ID_PROP_NAME, CONSENSUS_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -1411,7 +1416,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String replicationChannel()
         {
-            return System.getProperty(REPLICATION_CHANNEL_PROP_NAME);
+            return getProperty(REPLICATION_CHANNEL_PROP_NAME);
         }
 
         /**
@@ -1423,7 +1428,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String followerCatchupChannel()
         {
-            return System.getProperty(FOLLOWER_CATCHUP_CHANNEL_PROP_NAME, FOLLOWER_CATCHUP_CHANNEL_DEFAULT);
+            return getProperty(FOLLOWER_CATCHUP_CHANNEL_PROP_NAME, FOLLOWER_CATCHUP_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1435,7 +1440,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String leaderArchiveControlChannel()
         {
-            return System.getProperty(LEADER_ARCHIVE_CONTROL_CHANNEL_PROP_NAME, LEADER_ARCHIVE_CONTROL_CHANNEL_DEFAULT);
+            return getProperty(LEADER_ARCHIVE_CONTROL_CHANNEL_PROP_NAME, LEADER_ARCHIVE_CONTROL_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1459,7 +1464,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int ticksPerWheel()
         {
-            return Integer.getInteger(TICKS_PER_WHEEL_PROP_NAME, TICKS_PER_WHEEL_DEFAULT);
+            return getInteger(TICKS_PER_WHEEL_PROP_NAME, TICKS_PER_WHEEL_DEFAULT);
         }
 
         /**
@@ -1474,7 +1479,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int fileSyncLevel()
         {
-            return Integer.getInteger(FILE_SYNC_LEVEL_PROP_NAME, FILE_SYNC_LEVEL_DEFAULT);
+            return getInteger(FILE_SYNC_LEVEL_PROP_NAME, FILE_SYNC_LEVEL_DEFAULT);
         }
 
         /**
@@ -1485,7 +1490,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String timerServiceSupplier()
         {
-            return System.getProperty(TIMER_SERVICE_SUPPLIER_PROP_NAME, TIMER_SERVICE_SUPPLIER_DEFAULT);
+            return getProperty(TIMER_SERVICE_SUPPLIER_PROP_NAME, TIMER_SERVICE_SUPPLIER_DEFAULT);
         }
 
         /**
@@ -1496,7 +1501,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static String agentRoleName()
         {
-            return System.getProperty(CLUSTER_CONSENSUS_MODULE_AGENT_ROLE_NAME_PROP_NAME);
+            return getProperty(CLUSTER_CONSENSUS_MODULE_AGENT_ROLE_NAME_PROP_NAME);
         }
 
         /**
@@ -1507,7 +1512,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static int cpuAffinity()
         {
-            return Integer.getInteger(CLUSTER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+            return getInteger(CLUSTER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
         }
 
         /**
@@ -1519,7 +1524,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static long replicationProgressTimeoutNs()
         {
-            return SystemUtil.getDurationInNanos(
+            return getDurationInNanos(
                 CLUSTER_REPLICATION_PROGRESS_TIMEOUT_PROP_NAME, CLUSTER_REPLICATION_PROGRESS_TIMEOUT_DEFAULT_NS);
         }
 
@@ -1533,7 +1538,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static long replicationProgressIntervalNs()
         {
-            return SystemUtil.getDurationInNanos(CLUSTER_REPLICATION_PROGRESS_INTERVAL_PROP_NAME, Aeron.NULL_VALUE);
+            return getDurationInNanos(CLUSTER_REPLICATION_PROGRESS_INTERVAL_PROP_NAME, Aeron.NULL_VALUE);
         }
 
         /**
@@ -1543,7 +1548,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static boolean acceptStandbySnapshots()
         {
-            return Boolean.getBoolean(CLUSTER_ACCEPT_STANDBY_SNAPSHOTS_PROP_NAME);
+            return getBoolean(CLUSTER_ACCEPT_STANDBY_SNAPSHOTS_PROP_NAME);
         }
 
         /**
@@ -1555,7 +1560,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static ConsensusModuleExtension newConsensusModuleExtension()
         {
-            final String className = System.getProperty(Configuration.CONSENSUS_MODULE_EXTENSION_CLASS_NAME_PROP_NAME);
+            final String className = getProperty(Configuration.CONSENSUS_MODULE_EXTENSION_CLASS_NAME_PROP_NAME);
             if (null != className)
             {
                 try
@@ -1579,7 +1584,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static boolean enableControlOnConsensusChannel()
         {
-            return parseBoolean(System.getProperty(
+            return parseBoolean(getProperty(
                 CONSENSUS_MODULE_ENABLE_CONTROL_ON_CONSENSUS_CHANNEL_PROP_NAME, "true"));
         }
 
@@ -1591,7 +1596,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public static boolean enableControlOnLogChannel()
         {
-            return parseBoolean(System.getProperty(CONSENSUS_MODULE_ENABLE_CONTROL_ON_LOG_CHANNEL_PROP_NAME, "true"));
+            return parseBoolean(getProperty(CONSENSUS_MODULE_ENABLE_CONTROL_ON_LOG_CHANNEL_PROP_NAME, "true"));
         }
     }
 
@@ -1618,6 +1623,7 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private boolean ownsAeronClient = false;
         private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
         private Aeron aeron;
@@ -1749,8 +1755,13 @@ public final class ConsensusModule implements AutoCloseable
         /**
          * Conclude configuration by setting up defaults when specifics are not provided.
          */
-        @SuppressWarnings("MethodLength")
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        @SuppressWarnings("MethodLength")
+        private void doConclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
             {
@@ -1817,7 +1828,7 @@ public final class ConsensusModule implements AutoCloseable
 
             if (null == clusterClock)
             {
-                final String clockClassName = System.getProperty(
+                final String clockClassName = getProperty(
                     CLUSTER_CLOCK_PROP_NAME, MillisecondClusterClock.class.getName());
                 try
                 {

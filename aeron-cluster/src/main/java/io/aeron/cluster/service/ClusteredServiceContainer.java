@@ -18,6 +18,7 @@ package io.aeron.cluster.service;
 import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
@@ -66,6 +67,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -74,13 +76,15 @@ import java.util.function.Supplier;
 import static io.aeron.ChannelUri.addAliasIfAbsent;
 import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.CommonContext.threadName;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getInteger;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.ContextProperties.getSizeAsInt;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.SERVICE_NAME_PROP_NAME;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getSizeAsInt;
 import static org.agrona.SystemUtil.loadPropertiesFiles;
 
 /**
@@ -476,7 +480,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int clusterId()
         {
-            return Integer.getInteger(CLUSTER_ID_PROP_NAME, CLUSTER_ID_DEFAULT);
+            return getInteger(CLUSTER_ID_PROP_NAME, CLUSTER_ID_DEFAULT);
         }
 
         /**
@@ -486,7 +490,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int serviceId()
         {
-            return Integer.getInteger(SERVICE_ID_PROP_NAME, SERVICE_ID_DEFAULT);
+            return getInteger(SERVICE_ID_PROP_NAME, SERVICE_ID_DEFAULT);
         }
 
         /**
@@ -496,7 +500,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String serviceName()
         {
-            return System.getProperty(SERVICE_NAME_PROP_NAME, SERVICE_NAME_DEFAULT);
+            return getProperty(SERVICE_NAME_PROP_NAME, SERVICE_NAME_DEFAULT);
         }
 
         /**
@@ -507,7 +511,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int cpuAffinity()
         {
-            return Integer.getInteger(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+            return getInteger(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
         }
 
         /**
@@ -517,7 +521,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String replayChannel()
         {
-            return System.getProperty(REPLAY_CHANNEL_PROP_NAME, REPLAY_CHANNEL_DEFAULT);
+            return getProperty(REPLAY_CHANNEL_PROP_NAME, REPLAY_CHANNEL_DEFAULT);
         }
 
         /**
@@ -529,7 +533,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int replayStreamId()
         {
-            return Integer.getInteger(REPLAY_STREAM_ID_PROP_NAME, REPLAY_STREAM_ID_DEFAULT);
+            return getInteger(REPLAY_STREAM_ID_PROP_NAME, REPLAY_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -541,7 +545,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String controlChannel()
         {
-            return System.getProperty(CONTROL_CHANNEL_PROP_NAME, CONTROL_CHANNEL_DEFAULT);
+            return getProperty(CONTROL_CHANNEL_PROP_NAME, CONTROL_CHANNEL_DEFAULT);
         }
 
         /**
@@ -553,7 +557,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int consensusModuleStreamId()
         {
-            return Integer.getInteger(CONSENSUS_MODULE_STREAM_ID_PROP_NAME, CONSENSUS_MODULE_STREAM_ID_DEFAULT);
+            return getInteger(CONSENSUS_MODULE_STREAM_ID_PROP_NAME, CONSENSUS_MODULE_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -565,7 +569,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int serviceStreamId()
         {
-            return Integer.getInteger(SERVICE_STREAM_ID_PROP_NAME, SERVICE_STREAM_ID_DEFAULT);
+            return getInteger(SERVICE_STREAM_ID_PROP_NAME, SERVICE_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -575,7 +579,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String snapshotChannel()
         {
-            return System.getProperty(SNAPSHOT_CHANNEL_PROP_NAME, SNAPSHOT_CHANNEL_DEFAULT);
+            return getProperty(SNAPSHOT_CHANNEL_PROP_NAME, SNAPSHOT_CHANNEL_DEFAULT);
         }
 
         /**
@@ -586,7 +590,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int snapshotStreamId()
         {
-            return Integer.getInteger(SNAPSHOT_STREAM_ID_PROP_NAME, SNAPSHOT_STREAM_ID_DEFAULT);
+            return getInteger(SNAPSHOT_STREAM_ID_PROP_NAME, SNAPSHOT_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -611,7 +615,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
         {
             return () ->
             {
-                final String name = System.getProperty(CLUSTER_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
+                final String name = getProperty(CLUSTER_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
                 return io.aeron.driver.Configuration.agentIdleStrategy(name, controllableStatus);
             };
         }
@@ -623,7 +627,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String clusterDirName()
         {
-            return System.getProperty(CLUSTER_DIR_PROP_NAME, CLUSTER_DIR_DEFAULT);
+            return getProperty(CLUSTER_DIR_PROP_NAME, CLUSTER_DIR_DEFAULT);
         }
 
         /**
@@ -633,7 +637,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String clusterServicesDirName()
         {
-            return System.getProperty(CLUSTER_SERVICES_DIR_PROP_NAME);
+            return getProperty(CLUSTER_SERVICES_DIR_PROP_NAME);
         }
 
         /**
@@ -654,7 +658,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static boolean isRespondingService()
         {
-            final String property = System.getProperty(RESPONDER_SERVICE_PROP_NAME);
+            final String property = getProperty(RESPONDER_SERVICE_PROP_NAME);
             if (null == property)
             {
                 return RESPONDER_SERVICE_DEFAULT;
@@ -672,7 +676,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static int logFragmentLimit()
         {
-            return Integer.getInteger(LOG_FRAGMENT_LIMIT_PROP_NAME, LOG_FRAGMENT_LIMIT_DEFAULT);
+            return getInteger(LOG_FRAGMENT_LIMIT_PROP_NAME, LOG_FRAGMENT_LIMIT_DEFAULT);
         }
 
         /**
@@ -703,7 +707,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static ClusteredService newClusteredService()
         {
-            final String className = System.getProperty(Configuration.SERVICE_CLASS_NAME_PROP_NAME);
+            final String className = getProperty(Configuration.SERVICE_CLASS_NAME_PROP_NAME);
             if (null == className)
             {
                 throw new ClusterException("either a instance or class name for the service must be provided");
@@ -728,7 +732,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static DelegatingErrorHandler newDelegatingErrorHandler()
         {
-            final String className = System.getProperty(Configuration.DELEGATING_ERROR_HANDLER_PROP_NAME);
+            final String className = getProperty(Configuration.DELEGATING_ERROR_HANDLER_PROP_NAME);
             if (null != className)
             {
                 try
@@ -751,7 +755,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         public static String markFileDir()
         {
-            return System.getProperty(MARK_FILE_DIR_PROP_NAME);
+            return getProperty(MARK_FILE_DIR_PROP_NAME);
         }
     }
 
@@ -776,10 +780,11 @@ public final class ClusteredServiceContainer implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private int appVersion = SemanticVersion.compose(0, 0, 1);
         private int clusterId = Configuration.clusterId();
         private int serviceId = Configuration.serviceId();
-        private String serviceName = System.getProperty(SERVICE_NAME_PROP_NAME);
+        private String serviceName = getProperty(SERVICE_NAME_PROP_NAME);
         private int cpuAffinity = Configuration.cpuAffinity();
         private AffinityRegistry affinityRegistry;
         private String replayChannel = Configuration.replayChannel();
@@ -849,8 +854,13 @@ public final class ClusteredServiceContainer implements AutoCloseable
         /**
          * Conclude configuration by setting up defaults when specifics are not provided.
          */
-        @SuppressWarnings("MethodLength")
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        @SuppressWarnings("MethodLength")
+        private void doConclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
             {

@@ -60,8 +60,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static io.aeron.Aeron.Configuration.MAX_CLIENT_NAME_LENGTH;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getProperty;
+import static io.aeron.ContextProperties.getDurationInNanos;
+import static io.aeron.ContextProperties.getNullableProperty;
+import static io.aeron.ContextProperties.getProperty;
 
 /**
  * Aeron entry point for communicating to the Media Driver for creating {@link Publication}s and {@link Subscription}s.
@@ -1072,7 +1073,7 @@ public final class Aeron implements AutoCloseable
         @Config
         public static boolean preTouchMappedMemory()
         {
-            final String value = System.getProperty(PRE_TOUCH_MAPPED_MEMORY_PROP_NAME);
+            final String value = getProperty(PRE_TOUCH_MAPPED_MEMORY_PROP_NAME);
             if (null != value)
             {
                 return Boolean.parseBoolean(value);
@@ -1090,7 +1091,7 @@ public final class Aeron implements AutoCloseable
         @Config
         public static String clientName()
         {
-            return getProperty(CLIENT_NAME_PROP_NAME, "");
+            return getNullableProperty(CLIENT_NAME_PROP_NAME, "");
         }
 
         /**

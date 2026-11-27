@@ -19,7 +19,9 @@ import io.aeron.CommonContext;
 import io.aeron.driver.media.UdpChannel;
 import org.agrona.LangUtil;
 
-import static io.aeron.driver.Configuration.UNICAST_FLOW_CONTROL_STRATEGY;
+import static io.aeron.ContextProperties.getProperty;
+import static io.aeron.driver.Configuration.UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT;
+import static io.aeron.driver.Configuration.UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME;
 
 /**
  * Default supplier of {@link FlowControl} strategies for unicast streams via
@@ -27,6 +29,9 @@ import static io.aeron.driver.Configuration.UNICAST_FLOW_CONTROL_STRATEGY;
  */
 public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
 {
+    private final String flowControlStrategy = getProperty(
+        UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME, UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT);
+
     /**
      * Default constructor.
      */
@@ -48,14 +53,14 @@ public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
             throw new IllegalArgumentException("unsupported unicast flow control strategy: fc=" + fcStr);
         }
 
-        if (UnicastFlowControl.class.getName().equals(UNICAST_FLOW_CONTROL_STRATEGY))
+        if (UnicastFlowControl.class.getName().equals(flowControlStrategy))
         {
             return new UnicastFlowControl();
         }
 
         try
         {
-            flowControl = (FlowControl)Class.forName(UNICAST_FLOW_CONTROL_STRATEGY)
+            flowControl = (FlowControl)Class.forName(flowControlStrategy)
                 .getConstructor()
                 .newInstance();
         }
@@ -74,6 +79,6 @@ public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
     public String toString()
     {
         return "DefaultUnicastFlowControlSupplier{flowControlClass=" +
-            UNICAST_FLOW_CONTROL_STRATEGY + "}";
+            flowControlStrategy + "}";
     }
 }

@@ -20,6 +20,7 @@ import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
+import io.aeron.ContextProperties;
 import io.aeron.Counter;
 import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
@@ -46,6 +47,7 @@ import org.agrona.concurrent.NanoClock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Properties;
 
 import static io.aeron.AeronCounters.PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID;
 import static io.aeron.AeronCounters.PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID;
@@ -1628,6 +1630,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private final Properties properties = ContextProperties.current();
         private Aeron aeron;
         private boolean ownsAeronClient;
         private String aeronDirectoryName;
@@ -1672,8 +1675,13 @@ public final class PersistentSubscription implements AutoCloseable
         /**
          * Conclude configuration by setting up defaults when specifics are not provided.
          */
-        @SuppressWarnings("MethodLength")
         public void conclude()
+        {
+            ContextProperties.run(properties, this::doConclude);
+        }
+
+        @SuppressWarnings("MethodLength")
+        private void doConclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
             {
