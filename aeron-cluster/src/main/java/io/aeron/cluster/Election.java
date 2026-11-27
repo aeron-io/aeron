@@ -972,7 +972,15 @@ class Election
             {
                 if (0 == notifiedCommitPosition)
                 {
-                    return publishFollowerAppendPosition(nowNs);
+                    if (nowNs >= (consensusModuleAgent.timeOfLastLeaderUpdateNs() +
+                        ctx.leaderHeartbeatTimeoutNs()))
+                    {
+                        state(CANVASS, nowNs, "leader heartbeat timeout");
+                    }
+                    else
+                    {
+                        return publishFollowerAppendPosition(nowNs);
+                    }
                 }
                 else if (logPosition >= notifiedCommitPosition)
                 {

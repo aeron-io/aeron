@@ -1212,6 +1212,93 @@ class ElectionTest
     }
 
     @Test
+    void followerShouldReturnToCanvassWhenLeaderTimesOutDuringReplay()
+    {
+        final long leadershipTermId = 1;
+        final long followerLogPosition = 60;
+        final long followerAppendPosition = 120;
+        final long leaderLogPosition = 120;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember thisMember = clusterMembers[1];
+        final ClusterMember liveLeader = clusterMembers[0];
+        final ClusterMember replacementLeader = clusterMembers[2];
+
+        when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
+        final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap = new Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(clusterMembers, clusterMemberByIdMap);
+
+        final Election election = new Election(
+            true,
+            NULL_VALUE,
+            leadershipTermId,
+            followerLogPosition,
+            followerLogPosition,
+            followerAppendPosition,
+            clusterMembers,
+            clusterMemberByIdMap,
+            thisMember,
+            consensusPublisher,
+            ctx,
+            consensusModuleAgent);
+
+        final long leaderUpdateTimeNs = clock.increment(1);
+        when(consensusModuleAgent.timeOfLastLeaderUpdateNs()).thenReturn(leaderUpdateTimeNs);
+
+        election.doWork(leaderUpdateTimeNs);
+        verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
+
+        election.onNewLeadershipTerm(
+            leadershipTermId,
+            NULL_VALUE,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            followerLogPosition,
+            leaderLogPosition,
+            0,
+            RECORDING_ID,
+            leaderUpdateTimeNs,
+            liveLeader.id(),
+            LOG_SESSION_ID,
+            true);
+
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
+        election.doWork(clock.increment(1));
+        assertEquals(0, election.notifiedCommitPosition());
+
+        reset(electionStateCounter);
+        clock.increment(ctx.leaderHeartbeatTimeoutNs() + 1);
+
+        when(consensusModuleAgent.timeOfLastLeaderUpdateNs()).thenReturn(clock.nanoTime());
+        election.doWork(clock.nanoTime());
+        verify(electionStateCounter, never()).setRelease(ElectionState.CANVASS.code());
+
+        when(consensusModuleAgent.timeOfLastLeaderUpdateNs()).thenReturn(leaderUpdateTimeNs);
+        election.doWork(clock.nanoTime());
+        verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
+
+        reset(electionStateCounter);
+        election.onNewLeadershipTerm(
+            leadershipTermId,
+            NULL_VALUE,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId + 1,
+            followerAppendPosition,
+            followerAppendPosition,
+            followerAppendPosition,
+            RECORDING_ID,
+            clock.nanoTime(),
+            replacementLeader.id(),
+            LOG_SESSION_ID,
+            false);
+
+        assertEquals(leadershipTermId + 1, election.leadershipTermId());
+        assertSame(replacementLeader, election.leader());
+        verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
+    }
+
+    @Test
     void followerShouldReplicateReplayAndCatchupWhenLateJoiningClusterInLaterTerm()
     {
         final long leadershipTermId = 1;
