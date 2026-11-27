@@ -109,6 +109,11 @@ public:
         return (int64_t)frame_length * 19;
     }
 
+    static int64_t frame_term_offset_reserved_value_supplier(void *clientd, uint8_t *buffer, size_t frame_length)
+    {
+        return reinterpret_cast<aeron_data_header_t *>(buffer)->term_offset;
+    }
+
     aeron_data_header_t *verifyHeader(
         const aeron_mapped_buffer_t *term_buffer,
         const int32_t term_offset,
@@ -295,6 +300,36 @@ TEST_F(PublicationTest, offerFragmentedMessage)
         msgBuffer + (MAX_MESSAGE_SIZE - last_data_chunk_length), last_data_chunk_length));
 }
 
+TEST_F(PublicationTest, offerFragmentedMessageShouldPassEachFrameToReservedValueSupplier)
+{
+    const int32_t frame_count = 4;
+    uint8_t msgBuffer[(MAX_PAYLOAD_SIZE * (frame_count - 1)) + 100];
+    memset(msgBuffer, 'x', sizeof(msgBuffer));
+    const int32_t term_count = 5;
+    const size_t partition_index = aeron_logbuffer_index_by_term_count(term_count);
+    const int32_t term_offset = 512;
+    const int32_t term_id = m_publication->initial_term_id + term_count;
+    m_publication->log_meta_data->active_term_count = term_count;
+    m_publication->log_meta_data->term_tail_counters[partition_index] = packTail(term_id, term_offset);
+
+    const int64_t position = aeron_publication_offer(
+        m_publication,
+        msgBuffer,
+        sizeof(msgBuffer),
+        frame_term_offset_reserved_value_supplier,
+        nullptr);
+
+    ASSERT_EQ(5255840, position);
+    const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
+    for (int32_t i = 0; i < frame_count; i++)
+    {
+        const int32_t frame_offset = term_offset + (i * MTU_LENGTH);
+        const auto *header = reinterpret_cast<const aeron_data_header_t *>(term_buffer->addr + frame_offset);
+        EXPECT_EQ(frame_offset, header->term_offset) << "frame " << i;
+        EXPECT_EQ(frame_offset, header->reserved_value) << "frame " << i;
+    }
+}
+
 TEST_F(PublicationTest, vectorOfferUnfragmentedMessage)
 {
     const char *payload = "Aeron is awesome squared!";
@@ -398,6 +433,41 @@ TEST_F(PublicationTest, vectorOfferFragmentedMessage)
     EXPECT_EQ(0, memcmp(
         term_buffer->addr + last_frame_offset + AERON_DATA_HEADER_LENGTH,
         msgBuffer3 + (sizeof(msgBuffer3) - last_data_chunk_length), last_data_chunk_length));
+}
+
+TEST_F(PublicationTest, vectorOfferFragmentedMessageShouldPassEachFrameToReservedValueSupplier)
+{
+    const int32_t frame_count = 4;
+    uint8_t msgBuffer[(MAX_PAYLOAD_SIZE * (frame_count - 1)) + 100];
+    memset(msgBuffer, 'x', sizeof(msgBuffer));
+    aeron_iovec_t iov[2];
+    iov[0].iov_base = msgBuffer;
+    iov[0].iov_len = 333;
+    iov[1].iov_base = msgBuffer + 333;
+    iov[1].iov_len = sizeof(msgBuffer) - 333;
+    const int32_t term_count = 5;
+    const size_t partition_index = aeron_logbuffer_index_by_term_count(term_count);
+    const int32_t term_offset = 512;
+    const int32_t term_id = m_publication->initial_term_id + term_count;
+    m_publication->log_meta_data->active_term_count = term_count;
+    m_publication->log_meta_data->term_tail_counters[partition_index] = packTail(term_id, term_offset);
+
+    const int64_t position = aeron_publication_offerv(
+        m_publication,
+        iov,
+        2,
+        frame_term_offset_reserved_value_supplier,
+        nullptr);
+
+    ASSERT_EQ(5255840, position);
+    const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
+    for (int32_t i = 0; i < frame_count; i++)
+    {
+        const int32_t frame_offset = term_offset + (i * MTU_LENGTH);
+        const auto *header = reinterpret_cast<const aeron_data_header_t *>(term_buffer->addr + frame_offset);
+        EXPECT_EQ(frame_offset, header->term_offset) << "frame " << i;
+        EXPECT_EQ(frame_offset, header->reserved_value) << "frame " << i;
+    }
 }
 
 TEST_F(PublicationTest, tryClaimMaxPayloadSize)
