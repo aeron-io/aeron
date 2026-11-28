@@ -777,6 +777,22 @@ inline aeron_network_publication_t *aeron_driver_conductor_find_network_publicat
     return NULL;
 }
 
+inline aeron_ipc_publication_t *aeron_driver_conductor_find_ipc_publication_by_tag(
+    aeron_driver_conductor_t *conductor, int64_t tag_id)
+{
+    for (size_t i = 0, length = conductor->ipc_publications.length; i < length; i++)
+    {
+        aeron_ipc_publication_t *publication = conductor->ipc_publications.array[i].publication;
+
+        if (tag_id == publication->tag && AERON_URI_INVALID_TAG != publication->tag)
+        {
+            return publication;
+        }
+    }
+
+    return NULL;
+}
+
 inline void aeron_driver_init_subscription_channel(size_t uri_length, const char *uri, aeron_subscription_link_t *link)
 {
     size_t copy_length = sizeof(link->channel) - 1;

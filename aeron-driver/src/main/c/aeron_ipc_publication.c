@@ -163,6 +163,7 @@ int aeron_ipc_publication_create(
     _pub->conductor_fields.time_of_last_consumer_position_change_ns = now_ns;
     _pub->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_ACTIVE;
     _pub->conductor_fields.refcnt = 0;
+    _pub->tag = params->entity_tag;
     _pub->session_id = session_id;
     _pub->stream_id = stream_id;
     _pub->pub_lmt_position.counter_id = pub_lmt_position->counter_id;
